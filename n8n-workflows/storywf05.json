@@ -1,0 +1,1253 @@
+{
+  "id": "k7HsOfo7Veyt8Huk",
+  "name": "storywf05",
+  "description": "WF-05 Vision Pipeline: Extracts Visual DNA from image, audio, or YouTube links.",
+  "active": true,
+  "activeVersionId": "24e90c57-9b29-4a42-ab48-f99928939cfc",
+  "createdAt": "2026-10-26T09:41:02.086Z",
+  "updatedAt": "2026-10-29T21:00:25.337Z",
+  "isArchived": false,
+  "versionId": "24e90c57-9b29-4a42-ab48-f99928939cfc",
+  "versionCounter": 3,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "id": "1749a27b-1a8e-4a2d-8da0-b147273bf592",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "bd726431-5776-47b2-8c6e-54d6b1da62e7",
+      "name": "Input Normalizer & Ingestion Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item;\nconst raw = item.json || {};\nconst binaryObj = item.binary || null;\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst rawText = (raw.rawText || raw.userPrompt || raw.text || '').toString().trim();\nconst userPrompt = (raw.userPrompt || raw.rawText || 'Analyze media and extract anime character Visual DNA').toString().trim();\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nconst requestedMode = (raw.mode || extracted.mode || 'QUICK').toString().toUpperCase().trim();\nconst effective_mode = requestedMode === 'SAVE' ? 'SAVE' : 'QUICK';\n\nif (effective_mode === 'SAVE' && !project_id) {\n  throw new Error('WF-05 Error: project_id is strictly required when executing in SAVE mode (Rule 5 Project Isolation).');\n}\n\nconst character_code_hint = (raw.character_code_hint || raw.character_code || extracted.character_code || null);\n\nlet modality = (raw.modality || 'image').toString().toLowerCase().trim();\nlet mediaUrl = raw.mediaUrl || raw.media_url || raw.url || null;\n\nconst ytRegex = /(?:https?:\\/\\/)?(?:www\\.|m\\.)?(?:youtube\\.com\\/(?:watch\\?v=|shorts\\/|embed\\/)|youtu\\.be\\/)([a-zA-Z0-9_-]{11})/i;\nconst ytMatch = (mediaUrl && mediaUrl.match(ytRegex)) || rawText.match(ytRegex);\n\nlet youtubeVideoId = null;\nlet visionImageUrl = mediaUrl;\n\nif (ytMatch && ytMatch[1]) {\n  modality = 'youtube';\n  youtubeVideoId = ytMatch[1];\n  visionImageUrl = `https://img.youtube.com/vi/${youtubeVideoId}/maxresdefault.jpg`;\n  if (!mediaUrl) mediaUrl = ytMatch[0];\n}\n\nlet hasBinaryAttachment = false;\nlet binaryMimeType = 'image/jpeg';\nlet binaryBase64 = null;\nlet binaryFileName = null;\n\nif (binaryObj && Object.keys(binaryObj).length > 0) {\n  const firstKey = Object.keys(binaryObj)[0];\n  const binItem = binaryObj[firstKey];\n  hasBinaryAttachment = true;\n  binaryMimeType = binItem.mimeType || 'image/jpeg';\n  binaryFileName = binItem.fileName || 'uploaded_media';\n  if (binItem.data) { binaryBase64 = binItem.data; }\n  if (binaryMimeType.startsWith('audio/')) modality = 'audio';\n  else if (binaryMimeType.includes('pdf') || binaryMimeType.includes('text') || binaryMimeType.includes('document')) modality = 'document';\n  else if (binaryMimeType.startsWith('image/')) modality = 'image';\n}\n\nconst openAiImageUrl = visionImageUrl ? visionImageUrl : (binaryBase64 ? `data:${binaryMimeType};base64,${binaryBase64}` : 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg');\n\nconst geminiParts = [\n  {\n    text: [\n      'You are the WF-05 Multi-Modal Vision Analyzer for the AI Cinematic Anime Engine (Master Blueprint v6.5.0).',\n      'Analyze the provided input and extract the anime character Visual DNA into STRICT JSON matching this exact schema:',\n      '{\"character_code\": \"CHAR_001\", \"name\": \"string\", \"analysis_summary\": \"string\", \"visual_dna\": {\"face\": \"string\", \"hair\": \"string\", \"skin\": \"string\", \"eyes\": \"string\", \"body_build\": \"string\", \"clothing\": \"string\", \"accessories\": \"string\", \"weapons\": \"string\", \"color_palette\": \"string\", \"estimated_age\": \"string\", \"distinctive_marks\": \"string\"}}.',\n      'MANDATORY REQUIREMENT: face, hair, clothing, and color_palette MUST be non-empty descriptive strings.',\n      `Modality: ${modality}`,\n      `Media / Reference URL: ${visionImageUrl || mediaUrl || 'attached_binary'}`,\n      `Character Code Hint: ${character_code_hint || 'Auto-Assign'}`,\n      `User Prompt: ${userPrompt}`\n    ].join('\\n')\n  }\n];\n\nif (binaryBase64 && (binaryMimeType.startsWith('image/') || binaryMimeType === 'application/pdf' || binaryMimeType.startsWith('audio/'))) {\n  geminiParts.push({ inline_data: { mime_type: binaryMimeType, data: binaryBase64 } });\n}\n\nreturn {\n  json: {\n    project_id, modality, mediaUrl, vision_image_url: visionImageUrl, openai_image_url: openAiImageUrl, youtube_video_id: youtubeVideoId,\n    has_binary_attachment: hasBinaryAttachment, binary_file_name: binaryFileName, rawText, userPrompt, effective_mode, character_code_hint, sessionId,\n    gemini_parts: geminiParts, ingested_at: $now.toISOString()\n  },\n  binary: binaryObj || {}\n};"
+      }
+    },
+    {
+      "id": "f8f8d34d-7ecc-4624-9f2e-6063dfe8bcae",
+      "name": "Primary Vision: Gemini generateContent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        448,
+        192
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ ($env.GEMINI_VISION_MODEL || $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash').replace('models/', '') }}:generateContent?key={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.gemini.api_key || $env.GEMINI_API_KEY) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [ { role: 'user', parts: $json.gemini_parts } ], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "58521a74-6eb6-4288-8ed7-5e74b5968d16",
+      "name": "If Primary Gemini Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        672,
+        192
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($json.candidates && $json.candidates[0] && $json.candidates[0].content && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0] && $json.candidates[0].content.parts[0].text) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "dbc89063-8078-4b99-bfd9-b415b241400d",
+      "name": "Fallback Vision: OpenAI Chat Completions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        896,
+        128
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.OPENAI_VISION_ENDPOINT || 'https://api.openai.com/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.openai.api_key || $env.OPENAI_API_KEY) }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.OPENAI_VISION_MODEL || 'gpt-4o', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-05 Vision Fallback Analyzer for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Extract anime character Visual DNA into STRICT JSON matching: {\"character_code\": \"CHAR_001\", \"name\": \"string\", \"analysis_summary\": \"string\", \"visual_dna\": {\"face\": \"string\", \"hair\": \"string\", \"skin\": \"string\", \"eyes\": \"string\", \"body_build\": \"string\", \"clothing\": \"string\", \"accessories\": \"string\", \"weapons\": \"string\", \"color_palette\": \"string\", \"estimated_age\": \"string\", \"distinctive_marks\": \"string\"}}. Mandatory fields: face, hair, clothing, color_palette.' }, { role: 'user', content: [ { type: 'text', text: 'Modality: ' + $('Input Normalizer & Ingestion Gate').item.json.modality + '\\nCharacter Code Hint: ' + ($('Input Normalizer & Ingestion Gate').item.json.character_code_hint || 'CHAR_001') + '\\nUser Prompt: ' + $('Input Normalizer & Ingestion Gate').item.json.userPrompt }, { type: 'image_url', image_url: { url: $('Input Normalizer & Ingestion Gate').item.json.openai_image_url, detail: 'high' } } ] } ] }) }}",
+        "options": {
+          "timeout": 35000
+        }
+      }
+    },
+    {
+      "id": "a20f1af9-60a7-4f19-93bc-b37dd8c498f4",
+      "name": "Vision Response Normalizer & JSON Parser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base = $('Input Normalizer & Ingestion Gate').item.json;\nconst geminiNode = $('Primary Vision: Gemini generateContent').item.json || {};\nconst currentInput = $input.item.json || {};\n\nlet rawJsonText = null;\nlet visionProviderUsed = null;\n\nconst geminiText = geminiNode?.candidates?.[0]?.content?.parts?.[0]?.text;\nif (geminiText && typeof geminiText === 'string' && geminiText.trim().length > 0) {\n  rawJsonText = geminiText.trim();\n  visionProviderUsed = $env.GEMINI_VISION_MODEL || $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash';\n}\n\nif (!rawJsonText) {\n  const openAiText = currentInput?.choices?.[0]?.message?.content;\n  if (openAiText && typeof openAiText === 'string' && openAiText.trim().length > 0) {\n    rawJsonText = openAiText.trim();\n    visionProviderUsed = $env.OPENAI_VISION_MODEL || 'gpt-4o';\n  }\n}\n\nlet parsedPayload = null;\nif (rawJsonText) {\n  try {\n    const stripped = rawJsonText.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsedPayload = JSON.parse(stripped);\n  } catch (err) { parsedPayload = null; }\n}\n\nconst rawDna = (parsedPayload && parsedPayload.visual_dna && typeof parsedPayload.visual_dna === 'object') ? parsedPayload.visual_dna : (parsedPayload && typeof parsedPayload === 'object' ? parsedPayload : null);\n\nconst hasMandatoryFields = Boolean(\n  rawDna &&\n  typeof rawDna.face === 'string' && rawDna.face.trim().length > 0 &&\n  typeof rawDna.hair === 'string' && rawDna.hair.trim().length > 0 &&\n  typeof rawDna.clothing === 'string' && rawDna.clothing.trim().length > 0 &&\n  typeof rawDna.color_palette === 'string' && rawDna.color_palette.trim().length > 0\n);\n\nif (!hasMandatoryFields) {\n  return {\n    json: {\n      ...base, provider_failure: true, vision_provider_used: 'NONE_FAILED',\n      failure_reason: 'Both Gemini Vision and OpenAI Vision failed or returned incomplete mandatory Visual DNA fields.',\n      manual_review_record: {\n        project_id: base.project_id, status: 'MANUAL_REVIEW', action_type: 'VISION_ANALYSIS', review_type: 'VISION_PROVIDER_FAIL',\n        action_payload: { modality: base.modality, mediaUrl: base.mediaUrl, vision_image_url: base.vision_image_url, userPrompt: base.userPrompt, character_code_hint: base.character_code_hint, failed_at: $now.toISOString() }\n      }\n    }\n  };\n}\n\nconst normalizedVisualDna = {\n  face: rawDna.face.toString().trim(), hair: rawDna.hair.toString().trim(),\n  skin: (rawDna.skin || 'Fair warm anime skin tone').toString().trim(), eyes: (rawDna.eyes || 'Sharp expressive anime eyes').toString().trim(),\n  body_build: (rawDna.body_build || rawDna.body || 'Lean athletic anime build').toString().trim(), clothing: rawDna.clothing.toString().trim(),\n  accessories: (rawDna.accessories || 'None').toString().trim(), weapons: (rawDna.weapons || 'None').toString().trim(),\n  color_palette: rawDna.color_palette.toString().trim(), estimated_age: (rawDna.estimated_age || rawDna.age || '18-22 years').toString().trim(),\n  distinctive_marks: (rawDna.distinctive_marks || 'None').toString().trim()\n};\n\nconst resolvedCharCode = (base.character_code_hint || parsedPayload.character_code || 'CHAR_001').toString().toUpperCase().trim();\nconst resolvedCharName = (parsedPayload.name || resolvedCharCode).toString().trim();\n\nreturn {\n  json: {\n    ...base, provider_failure: false, vision_provider_used: visionProviderUsed,\n    character_code: resolvedCharCode, character_name: resolvedCharName,\n    analysis_summary: (parsedPayload.analysis_summary || parsedPayload.summary || `Extracted Visual DNA for ${resolvedCharName} (${resolvedCharCode})`).toString().trim(),\n    visual_dna: normalizedVisualDna\n  }\n};"
+      }
+    },
+    {
+      "id": "404e162e-b7d4-478a-90e5-dcc658325e49",
+      "name": "Provider Failure Switch",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        192
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.provider_failure }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "63761461-6c7f-47c1-99ee-6b83d456cda6",
+      "name": "Supabase: Queue VISION_PROVIDER_FAIL in pending_actions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2688,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.manual_review_record) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "c1736eed-0b44-41b8-a7f6-a3dee6768cb3",
+      "name": "Mode Switch (QUICK vs SAVE)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        288
+      ],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.effective_mode }}",
+              "value2": "QUICK"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "77cf6fe3-1871-4bc4-857e-e8a0d97d4ed7",
+      "name": "QUICK Mode Branch (Zero DB Writes)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Vision Response Normalizer & JSON Parser').item.json;\nconst expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();\nconst tempAssetUrl = `${$env.SUPABASE_URL || 'https://storage.anime-engine.internal'}/storage/v1/object/temp-working/${ctx.sessionId}/${ctx.character_code}_preview.json?expires=${encodeURIComponent(expiresAt)}`;\n\nreturn {\n  json: {\n    ...ctx, branch_executed: 'QUICK_PREVIEW_ONLY', db_writes_performed: false,\n    reference_version: null, valid_from_episode: null, valid_to_episode: null,\n    working_storage_url: tempAssetUrl, working_link_expires_at: expiresAt\n  }\n};"
+      }
+    },
+    {
+      "id": "af27302b-426e-4fe1-948a-4cf492a9c0e8",
+      "name": "Supabase: GET Existing Character Version",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        384
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,reference_version&project_id=eq.{{ $json.project_id }}&character_code=eq.{{ encodeURIComponent($json.character_code) }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c192d065-9a26-4522-94c4-6006d9edd164",
+      "name": "Prepare Versioned Character & R4 History",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        384
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Vision Response Normalizer & JSON Parser').item.json;\nconst lookupResp = $input.item.json;\nconst existingRow = Array.isArray(lookupResp) ? lookupResp[0] : (lookupResp && lookupResp.character_code ? lookupResp : null);\nconst currentVersion = existingRow && existingRow.reference_version ? Number(existingRow.reference_version) : 0;\nconst nextReferenceVersion = currentVersion + 1;\n\nconst characterUpsertPayload = {\n  project_id: ctx.project_id, character_code: ctx.character_code, name: existingRow?.name || ctx.character_name,\n  visual_dna: ctx.visual_dna, reference_version: nextReferenceVersion, source: 'VISION_PIPELINE', validation_status: 'APPROVED'\n};\n\nconst referenceHistoryPayload = {\n  project_id: ctx.project_id, character_code: ctx.character_code, reference_version: nextReferenceVersion,\n  visual_dna: ctx.visual_dna, valid_from_episode: 0, valid_to_episode: null, reason: 'WF-05 Vision Pipeline Extraction'\n};\n\nreturn {\n  json: {\n    ...ctx, branch_executed: 'SAVE_PERSISTED', db_writes_performed: true,\n    previous_reference_version: currentVersion > 0 ? currentVersion : null, reference_version: nextReferenceVersion,\n    valid_from_episode: 0, valid_to_episode: null, character_upsert_payload: characterUpsertPayload, reference_history_payload: referenceHistoryPayload\n  }\n};"
+      }
+    },
+    {
+      "id": "6be96dc5-e164-41ff-bb32-fcd1bcf2ec2b",
+      "name": "Supabase: Upsert Character (characters)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2240,
+        384
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?on_conflict=project_id,character_code",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.character_upsert_payload) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "96f84e73-798a-42c0-84b3-e6ab5865fa8d",
+      "name": "Supabase: Insert Reference History (R4 Open-Ended)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2464,
+        384
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Prepare Versioned Character & R4 History').item.json.reference_history_payload) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "d2d9918b-11dd-4ab6-8ea7-fbc6125ce5e6",
+      "name": "Supabase: Insert Audit Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2688,
+        384
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Prepare Versioned Character & R4 History').item.json.project_id, workflow_name: 'WF-05', action: 'VISION_EXTRACTION_SAVED', execution_id: $execution.id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "926b5ac6-d830-4c18-8614-f68d90a95c2a",
+      "name": "Final Vision Response Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const parserState = $('Vision Response Normalizer & JSON Parser').item.json;\n\nif (parserState.provider_failure === true) {\n  const failMsg = [\n    `\u26a0\ufe0f **WF-05: Vision Providers Failed \u2014 Queued for Manual Review!**`,\n    `\u2022 **Modality:** \\`${parserState.modality}\\``,\n    `\u2022 **Status:** \\`MANUAL_REVIEW\\` (\\`review_type: VISION_PROVIDER_FAIL\\`)`,\n    `\u2022 **Action Taken:** Gemini Vision aur OpenAI Vision dono se valid Visual DNA nahi mila, isliye request \\`pending_actions\\` table me safe queue kar di gayi hai.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'MANUAL_REVIEW_QUEUED', workflow_name: 'WF-05', execution_id: $execution.id, project_id: parserState.project_id, modality: parserState.modality, review_type: 'VISION_PROVIDER_FAIL', output: failMsg, text: failMsg } };\n}\n\nconst activeState = $('Prepare Versioned Character & R4 History').isExecuted ? $('Prepare Versioned Character & R4 History').item.json : $('QUICK Mode Branch (Zero DB Writes)').item.json;\nconst dna = activeState.visual_dna;\nconst isSaveMode = activeState.effective_mode === 'SAVE';\n\nconst dnaBreakdown = [\n  `\u2022 **Face:** ${dna.face}`,\n  `\u2022 **Hair:** ${dna.hair} | **Eyes:** ${dna.eyes} | **Skin:** ${dna.skin}`,\n  `\u2022 **Body Build:** ${dna.body_build} | **Estimated Age:** ${dna.estimated_age}`,\n  `\u2022 **Clothing:** ${dna.clothing}`,\n  `\u2022 **Accessories & Weapons:** ${dna.accessories} / ${dna.weapons}`,\n  `\u2022 **Color Palette:** ${dna.color_palette}`,\n  `\u2022 **Distinctive Marks:** ${dna.distinctive_marks}`\n].join('\\n');\n\nconst modeSummary = isSaveMode\n  ? `\ud83d\udcbe **Mode: SAVE (Canonical Persistence Active)**\\n\u2022 **Character Upserted:** \\`${activeState.character_code}\\` (${activeState.character_name})\\n\u2022 **R4 Reference History:** \\`reference_version = v${activeState.reference_version}\\` (\\`valid_from_episode = 0\\`, \\`valid_to_episode = null\\`)\\n\u2022 **Audit Log:** Recorded \\`VISION_EXTRACTION_SAVED\\` in \\`audit_log\\`.`\n  : `\u26a1 **Mode: QUICK (Ad-Hoc Preview \u2014 Zero Database Writes)**\\n\u2022 **Isolation Guarantee:** Project tables me kuch bhi write nahi kiya gaya hai.\\n\u2022 **Temporary Working Link:** ${activeState.working_storage_url}\\n\ud83d\udca1 *Tip: Is Visual DNA ko permanently lock karne ke liye \\`mode: SAVE\\` use karein.*`;\n\nconst finalMessage = [\n  `\ud83d\udc41\ufe0f **WF-05: Multi-Modal Vision DNA Extraction Complete!**`,\n  `\ud83d\udd0d **Modality:** \\`${activeState.modality}\\` | **Provider:** \\`${activeState.vision_provider_used}\\``,\n  `\ud83d\udcdd **Summary:** ${activeState.analysis_summary}`, ``,\n  `\ud83e\uddec **Extracted Visual DNA (11-Field Schema):**`, dnaBreakdown, ``, modeSummary\n].join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: isSaveMode ? 'VISION_EXTRACTION_SAVED' : 'QUICK_VISION_PREVIEW_READY', workflow_name: 'WF-05', execution_id: $execution.id,\n    project_id: activeState.project_id, modality: activeState.modality, mode: activeState.effective_mode, db_writes_performed: activeState.db_writes_performed,\n    vision_provider_used: activeState.vision_provider_used, character_code: activeState.character_code, character_name: activeState.character_name,\n    reference_version: activeState.reference_version, valid_from_episode: activeState.valid_from_episode, valid_to_episode: activeState.valid_to_episode,\n    working_storage_url: activeState.working_storage_url || null, visual_dna: activeState.visual_dna, output: finalMessage, text: finalMessage\n  }\n};"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Input Normalizer & Ingestion Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Normalizer & Ingestion Gate": {
+      "main": [
+        [
+          {
+            "node": "Primary Vision: Gemini generateContent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Primary Vision: Gemini generateContent": {
+      "main": [
+        [
+          {
+            "node": "If Primary Gemini Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Primary Gemini Failed": {
+      "main": [
+        [
+          {
+            "node": "Fallback Vision: OpenAI Chat Completions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Vision Response Normalizer & JSON Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Vision: OpenAI Chat Completions": {
+      "main": [
+        [
+          {
+            "node": "Vision Response Normalizer & JSON Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vision Response Normalizer & JSON Parser": {
+      "main": [
+        [
+          {
+            "node": "Provider Failure Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider Failure Switch": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Queue VISION_PROVIDER_FAIL in pending_actions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mode Switch (QUICK vs SAVE)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Queue VISION_PROVIDER_FAIL in pending_actions": {
+      "main": [
+        [
+          {
+            "node": "Final Vision Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mode Switch (QUICK vs SAVE)": {
+      "main": [
+        [
+          {
+            "node": "QUICK Mode Branch (Zero DB Writes)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: GET Existing Character Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QUICK Mode Branch (Zero DB Writes)": {
+      "main": [
+        [
+          {
+            "node": "Final Vision Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: GET Existing Character Version": {
+      "main": [
+        [
+          {
+            "node": "Prepare Versioned Character & R4 History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Versioned Character & R4 History": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Upsert Character (characters)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Upsert Character (characters)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Reference History (R4 Open-Ended)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Reference History (R4 Open-Ended)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Final Vision Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "k7HsOfo7Veyt8Huk",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T09:41:02.111Z",
+      "updatedAt": "2026-10-26T09:41:02.111Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "24e90c57-9b29-4a42-ab48-f99928939cfc",
+    "workflowId": "k7HsOfo7Veyt8Huk",
+    "nodes": [
+      {
+        "id": "1749a27b-1a8e-4a2d-8da0-b147273bf592",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          192
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "bd726431-5776-47b2-8c6e-54d6b1da62e7",
+        "name": "Input Normalizer & Ingestion Gate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          192
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const item = $input.item;\nconst raw = item.json || {};\nconst binaryObj = item.binary || null;\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst rawText = (raw.rawText || raw.userPrompt || raw.text || '').toString().trim();\nconst userPrompt = (raw.userPrompt || raw.rawText || 'Analyze media and extract anime character Visual DNA').toString().trim();\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nconst requestedMode = (raw.mode || extracted.mode || 'QUICK').toString().toUpperCase().trim();\nconst effective_mode = requestedMode === 'SAVE' ? 'SAVE' : 'QUICK';\n\nif (effective_mode === 'SAVE' && !project_id) {\n  throw new Error('WF-05 Error: project_id is strictly required when executing in SAVE mode (Rule 5 Project Isolation).');\n}\n\nconst character_code_hint = (raw.character_code_hint || raw.character_code || extracted.character_code || null);\n\nlet modality = (raw.modality || 'image').toString().toLowerCase().trim();\nlet mediaUrl = raw.mediaUrl || raw.media_url || raw.url || null;\n\nconst ytRegex = /(?:https?:\\/\\/)?(?:www\\.|m\\.)?(?:youtube\\.com\\/(?:watch\\?v=|shorts\\/|embed\\/)|youtu\\.be\\/)([a-zA-Z0-9_-]{11})/i;\nconst ytMatch = (mediaUrl && mediaUrl.match(ytRegex)) || rawText.match(ytRegex);\n\nlet youtubeVideoId = null;\nlet visionImageUrl = mediaUrl;\n\nif (ytMatch && ytMatch[1]) {\n  modality = 'youtube';\n  youtubeVideoId = ytMatch[1];\n  visionImageUrl = `https://img.youtube.com/vi/${youtubeVideoId}/maxresdefault.jpg`;\n  if (!mediaUrl) mediaUrl = ytMatch[0];\n}\n\nlet hasBinaryAttachment = false;\nlet binaryMimeType = 'image/jpeg';\nlet binaryBase64 = null;\nlet binaryFileName = null;\n\nif (binaryObj && Object.keys(binaryObj).length > 0) {\n  const firstKey = Object.keys(binaryObj)[0];\n  const binItem = binaryObj[firstKey];\n  hasBinaryAttachment = true;\n  binaryMimeType = binItem.mimeType || 'image/jpeg';\n  binaryFileName = binItem.fileName || 'uploaded_media';\n  if (binItem.data) { binaryBase64 = binItem.data; }\n  if (binaryMimeType.startsWith('audio/')) modality = 'audio';\n  else if (binaryMimeType.includes('pdf') || binaryMimeType.includes('text') || binaryMimeType.includes('document')) modality = 'document';\n  else if (binaryMimeType.startsWith('image/')) modality = 'image';\n}\n\nconst openAiImageUrl = visionImageUrl ? visionImageUrl : (binaryBase64 ? `data:${binaryMimeType};base64,${binaryBase64}` : 'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg');\n\nconst geminiParts = [\n  {\n    text: [\n      'You are the WF-05 Multi-Modal Vision Analyzer for the AI Cinematic Anime Engine (Master Blueprint v6.5.0).',\n      'Analyze the provided input and extract the anime character Visual DNA into STRICT JSON matching this exact schema:',\n      '{\"character_code\": \"CHAR_001\", \"name\": \"string\", \"analysis_summary\": \"string\", \"visual_dna\": {\"face\": \"string\", \"hair\": \"string\", \"skin\": \"string\", \"eyes\": \"string\", \"body_build\": \"string\", \"clothing\": \"string\", \"accessories\": \"string\", \"weapons\": \"string\", \"color_palette\": \"string\", \"estimated_age\": \"string\", \"distinctive_marks\": \"string\"}}.',\n      'MANDATORY REQUIREMENT: face, hair, clothing, and color_palette MUST be non-empty descriptive strings.',\n      `Modality: ${modality}`,\n      `Media / Reference URL: ${visionImageUrl || mediaUrl || 'attached_binary'}`,\n      `Character Code Hint: ${character_code_hint || 'Auto-Assign'}`,\n      `User Prompt: ${userPrompt}`\n    ].join('\\n')\n  }\n];\n\nif (binaryBase64 && (binaryMimeType.startsWith('image/') || binaryMimeType === 'application/pdf' || binaryMimeType.startsWith('audio/'))) {\n  geminiParts.push({ inline_data: { mime_type: binaryMimeType, data: binaryBase64 } });\n}\n\nreturn {\n  json: {\n    project_id, modality, mediaUrl, vision_image_url: visionImageUrl, openai_image_url: openAiImageUrl, youtube_video_id: youtubeVideoId,\n    has_binary_attachment: hasBinaryAttachment, binary_file_name: binaryFileName, rawText, userPrompt, effective_mode, character_code_hint, sessionId,\n    gemini_parts: geminiParts, ingested_at: $now.toISOString()\n  },\n  binary: binaryObj || {}\n};"
+        }
+      },
+      {
+        "id": "f8f8d34d-7ecc-4624-9f2e-6063dfe8bcae",
+        "name": "Primary Vision: Gemini generateContent",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          448,
+          192
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ ($env.GEMINI_VISION_MODEL || $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash').replace('models/', '') }}:generateContent?key={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.gemini.api_key || $env.GEMINI_API_KEY) }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ contents: [ { role: 'user', parts: $json.gemini_parts } ], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }}",
+          "options": {
+            "timeout": 30000
+          }
+        }
+      },
+      {
+        "id": "58521a74-6eb6-4288-8ed7-5e74b5968d16",
+        "name": "If Primary Gemini Failed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          672,
+          192
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ Boolean($json.candidates && $json.candidates[0] && $json.candidates[0].content && $json.candidates[0].content.parts && $json.candidates[0].content.parts[0] && $json.candidates[0].content.parts[0].text) }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "dbc89063-8078-4b99-bfd9-b415b241400d",
+        "name": "Fallback Vision: OpenAI Chat Completions",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          896,
+          128
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.OPENAI_VISION_ENDPOINT || 'https://api.openai.com/v1/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.openai.api_key || $env.OPENAI_API_KEY) }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.OPENAI_VISION_MODEL || 'gpt-4o', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-05 Vision Fallback Analyzer for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Extract anime character Visual DNA into STRICT JSON matching: {\"character_code\": \"CHAR_001\", \"name\": \"string\", \"analysis_summary\": \"string\", \"visual_dna\": {\"face\": \"string\", \"hair\": \"string\", \"skin\": \"string\", \"eyes\": \"string\", \"body_build\": \"string\", \"clothing\": \"string\", \"accessories\": \"string\", \"weapons\": \"string\", \"color_palette\": \"string\", \"estimated_age\": \"string\", \"distinctive_marks\": \"string\"}}. Mandatory fields: face, hair, clothing, color_palette.' }, { role: 'user', content: [ { type: 'text', text: 'Modality: ' + $('Input Normalizer & Ingestion Gate').item.json.modality + '\\nCharacter Code Hint: ' + ($('Input Normalizer & Ingestion Gate').item.json.character_code_hint || 'CHAR_001') + '\\nUser Prompt: ' + $('Input Normalizer & Ingestion Gate').item.json.userPrompt }, { type: 'image_url', image_url: { url: $('Input Normalizer & Ingestion Gate').item.json.openai_image_url, detail: 'high' } } ] } ] }) }}",
+          "options": {
+            "timeout": 35000
+          }
+        }
+      },
+      {
+        "id": "a20f1af9-60a7-4f19-93bc-b37dd8c498f4",
+        "name": "Vision Response Normalizer & JSON Parser",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          192
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const base = $('Input Normalizer & Ingestion Gate').item.json;\nconst geminiNode = $('Primary Vision: Gemini generateContent').item.json || {};\nconst currentInput = $input.item.json || {};\n\nlet rawJsonText = null;\nlet visionProviderUsed = null;\n\nconst geminiText = geminiNode?.candidates?.[0]?.content?.parts?.[0]?.text;\nif (geminiText && typeof geminiText === 'string' && geminiText.trim().length > 0) {\n  rawJsonText = geminiText.trim();\n  visionProviderUsed = $env.GEMINI_VISION_MODEL || $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash';\n}\n\nif (!rawJsonText) {\n  const openAiText = currentInput?.choices?.[0]?.message?.content;\n  if (openAiText && typeof openAiText === 'string' && openAiText.trim().length > 0) {\n    rawJsonText = openAiText.trim();\n    visionProviderUsed = $env.OPENAI_VISION_MODEL || 'gpt-4o';\n  }\n}\n\nlet parsedPayload = null;\nif (rawJsonText) {\n  try {\n    const stripped = rawJsonText.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsedPayload = JSON.parse(stripped);\n  } catch (err) { parsedPayload = null; }\n}\n\nconst rawDna = (parsedPayload && parsedPayload.visual_dna && typeof parsedPayload.visual_dna === 'object') ? parsedPayload.visual_dna : (parsedPayload && typeof parsedPayload === 'object' ? parsedPayload : null);\n\nconst hasMandatoryFields = Boolean(\n  rawDna &&\n  typeof rawDna.face === 'string' && rawDna.face.trim().length > 0 &&\n  typeof rawDna.hair === 'string' && rawDna.hair.trim().length > 0 &&\n  typeof rawDna.clothing === 'string' && rawDna.clothing.trim().length > 0 &&\n  typeof rawDna.color_palette === 'string' && rawDna.color_palette.trim().length > 0\n);\n\nif (!hasMandatoryFields) {\n  return {\n    json: {\n      ...base, provider_failure: true, vision_provider_used: 'NONE_FAILED',\n      failure_reason: 'Both Gemini Vision and OpenAI Vision failed or returned incomplete mandatory Visual DNA fields.',\n      manual_review_record: {\n        project_id: base.project_id, status: 'MANUAL_REVIEW', action_type: 'VISION_ANALYSIS', review_type: 'VISION_PROVIDER_FAIL',\n        action_payload: { modality: base.modality, mediaUrl: base.mediaUrl, vision_image_url: base.vision_image_url, userPrompt: base.userPrompt, character_code_hint: base.character_code_hint, failed_at: $now.toISOString() }\n      }\n    }\n  };\n}\n\nconst normalizedVisualDna = {\n  face: rawDna.face.toString().trim(), hair: rawDna.hair.toString().trim(),\n  skin: (rawDna.skin || 'Fair warm anime skin tone').toString().trim(), eyes: (rawDna.eyes || 'Sharp expressive anime eyes').toString().trim(),\n  body_build: (rawDna.body_build || rawDna.body || 'Lean athletic anime build').toString().trim(), clothing: rawDna.clothing.toString().trim(),\n  accessories: (rawDna.accessories || 'None').toString().trim(), weapons: (rawDna.weapons || 'None').toString().trim(),\n  color_palette: rawDna.color_palette.toString().trim(), estimated_age: (rawDna.estimated_age || rawDna.age || '18-22 years').toString().trim(),\n  distinctive_marks: (rawDna.distinctive_marks || 'None').toString().trim()\n};\n\nconst resolvedCharCode = (base.character_code_hint || parsedPayload.character_code || 'CHAR_001').toString().toUpperCase().trim();\nconst resolvedCharName = (parsedPayload.name || resolvedCharCode).toString().trim();\n\nreturn {\n  json: {\n    ...base, provider_failure: false, vision_provider_used: visionProviderUsed,\n    character_code: resolvedCharCode, character_name: resolvedCharName,\n    analysis_summary: (parsedPayload.analysis_summary || parsedPayload.summary || `Extracted Visual DNA for ${resolvedCharName} (${resolvedCharCode})`).toString().trim(),\n    visual_dna: normalizedVisualDna\n  }\n};"
+        }
+      },
+      {
+        "id": "404e162e-b7d4-478a-90e5-dcc658325e49",
+        "name": "Provider Failure Switch",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1344,
+          192
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.provider_failure }}",
+                "value2": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "63761461-6c7f-47c1-99ee-6b83d456cda6",
+        "name": "Supabase: Queue VISION_PROVIDER_FAIL in pending_actions",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2688,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.manual_review_record) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "c1736eed-0b44-41b8-a7f6-a3dee6768cb3",
+        "name": "Mode Switch (QUICK vs SAVE)",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1568,
+          288
+        ],
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $json.effective_mode }}",
+                "value2": "QUICK"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "77cf6fe3-1871-4bc4-857e-e8a0d97d4ed7",
+        "name": "QUICK Mode Branch (Zero DB Writes)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2688,
+          192
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $('Vision Response Normalizer & JSON Parser').item.json;\nconst expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();\nconst tempAssetUrl = `${$env.SUPABASE_URL || 'https://storage.anime-engine.internal'}/storage/v1/object/temp-working/${ctx.sessionId}/${ctx.character_code}_preview.json?expires=${encodeURIComponent(expiresAt)}`;\n\nreturn {\n  json: {\n    ...ctx, branch_executed: 'QUICK_PREVIEW_ONLY', db_writes_performed: false,\n    reference_version: null, valid_from_episode: null, valid_to_episode: null,\n    working_storage_url: tempAssetUrl, working_link_expires_at: expiresAt\n  }\n};"
+        }
+      },
+      {
+        "id": "af27302b-426e-4fe1-948a-4cf492a9c0e8",
+        "name": "Supabase: GET Existing Character Version",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          384
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,reference_version&project_id=eq.{{ $json.project_id }}&character_code=eq.{{ encodeURIComponent($json.character_code) }}&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "c192d065-9a26-4522-94c4-6006d9edd164",
+        "name": "Prepare Versioned Character & R4 History",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          384
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $('Vision Response Normalizer & JSON Parser').item.json;\nconst lookupResp = $input.item.json;\nconst existingRow = Array.isArray(lookupResp) ? lookupResp[0] : (lookupResp && lookupResp.character_code ? lookupResp : null);\nconst currentVersion = existingRow && existingRow.reference_version ? Number(existingRow.reference_version) : 0;\nconst nextReferenceVersion = currentVersion + 1;\n\nconst characterUpsertPayload = {\n  project_id: ctx.project_id, character_code: ctx.character_code, name: existingRow?.name || ctx.character_name,\n  visual_dna: ctx.visual_dna, reference_version: nextReferenceVersion, source: 'VISION_PIPELINE', validation_status: 'APPROVED'\n};\n\nconst referenceHistoryPayload = {\n  project_id: ctx.project_id, character_code: ctx.character_code, reference_version: nextReferenceVersion,\n  visual_dna: ctx.visual_dna, valid_from_episode: 0, valid_to_episode: null, reason: 'WF-05 Vision Pipeline Extraction'\n};\n\nreturn {\n  json: {\n    ...ctx, branch_executed: 'SAVE_PERSISTED', db_writes_performed: true,\n    previous_reference_version: currentVersion > 0 ? currentVersion : null, reference_version: nextReferenceVersion,\n    valid_from_episode: 0, valid_to_episode: null, character_upsert_payload: characterUpsertPayload, reference_history_payload: referenceHistoryPayload\n  }\n};"
+        }
+      },
+      {
+        "id": "6be96dc5-e164-41ff-bb32-fcd1bcf2ec2b",
+        "name": "Supabase: Upsert Character (characters)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2240,
+          384
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?on_conflict=project_id,character_code",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.character_upsert_payload) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "96f84e73-798a-42c0-84b3-e6ab5865fa8d",
+        "name": "Supabase: Insert Reference History (R4 Open-Ended)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2464,
+          384
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Prepare Versioned Character & R4 History').item.json.reference_history_payload) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "d2d9918b-11dd-4ab6-8ea7-fbc6125ce5e6",
+        "name": "Supabase: Insert Audit Log",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2688,
+          384
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Prepare Versioned Character & R4 History').item.json.project_id, workflow_name: 'WF-05', action: 'VISION_EXTRACTION_SAVED', execution_id: $execution.id }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "926b5ac6-d830-4c18-8614-f68d90a95c2a",
+        "name": "Final Vision Response Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2912,
+          192
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const parserState = $('Vision Response Normalizer & JSON Parser').item.json;\n\nif (parserState.provider_failure === true) {\n  const failMsg = [\n    `\u26a0\ufe0f **WF-05: Vision Providers Failed \u2014 Queued for Manual Review!**`,\n    `\u2022 **Modality:** \\`${parserState.modality}\\``,\n    `\u2022 **Status:** \\`MANUAL_REVIEW\\` (\\`review_type: VISION_PROVIDER_FAIL\\`)`,\n    `\u2022 **Action Taken:** Gemini Vision aur OpenAI Vision dono se valid Visual DNA nahi mila, isliye request \\`pending_actions\\` table me safe queue kar di gayi hai.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'MANUAL_REVIEW_QUEUED', workflow_name: 'WF-05', execution_id: $execution.id, project_id: parserState.project_id, modality: parserState.modality, review_type: 'VISION_PROVIDER_FAIL', output: failMsg, text: failMsg } };\n}\n\nconst activeState = $('Prepare Versioned Character & R4 History').isExecuted ? $('Prepare Versioned Character & R4 History').item.json : $('QUICK Mode Branch (Zero DB Writes)').item.json;\nconst dna = activeState.visual_dna;\nconst isSaveMode = activeState.effective_mode === 'SAVE';\n\nconst dnaBreakdown = [\n  `\u2022 **Face:** ${dna.face}`,\n  `\u2022 **Hair:** ${dna.hair} | **Eyes:** ${dna.eyes} | **Skin:** ${dna.skin}`,\n  `\u2022 **Body Build:** ${dna.body_build} | **Estimated Age:** ${dna.estimated_age}`,\n  `\u2022 **Clothing:** ${dna.clothing}`,\n  `\u2022 **Accessories & Weapons:** ${dna.accessories} / ${dna.weapons}`,\n  `\u2022 **Color Palette:** ${dna.color_palette}`,\n  `\u2022 **Distinctive Marks:** ${dna.distinctive_marks}`\n].join('\\n');\n\nconst modeSummary = isSaveMode\n  ? `\ud83d\udcbe **Mode: SAVE (Canonical Persistence Active)**\\n\u2022 **Character Upserted:** \\`${activeState.character_code}\\` (${activeState.character_name})\\n\u2022 **R4 Reference History:** \\`reference_version = v${activeState.reference_version}\\` (\\`valid_from_episode = 0\\`, \\`valid_to_episode = null\\`)\\n\u2022 **Audit Log:** Recorded \\`VISION_EXTRACTION_SAVED\\` in \\`audit_log\\`.`\n  : `\u26a1 **Mode: QUICK (Ad-Hoc Preview \u2014 Zero Database Writes)**\\n\u2022 **Isolation Guarantee:** Project tables me kuch bhi write nahi kiya gaya hai.\\n\u2022 **Temporary Working Link:** ${activeState.working_storage_url}\\n\ud83d\udca1 *Tip: Is Visual DNA ko permanently lock karne ke liye \\`mode: SAVE\\` use karein.*`;\n\nconst finalMessage = [\n  `\ud83d\udc41\ufe0f **WF-05: Multi-Modal Vision DNA Extraction Complete!**`,\n  `\ud83d\udd0d **Modality:** \\`${activeState.modality}\\` | **Provider:** \\`${activeState.vision_provider_used}\\``,\n  `\ud83d\udcdd **Summary:** ${activeState.analysis_summary}`, ``,\n  `\ud83e\uddec **Extracted Visual DNA (11-Field Schema):**`, dnaBreakdown, ``, modeSummary\n].join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: isSaveMode ? 'VISION_EXTRACTION_SAVED' : 'QUICK_VISION_PREVIEW_READY', workflow_name: 'WF-05', execution_id: $execution.id,\n    project_id: activeState.project_id, modality: activeState.modality, mode: activeState.effective_mode, db_writes_performed: activeState.db_writes_performed,\n    vision_provider_used: activeState.vision_provider_used, character_code: activeState.character_code, character_name: activeState.character_name,\n    reference_version: activeState.reference_version, valid_from_episode: activeState.valid_from_episode, valid_to_episode: activeState.valid_to_episode,\n    working_storage_url: activeState.working_storage_url || null, visual_dna: activeState.visual_dna, output: finalMessage, text: finalMessage\n  }\n};"
+        }
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Input Normalizer & Ingestion Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Input Normalizer & Ingestion Gate": {
+        "main": [
+          [
+            {
+              "node": "Primary Vision: Gemini generateContent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Primary Vision: Gemini generateContent": {
+        "main": [
+          [
+            {
+              "node": "If Primary Gemini Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Primary Gemini Failed": {
+        "main": [
+          [
+            {
+              "node": "Fallback Vision: OpenAI Chat Completions",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Vision Response Normalizer & JSON Parser",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fallback Vision: OpenAI Chat Completions": {
+        "main": [
+          [
+            {
+              "node": "Vision Response Normalizer & JSON Parser",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Vision Response Normalizer & JSON Parser": {
+        "main": [
+          [
+            {
+              "node": "Provider Failure Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Provider Failure Switch": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Queue VISION_PROVIDER_FAIL in pending_actions",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mode Switch (QUICK vs SAVE)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Queue VISION_PROVIDER_FAIL in pending_actions": {
+        "main": [
+          [
+            {
+              "node": "Final Vision Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mode Switch (QUICK vs SAVE)": {
+        "main": [
+          [
+            {
+              "node": "QUICK Mode Branch (Zero DB Writes)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: GET Existing Character Version",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "QUICK Mode Branch (Zero DB Writes)": {
+        "main": [
+          [
+            {
+              "node": "Final Vision Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: GET Existing Character Version": {
+        "main": [
+          [
+            {
+              "node": "Prepare Versioned Character & R4 History",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Versioned Character & R4 History": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Upsert Character (characters)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Upsert Character (characters)": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Reference History (R4 Open-Ended)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Reference History (R4 Open-Ended)": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Audit Log": {
+        "main": [
+          [
+            {
+              "node": "Final Vision Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T21:00:25.342Z",
+    "updatedAt": "2026-10-29T21:00:25.342Z",
+    "workflowPublishHistory": [
+      {
+        "id": 146,
+        "workflowId": "k7HsOfo7Veyt8Huk",
+        "versionId": "24e90c57-9b29-4a42-ab48-f99928939cfc",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-29T21:00:25.538Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,2523 @@
+{
+  "id": "U4pLz7pXmG2OqXlt",
+  "name": "StoryWF-00: Main Router",
+  "description": "Main Router: Classifies user commands and dispatches to correct sub-workflows.",
+  "active": true,
+  "activeVersionId": "da735947-c87d-4d82-bc8d-32d8617a684e",
+  "createdAt": "2026-10-26T06:11:10.044Z",
+  "updatedAt": "2026-10-29T22:43:44.232Z",
+  "isArchived": false,
+  "versionId": "da735947-c87d-4d82-bc8d-32d8617a684e",
+  "versionCounter": 12,
+  "sourceWorkflowId": null,
+  "triggerCount": 2,
+  "nodes": [
+    {
+      "id": "44c68559-d7d0-4e17-b316-1bfd3f375921",
+      "name": "Chat Trigger",
+      "webhookId": "wf00-chat-trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        176,
+        1232
+      ],
+      "parameters": {
+        "options": {
+          "allowFileUploads": true
+        }
+      }
+    },
+    {
+      "id": "d2455521-1b95-4744-9c48-6af74f0f04ba",
+      "name": "Webhook Trigger",
+      "webhookId": "wf00-webhook-router",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        176,
+        1424
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "api/v1/router",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "d04c2735-44ab-44e5-99c7-690f98c7da5e",
+      "name": "Ingest Gate & Aankh Inspector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1328
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const item = $input.item;\nconst rawJson = item.json || {};\nconst body = rawJson.body || rawJson;\nconst nestedPayload = (body.payload && typeof body.payload === 'object') ? body.payload : {};\nconst binaryData = item.binary || null;\nconst rawText = (body.chatInput || body.rawText || body.text || body.message || body.userPrompt || body.user_prompt || body.prompt || nestedPayload.prompt || nestedPayload.userPrompt || nestedPayload.rawText || '').toString().trim();\nconst sessionId = (body.sessionId || body.session_id || rawJson.sessionId || `sess_${$execution.id}`).toString();\nconst incomingProjectId = (body.project_id || body.projectId || nestedPayload.project_id || (rawJson.headers && rawJson.headers['x-project-id']) || null);\nconst incomingEpisodeNo = Number(body.episode_no || body.episode_number || nestedPayload.episode_no || nestedPayload.episode_number || 1);\nconst incomingMode = (body.mode || nestedPayload.mode) ? (body.mode || nestedPayload.mode).toString().toUpperCase().trim() : null;\nconst youtubeRegex = /(?:https?:\\/\\/)?(?:www\\.|m\\.)?(?:youtube\\.com\\/(?:watch\\?v=|shorts\\/|embed\\/)|youtu\\.be\\/)([a-zA-Z0-9_-]{11})(?:\\S+)?/i;\nconst generalMediaUrlRegex = /(https?:\\/\\/[^\\s]+\\.(?:png|jpg|jpeg|webp|gif|mp3|wav|ogg|m4a|mp4|mov|pdf|doc|docx)(?:\\?[^\\s]*)?)/i;\nlet modality = 'text_only';\nlet mediaUrl = body.mediaUrl || body.media_url || nestedPayload.mediaUrl || null;\nlet binaryMeta = null;\nif (binaryData && Object.keys(binaryData).length > 0) {\n  const firstKey = Object.keys(binaryData)[0];\n  const bin = binaryData[firstKey];\n  const mime = (bin.mimeType || '').toLowerCase();\n  const fileName = (bin.fileName || '').toLowerCase();\n  binaryMeta = { binaryKey: firstKey, mimeType: mime, fileName: bin.fileName || 'attachment', fileSize: bin.fileSize || null };\n  if (mime.startsWith('image/') || /\\.(png|jpg|jpeg|webp|gif)$/.test(fileName)) { modality = 'image'; } else if (mime.startsWith('audio/') || /\\.(mp3|wav|ogg|m4a|flac)$/.test(fileName)) { modality = 'audio'; } else if (mime === 'application/pdf' || mime.includes('word') || mime.includes('document') || /\\.(pdf|doc|docx|txt|md)$/.test(fileName)) { modality = 'document'; }\n}\nconst ytMatch = rawText.match(youtubeRegex) || (mediaUrl && mediaUrl.match(youtubeRegex));\nif (ytMatch) { modality = 'youtube'; mediaUrl = ytMatch[0]; } else if (modality === 'text_only') {\n  const urlMatch = rawText.match(generalMediaUrlRegex) || (mediaUrl && mediaUrl.match(generalMediaUrlRegex));\n  if (urlMatch) { mediaUrl = urlMatch[0]; const lowerUrl = mediaUrl.toLowerCase(); if (/\\.(png|jpg|jpeg|webp|gif)/.test(lowerUrl)) modality = 'image'; else if (/\\.(mp3|wav|ogg|m4a)/.test(lowerUrl)) modality = 'audio'; else if (/\\.(pdf|doc|docx)/.test(lowerUrl)) modality = 'document'; }\n}\nlet userPrompt = rawText;\nif (mediaUrl && userPrompt.includes(mediaUrl)) { userPrompt = userPrompt.replace(mediaUrl, '').replace(/\\s{2,}/g, ' ').trim(); }\nif (!userPrompt && modality !== 'text_only') { userPrompt = `[Attached ${modality.toUpperCase()} Input]`; }\nconst SENSITIVE_KEY_PATTERN = /(api[-_]?key|token|secret|password|authorization|bearer|credential|service[-_]?role)/i;\nfunction sanitizeObject(obj) { if (!obj || typeof obj !== 'object') return obj; const cleaned = Array.isArray(obj) ? [] : {}; for (const [k, v] of Object.entries(obj)) { if (SENSITIVE_KEY_PATTERN.test(k)) { cleaned[k] = '[REDACTED_BY_RULE_16]'; } else if (typeof v === 'object' && v !== null) { cleaned[k] = sanitizeObject(v); } else if (typeof v === 'string' && /(sk-[a-zA-Z0-9]{16,}|gsk_[a-zA-Z0-9]{16,}|eyJ[a-zA-Z0-9_-]{10,}\\.)/.test(v)) { cleaned[k] = '[REDACTED_TOKEN_PATTERN]'; } else { cleaned[k] = v; } } return cleaned; }\nreturn { json: { user_infrastructure: body.user_infrastructure || nestedPayload.user_infrastructure || {}, project_style: body.project_style || nestedPayload.project_style || {}, intent: body.intent || nestedPayload.intent || null, episode_no: incomingEpisodeNo, episode_number: incomingEpisodeNo, payload: nestedPayload, rawText, binary: binaryMeta, modality, mediaUrl, userPrompt, user_prompt: userPrompt, project_id: incomingProjectId, sessionId, mode: incomingMode, trigger_source: rawJson.chatInput !== undefined ? 'CHAT' : 'WEBHOOK', sanitized_payload: sanitizeObject(body) }, binary: binaryData || {} };"
+      }
+    },
+    {
+      "id": "35d570e8-b762-4b8c-9d3c-eea08e12134e",
+      "name": "Supabase: Lookup Project",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        624,
+        1328
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,is_active&{{ $json.project_id ? 'id=eq.' + encodeURIComponent($json.project_id) + '&is_active=eq.true' : 'is_active=eq.true' }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "717e1303-3044-4024-b009-352d6adc3410",
+      "name": "Project Context Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        1328
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ingestContext = $('Ingest Gate & Aankh Inspector').item.json;\nconst supabaseResponse = $input.item.json;\n\nconst resolvedRecord = Array.isArray(supabaseResponse)\n  ? supabaseResponse[0]\n  : (supabaseResponse && supabaseResponse.id ? supabaseResponse : null);\n\nconst isBootstrapCommand = /^([#*!]\\s*(create_project|new_project|db_test|health)|create\\s+(?:a\\s+)?new\\s+project)/i.test(ingestContext.rawText || '');\n\nif (!resolvedRecord || !resolvedRecord.id) {\n  if (isBootstrapCommand) {\n    return {\n      json: {\n        ...ingestContext,\n        project_id: null,\n        project_name: 'BOOTSTRAP_CONTEXT',\n        project_valid: true,\n        is_bootstrap: true\n      },\n      binary: $('Ingest Gate & Aankh Inspector').item.binary || {}\n    };\n  }\n\n  return {\n    json: {\n      ...ingestContext,\n      project_id: null,\n      project_valid: false,\n      error_code: 'ERR_PROJECT_CONTEXT_UNRESOLVED',\n      error_message: ingestContext.project_id\n        ? `Provided project_id (${ingestContext.project_id}) does not exist or is not active.`\n        : 'No active project found in Supabase (projects.is_active = true). Create or activate a project first.'\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...ingestContext,\n    project_id: resolvedRecord.id,\n    project_name: resolvedRecord.name,\n    project_valid: true,\n    is_bootstrap: false\n  },\n  binary: $('Ingest Gate & Aankh Inspector').item.binary || {}\n};"
+      }
+    },
+    {
+      "id": "d196830a-242a-4325-b48b-aaa3b09b0e71",
+      "name": "If Project Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        1328
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.project_valid }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "00bc943b-7855-4ae4-940c-5dd0b05a8808",
+      "name": "Layer 1: Prefix Fast-Track",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        1008
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $input.item.json; const raw = (ctx.rawText || '').trim(); let matchedIntent = ctx.intent || null; let confidence = matchedIntent ? 1.0 : 0.0; let reason = matchedIntent ? 'Explicit intent provided' : null; let extractedParams = { episode_number: ctx.episode_no || ctx.episode_number || null, mode: ctx.mode || null, character_name: null, voice_id: null }; const epNumMatch = raw.match(/(?:ep(?:isode)?\\s*#?\\s*|#)([0-9]{1,4})\\b/i); if (epNumMatch) extractedParams.episode_number = parseInt(epNumMatch[1], 10); if (!matchedIntent && /^[#*!]/.test(raw)) { const cmdBody = raw.replace(/^[#*!]+\\s*/, '').trim().toLowerCase(); const prefixRules = [{ pattern: /^ep(?:isode)?\\s+\\d+.*(?:regen|retry|redo)/i, intent: 'REGENERATE_EPISODE' }, { pattern: /^regen(?:erate)?\\s+ep/i, intent: 'REGENERATE_EPISODE' }, { pattern: /^cont(?:inue)?\\s+ep/i, intent: 'CONTINUE_EPISODE' }, { pattern: /^ep(?:isode)?\\s+\\d+/i, intent: 'GENERATE_EPISODE' }, { pattern: /^(?:reel|short)\\b/i, intent: 'QUICK_GENERATE_REEL' }, { pattern: /^(?:vid|video|quick_video)\\b/i, intent: 'QUICK_GENERATE_VIDEO' }, { pattern: /^(?:img|image|quick_image)\\b/i, intent: 'QUICK_GENERATE_IMAGE' }]; for (const rule of prefixRules) { if (rule.pattern.test(cmdBody)) { matchedIntent = rule.intent; confidence = 1.0; reason = 'Layer 1 match'; break; } } } return { json: { ...ctx, skip_llm: matchedIntent !== null, classification: matchedIntent ? { intent: matchedIntent, confidence, reason, extracted_params: extractedParams, classifier_layer: 'LAYER_1_PREFIX' } : null }, binary: $input.item.binary || {} };"
+      }
+    },
+    {
+      "id": "213194c4-7876-4158-9f38-3ab9937eef26",
+      "name": "If LLM Classification Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        1008
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.skip_llm }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "86b82dc4-259d-4236-9999-9ff299ec0ea5",
+      "name": "Layer 2A: Groq Primary Router",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        1744,
+        944
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $json.modality + '\\nMedia URL: ' + ($json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($json.mode || 'none') + '\\nUser Input: ' + ($json.userPrompt || $json.rawText) } ] }) }}",
+        "options": {
+          "timeout": 8000
+        }
+      }
+    },
+    {
+      "id": "13f3a5de-0355-42b9-9ca4-057366d6e976",
+      "name": "If Primary LLM Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        944
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "3add7694-afc1-41d2-994e-273bcbd443c5",
+      "name": "Layer 2B: Gemini Fallback Router",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        2192,
+        864
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($('Layer 1: Prefix Fast-Track').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $('Layer 1: Prefix Fast-Track').item.json.modality + '\\nMedia URL: ' + ($('Layer 1: Prefix Fast-Track').item.json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($('Layer 1: Prefix Fast-Track').item.json.mode || 'none') + '\\nUser Input: ' + ($('Layer 1: Prefix Fast-Track').item.json.userPrompt || $('Layer 1: Prefix Fast-Track').item.json.rawText) } ] }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "e3501126-057f-46bc-b60d-363dd45c81c3",
+      "name": "Layer 3: Intent Normalizer & Regex",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        1008
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const baseCtx = $('Layer 1: Prefix Fast-Track').item.json;\nif (baseCtx.skip_llm && baseCtx.classification) {\n  return { json: { ...baseCtx, intent: baseCtx.classification.intent, confidence: baseCtx.classification.confidence, intent_reason: baseCtx.classification.reason, extracted_params: baseCtx.classification.extracted_params, classifier_layer: baseCtx.classification.classifier_layer }, binary: $('Layer 1: Prefix Fast-Track').item.binary || {} };\n}\nconst VALID_INTENTS = new Set(['GENERATE_EPISODE', 'REGENERATE_EPISODE', 'CONTINUE_EPISODE', 'QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO', 'QUICK_GENERATE_REEL', 'SAVE_TO_PROJECT', 'VISION_ANALYSIS', 'CHANGE_CHARACTER_VOICE', 'PREVIEW_VOICE', 'LIST_VOICES', 'RESET_VOICE', 'CHECK_CANON', 'VIEW_CANON', 'APPROVE_CANON_CHANGE', 'REJECT_CANON_CHANGE', 'CHECK_CONTINUITY', 'CHECK_QUOTA', 'RETRY_FAILED', 'VIEW_STATE', 'VIEW_AUDIT', 'RUN_QC', 'PUBLISH_NOW', 'VIEW_ANALYTICS', 'ADMIN_START_KAGGLE', 'ADMIN_STOP_KAGGLE', 'ADMIN_STATUS', 'DB_TEST', 'SYSTEM_HEALTH', 'CREATE_PROJECT', 'OPEN_PROJECT', 'SAVE_BIBLE', 'BIBLE_CHAT', 'UNKNOWN']);\nconst llmResponse = $input.item.json;\nlet parsedLlm = null;\nlet classifierLayer = 'LAYER_2_LLM';\ntry {\n  const rawContent = llmResponse?.choices?.[0]?.message?.content;\n  if (rawContent) {\n    const cleanedJsonStr = rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    const candidate = JSON.parse(cleanedJsonStr);\n    if (candidate && VALID_INTENTS.has(candidate.intent)) {\n      parsedLlm = { intent: candidate.intent, confidence: typeof candidate.confidence === 'number' ? candidate.confidence : 0.85, reason: candidate.reason || 'Classified via Layer 2', extracted_params: { episode_number: candidate.extracted_params?.episode_number ?? null, mode: candidate.extracted_params?.mode ?? baseCtx.mode ?? null, character_name: candidate.extracted_params?.character_name ?? null, voice_id: candidate.extracted_params?.voice_id ?? null } };\n    }\n  }\n} catch (err) { parsedLlm = null; }\nif (!parsedLlm) {\n  classifierLayer = 'LAYER_3_REGEX_FALLBACK';\n  const text = (baseCtx.rawText || '').toLowerCase();\n  const epMatch = text.match(/(?:ep(?:isode)?\\s*#?\\s*)([0-9]{1,4})\\b/i);\n  const epNum = epMatch ? parseInt(epMatch[1], 10) : null;\n  let fallbackIntent = 'UNKNOWN';\n  let fallbackReason = 'Layer 3 regex fallback: no pattern matched.';\n  const regexCatalog = [\n    { re: /\\b(regen(?:erate)?|redo|re-run)\\b.*\\bep(?:isode)?\\b/i, intent: 'REGENERATE_EPISODE' },\n    { re: /\\b(continue|resume)\\b.*\\bep(?:isode)?\\b/i, intent: 'CONTINUE_EPISODE' },\n    { re: /\\b(ep(?:isode)?\\s*\\d+|banao|generate\\s+ep|make\\s+ep|produce\\s+ep)/i, intent: 'GENERATE_EPISODE' },\n    { re: /\\b(change|switch|update|modify)\\b.*\\bvoice\\b|\\bvoice\\b.*\\b(change|switch|update)\\b/i, intent: 'CHANGE_CHARACTER_VOICE' },\n    { re: /\\bpreview\\b.*\\bvoice\\b/i, intent: 'PREVIEW_VOICE' },\n    { re: /\\b(list|show|all)\\b.*\\bvoices\\b/i, intent: 'LIST_VOICES' },\n    { re: /\\breset\\b.*\\bvoice\\b/i, intent: 'RESET_VOICE' },\n    { re: /\\bkaggle\\b.*\\b(on|start|boot|launch)\\b/i, intent: 'ADMIN_START_KAGGLE' },\n    { re: /\\bkaggle\\b.*\\b(off|stop|kill|shutdown)\\b/i, intent: 'ADMIN_STOP_KAGGLE' },\n    { re: /\\b(check\\s+canon|canon\\s+check)\\b/i, intent: 'CHECK_CANON' },\n    { re: /\\b(view\\s+canon|show\\s+canon)\\b/i, intent: 'VIEW_CANON' },\n    { re: /\\bapprove\\s+canon\\b/i, intent: 'APPROVE_CANON_CHANGE' },\n    { re: /\\breject\\s+canon\\b/i, intent: 'REJECT_CANON_CHANGE' },\n    { re: /\\bcontinuity\\b/i, intent: 'CHECK_CONTINUITY' },\n    { re: /\\bquota\\b/i, intent: 'CHECK_QUOTA' },\n    { re: /\\bretry\\s+failed\\b/i, intent: 'RETRY_FAILED' },\n    { re: /\\bview\\s+state\\b/i, intent: 'VIEW_STATE' },\n    { re: /\\b(view\\s+audit|audit\\s+log)\\b/i, intent: 'VIEW_AUDIT' },\n    { re: /\\brun\\s+qc\\b|\\bquality\\s+control\\b/i, intent: 'RUN_QC' },\n    { re: /\\bpublish\\s+now\\b/i, intent: 'PUBLISH_NOW' },\n    { re: /\\banalytics\\b/i, intent: 'VIEW_ANALYTICS' },\n    { re: /\\bdb\\s*test\\b/i, intent: 'DB_TEST' },\n    { re: /\\bsystem\\s+health\\b/i, intent: 'SYSTEM_HEALTH' },\n    { re: /\\badmin\\s+status\\b|\\bstatus\\b/i, intent: 'ADMIN_STATUS' },\n    { re: /\\bcreate\\s+project\\b|\\bnew\\s+project\\b/i, intent: 'CREATE_PROJECT' },\n    { re: /\\bopen\\s+project\\b|\\bswitch\\s+project\\b/i, intent: 'OPEN_PROJECT' },\n    { re: /\\bsave\\s+bible\\b/i, intent: 'SAVE_BIBLE' },\n    { re: /\\bbible\\b|\\blore\\b|\\bworldbuilding\\b/i, intent: 'BIBLE_CHAT' },\n    { re: /\\bsave\\s+to\\s+project\\b/i, intent: 'SAVE_TO_PROJECT' },\n    { re: /\\b(generate|create|draw|make)\\b.*\\b(image|pic|frame|art)\\b/i, intent: 'QUICK_GENERATE_IMAGE' },\n    { re: /\\b(generate|create|render|make)\\b.*\\b(video|clip|animation)\\b/i, intent: 'QUICK_GENERATE_VIDEO' },\n    { re: /\\b(reel|short)\\b/i, intent: 'QUICK_GENERATE_REEL' }\n  ];\n  for (const item of regexCatalog) {\n    if (item.re.test(text)) { fallbackIntent = item.intent; fallbackReason = `Layer 3 regex safety net matched: ${item.re.toString()}`; break; }\n  }\n  if (fallbackIntent === 'UNKNOWN' && ['image', 'document', 'youtube'].includes(baseCtx.modality)) { fallbackIntent = 'VISION_ANALYSIS'; fallbackReason = `Layer 3 modality fallback`; }\n  parsedLlm = { intent: fallbackIntent, confidence: fallbackIntent === 'UNKNOWN' ? 0.2 : 0.75, reason: fallbackReason, extracted_params: { episode_number: epNum, mode: baseCtx.mode || null, character_name: null, voice_id: null } };\n}\nreturn { json: { ...baseCtx, intent: parsedLlm.intent, confidence: parsedLlm.confidence, intent_reason: parsedLlm.reason, extracted_params: parsedLlm.extracted_params, classifier_layer: classifierLayer }, binary: $('Layer 1: Prefix Fast-Track').item.binary || {} };"
+      }
+    },
+    {
+      "id": "347480ed-cad8-4019-82b4-0403bec6aee3",
+      "name": "Mode & R12 Governance Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        1008
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $input.item.json;\nconst intent = ctx.intent;\nconst userRequestedMode = (ctx.extracted_params?.mode || ctx.mode || '').toString().toUpperCase();\nlet effectiveMode = 'QUICK';\nlet governanceNotes = [];\nlet downstreamCommand = intent;\nlet mutationStrategy = 'STANDARD';\nlet requiresIdempotencyCheck = false;\nif (['GENERATE_EPISODE', 'REGENERATE_EPISODE', 'CONTINUE_EPISODE'].includes(intent)) {\n  effectiveMode = 'SAVE';\n  if (userRequestedMode === 'QUICK') { governanceNotes.push('Rule 45: QUICK overridden to SAVE.'); } else { governanceNotes.push('Rule 45: Episode locked to SAVE.'); }\n} else if (['QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO', 'QUICK_GENERATE_REEL', 'VISION_ANALYSIS'].includes(intent)) {\n  effectiveMode = userRequestedMode === 'SAVE' ? 'SAVE' : 'QUICK';\n  governanceNotes.push('R2 Ad-Hoc: Mode ' + effectiveMode + '.');\n} else if (['SAVE_TO_PROJECT', 'SAVE_BIBLE', 'CREATE_PROJECT', 'APPROVE_CANON_CHANGE', 'REJECT_CANON_CHANGE', 'CHANGE_CHARACTER_VOICE', 'RESET_VOICE'].includes(intent)) {\n  effectiveMode = 'SAVE';\n}\nif (intent === 'CHANGE_CHARACTER_VOICE') { downstreamCommand = 'CHANGE_VOICE'; mutationStrategy = 'VERSIONED_APPEND_ONLY'; governanceNotes.push('R12 Versioned Voice.'); }\nif (intent === 'GENERATE_EPISODE') requiresIdempotencyCheck = true;\nconst routeMap = {\n  CREATE_PROJECT: { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  OPEN_PROJECT:   { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  SAVE_BIBLE:     { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  BIBLE_CHAT:     { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  GENERATE_EPISODE:    { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  QUICK_GENERATE_REEL: { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  REGENERATE_EPISODE:  { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  CONTINUE_EPISODE:    { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  QUICK_GENERATE_IMAGE: { branch: 'WF_03', wf_id: $env.WF_03_PROD_ID },\n  QUICK_GENERATE_VIDEO: { branch: 'WF_03', wf_id: $env.WF_03_PROD_ID },\n  SAVE_TO_PROJECT:      { branch: 'WF_03', wf_id: $env.WF_03_PROD_ID },\n  CHANGE_CHARACTER_VOICE: { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  PREVIEW_VOICE:          { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  LIST_VOICES:            { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  RESET_VOICE:            { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  VIEW_STATE:             { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  VIEW_AUDIT:             { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  PUBLISH_NOW:            { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  ADMIN_START_KAGGLE:     { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  ADMIN_STOP_KAGGLE:      { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  ADMIN_STATUS:           { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  DB_TEST:                { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  SYSTEM_HEALTH:          { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  VISION_ANALYSIS:      { branch: 'WF_05', wf_id: $env.WF_05_VISION_ID },\n  CHECK_CONTINUITY:     { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_06_CONTINUITY_ID },\n  VIEW_ANALYTICS:       { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_08_ANALYTICS_ID },\n  CHECK_CANON:          { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  VIEW_CANON:           { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  APPROVE_CANON_CHANGE: { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  REJECT_CANON_CHANGE:  { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  RESOLVE_DEADLOCKS:    { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_10_STATE_ID },\n  RUN_QC:               { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_11_QC_ID },\n  CHECK_QUOTA:          { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_12_QUOTA_ID },\n  RETRY_FAILED:         { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_13_RETRY_ID }\n};\nconst resolvedRoute = routeMap[intent] || { branch: 'FALLBACK_CLARIFICATION', wf_id: null };\nreturn { json: { ...ctx, mode: effectiveMode, downstream_command: downstreamCommand, mutation_strategy: mutationStrategy, governance_notes: governanceNotes, requires_idempotency_check: requiresIdempotencyCheck, idempotency_blocked: false, dispatch_branch: resolvedRoute.branch, target_workflow_id: resolvedRoute.wf_id, preflight_workflow_ids: { wf_10_quota: $env.WF_12_QUOTA_ID || null, wf_09_canon: $env.WF_09_CANON_ID || null, wf_06_continuity: $env.WF_06_CONTINUITY_ID || null } }, binary: $input.item.binary || {} };"
+      }
+    },
+    {
+      "id": "826f8cac-c92a-4e58-908d-855163b90048",
+      "name": "If Episode Idempotency Required",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2864,
+        1008
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.requires_idempotency_check }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "93f28d5d-3656-4778-9981-43e41f18a9f1",
+      "name": "Supabase: Query Episode States Lock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        3088,
+        944
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?select=id,episode_no,current_state,is_locked,updated_at&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.extracted_params.episode_number || 1 }}&current_state=in.(GENERATING,PRODUCTION)&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "aa185ef4-e9c3-483e-a2e7-fd8f44760d24",
+      "name": "Supabase: Query Pending Actions Lock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        3312,
+        944
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,action_type,status,action_payload,created_at&project_id=eq.{{ $('Mode & R12 Governance Engine').item.json.project_id }}&status=in.(PENDING,RUNNING,IN_PROGRESS,LOCKED)&limit=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2dbd0720-a80e-4647-bdd7-a2462fbb1450",
+      "name": "Idempotency Lock Evaluator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3536,
+        944
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Mode & R12 Governance Engine').item.json;\nconst epStateItems = $('Supabase: Query Episode States Lock').all().map(i => i.json);\nconst pendingActionItems = $('Supabase: Query Pending Actions Lock').all().map(i => i.json);\nconst combined = [...epStateItems, ...pendingActionItems];\n\nconst epNumber = ctx.extracted_params?.episode_number;\nif (!epNumber) {\n  return {\n    json: {\n      ...ctx,\n      idempotency_blocked: true,\n      dispatch_branch: 'IDEMPOTENCY_ABORT',\n      abort_reason: 'Missing episode_number parameter for GENERATE_EPISODE. Specify an episode number (e.g., \"#episode 5 banao\").'\n    }\n  };\n}\n\nconst allRows = [];\nfor (const entry of combined) {\n  if (Array.isArray(entry)) {\n    for (const row of entry) if (row && row.id) allRows.push(row);\n  } else if (entry && entry.id) {\n    allRows.push(entry);\n  }\n}\n\n// pending_actions has no episode_no column -> filter by action_payload\nconst activeConflicts = allRows.filter(row => {\n  const payload = row.action_payload || {};\n  const payloadEp = payload.episode_no ?? payload.episode_number ?? payload.episodeNo;\n  // episode_states rows always match (already filtered by episode_no in URL)\n  // pending_actions rows only match if payload episode matches or is absent\n  if (row.current_state !== undefined) return true;\n  if (payloadEp == null) return true;\n  return Number(payloadEp) === Number(epNumber);\n});\n\nif (activeConflicts.length > 0) {\n  const firstConflict = activeConflicts[0];\n  const conflictState = firstConflict.current_state || firstConflict.status || 'ACTIVE';\n  return {\n    json: {\n      ...ctx,\n      idempotency_blocked: true,\n      dispatch_branch: 'IDEMPOTENCY_ABORT',\n      conflict_record: firstConflict,\n      abort_reason: `Rule 21 Idempotency Lock Active: Project ${ctx.project_id}, Episode ${epNumber} already has an active job (ID: ${firstConflict.id}, State: ${conflictState}). Wait for completion or issue #retry_failed.`\n    }\n  };\n}\n\nreturn {\n  json: { ...ctx, idempotency_blocked: false },\n  binary: $('Mode & R12 Governance Engine').item.binary || {}\n};"
+      }
+    },
+    {
+      "id": "89208a35-4140-4f02-96ac-190ba0f00ff8",
+      "name": "Supabase: Insert Audit Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        3760,
+        1008
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.extracted_params?.episode_number || null, workflow_name: 'WF-00', action: $json.intent, entity_type: 'COMMAND', reason: $json.userPrompt || $json.rawText, execution_id: $execution.id, new_value: { downstream_command: $json.downstream_command, mode: $json.mode, modality: $json.modality, classifier_layer: $json.classifier_layer, confidence: $json.confidence, idempotency_blocked: $json.idempotency_blocked || false, sanitized_payload: $json.sanitized_payload } }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "cd70f9de-333c-476a-856a-1a7e031a8d81",
+      "name": "Restore Context After Audit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3984,
+        1008
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const postIdempotency = $('Idempotency Lock Evaluator').isExecuted\n  ? $('Idempotency Lock Evaluator').first().json\n  : $('Mode & R12 Governance Engine').first().json;\n\nreturn {\n  json: { ...postIdempotency, audit_logged: true },\n  binary: $('Mode & R12 Governance Engine').item.binary || {}\n};"
+      }
+    },
+    {
+      "id": "cd259c39-c3d0-46a6-bc4c-94fbad2591bb",
+      "name": "Master Dispatch Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        4208,
+        928
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.dispatch_branch }}",
+                    "rightValue": "WF_01",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-01 Bible"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.dispatch_branch }}",
+                    "rightValue": "WF_02_CHAINED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-02 Story (Chained)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.dispatch_branch }}",
+                    "rightValue": "WF_03",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-03 Production"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.dispatch_branch }}",
+                    "rightValue": "WF_04",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-04 Admin & Voice"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.dispatch_branch }}",
+                    "rightValue": "WF_05",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WF-05 Vision"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.dispatch_branch }}",
+                    "rightValue": "GOVERNANCE_DIRECT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Governance Direct"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "83d7c6b5-362a-48ce-83c1-7a08f8a74687",
+      "name": "Dispatch: WF-01 Bible Architect",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        5104,
+        432
+      ],
+      "parameters": {
+        "workflowId": "={{ $json.target_workflow_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "37792bf0-920f-47ed-b35d-89bb37202292",
+      "name": "Pre-Flight 1: WF-10 Quota Guard",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        4432,
+        624
+      ],
+      "parameters": {
+        "workflowId": "={{ $json.preflight_workflow_ids.wf_10_quota }}",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "d07a4ac5-449c-4511-8d00-8ff6c08a3916",
+      "name": "Pre-Flight 2: WF-09 Canon Check",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        4656,
+        624
+      ],
+      "parameters": {
+        "workflowId": "={{ $('Restore Context After Audit').first().json.preflight_workflow_ids.wf_09_canon }}",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "0e1b79b0-984d-48da-8f35-e3df7c80f33c",
+      "name": "Pre-Flight 3: WF-06 Continuity Check",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        4880,
+        624
+      ],
+      "parameters": {
+        "workflowId": "={{ $('Restore Context After Audit').first().json.preflight_workflow_ids.wf_06_continuity }}",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
+      "id": "40e1f590-bba7-4ad4-8e0f-f240ba57988e",
+      "name": "Dispatch: WF-02 Story Generator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        5104,
+        624
+      ],
+      "parameters": {
+        "workflowId": "={{ $('Restore Context After Audit').first().json.target_workflow_id }}",
+        "options": {
+          "waitForSubWorkflow": true
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "project_id": "={{ $('Restore Context After Audit').first().json.project_id }}",
+            "episode_number": "={{ $('Restore Context After Audit').first().json.extracted_params?.episode_number || 1 }}",
+            "season_number": "={{ $('Restore Context After Audit').first().json.extracted_params?.season_no || 1 }}",
+            "user_prompt": "={{ $('Restore Context After Audit').first().json.userPrompt || $('Restore Context After Audit').first().json.rawText }}",
+            "user_infrastructure": "={{ $('Restore Context After Audit').first().json.user_infrastructure }}",
+            "project_style": "={{ $('Restore Context After Audit').first().json.project_style }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "8de76bea-958b-4668-b01c-d6f6430ef1c3",
+      "name": "Dispatch: WF-03 Production Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        5104,
+        816
+      ],
+      "parameters": {
+        "workflowId": "={{ $json.target_workflow_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "6e77d7e1-2f48-4f01-bc1a-3e5f78072d80",
+      "name": "Dispatch: WF-04 Admin & Voice Engine",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        5104,
+        1008
+      ],
+      "parameters": {
+        "workflowId": "={{ $json.target_workflow_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "87accd4e-d589-4c7f-a667-87e79665f2b1",
+      "name": "Dispatch: WF-05 Vision Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        5104,
+        1296
+      ],
+      "parameters": {
+        "workflowId": "={{ $json.target_workflow_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "7ee3772e-0fad-42cb-a976-92f9b3970405",
+      "name": "Dispatch: Governance Direct (WF-06/08/09/10/11/12/13)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        5104,
+        1488
+      ],
+      "parameters": {
+        "workflowId": "={{ $json.target_workflow_id }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "23cbc52b-354a-4f8f-90c6-3e9e550c4a0d",
+      "name": "Unified Response Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5328,
+        1088
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const routerCtx = $('Restore Context After Audit').isExecuted\n  ? $('Restore Context After Audit').first().json\n  : $('Project Context Gate').first().json;\n\nconst currentItem = $input.first().json;\n\nif (routerCtx.project_valid === false) {\n  return { json: { ok: false, status: 'ERROR_PROJECT_ISOLATION', execution_id: $execution.id, project_id: null, output: `\u274c Project Context Error: ${routerCtx.error_message}`, text: `\u274c Project Context Error: ${routerCtx.error_message}`, data: { error_code: routerCtx.error_code } } };\n}\n\nif (routerCtx.idempotency_blocked === true) {\n  return { json: { ok: false, status: 'ABORTED_IDEMPOTENCY_CONFLICT', execution_id: $execution.id, project_id: routerCtx.project_id, intent: routerCtx.intent, mode: routerCtx.mode, output: `\u26a0\ufe0f ${routerCtx.abort_reason}`, text: `\u26a0\ufe0f ${routerCtx.abort_reason}`, data: { conflict: routerCtx.conflict_record || null, episode_number: routerCtx.extracted_params?.episode_number || null } } };\n}\n\nif (routerCtx.dispatch_branch === 'FALLBACK_CLARIFICATION') {\n  const clarificationMsg =\n    `\ud83e\udd16 Command Clarification Needed (Project: ${routerCtx.project_name || routerCtx.project_id})\\n` +\n    `I could not confidently map your request to an active workflow. Try one of:\\n` +\n    `\u2022 #episode 5 banao (Canonical Episode Generation - SAVE mode)\\n` +\n    `\u2022 #img [prompt] or #vid [prompt] (Quick Ad-Hoc Generation)\\n` +\n    `\u2022 #change_voice [character] [voice_id] (Versioned Voice Update)\\n` +\n    `\u2022 #status | #quota | #canon | #continuity`;\n\n  return { json: { ok: true, status: 'CLARIFICATION_REQUIRED', execution_id: $execution.id, project_id: routerCtx.project_id, intent: routerCtx.intent, mode: routerCtx.mode, output: clarificationMsg, text: clarificationMsg } };\n}\n\nconst subWorkflowMessage =\n  currentItem.output ||\n  currentItem.text ||\n  currentItem.message ||\n  `\u2705 Executed ${routerCtx.downstream_command} via ${routerCtx.dispatch_branch} [Mode: ${routerCtx.mode}]`;\n\nreturn {\n  json: {\n    ok: currentItem.ok !== undefined ? currentItem.ok : true,\n    status: currentItem.status || 'COMPLETED',\n    execution_id: $execution.id,\n    project_id: routerCtx.project_id,\n    project_name: routerCtx.project_name,\n    intent: routerCtx.intent,\n    downstream_command: routerCtx.downstream_command,\n    mutation_strategy: routerCtx.mutation_strategy,\n    mode: routerCtx.mode,\n    modality: routerCtx.modality,\n    dispatch_branch: routerCtx.dispatch_branch,\n    output: subWorkflowMessage,\n    text: subWorkflowMessage,\n    data: currentItem.data || currentItem\n  }\n};"
+      }
+    },
+    {
+      "id": "8cdedec0-022f-49fa-8089-9dbfbcfc44ef",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        5552,
+        1088
+      ],
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "id": "restore-ctx-wf09",
+      "name": "Restore Context Before WF-09",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4544,
+        624
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const baseCtx = $('Restore Context After Audit').first().json;\nconst prevOut = $input.item.json || {};\nconst resolvedPrompt = (prevOut.user_prompt || prevOut.userPrompt || baseCtx.userPrompt || baseCtx.rawText || (baseCtx.payload && baseCtx.payload.prompt) || '').toString().trim();\nconst epNo = Number(baseCtx.episode_no || baseCtx.episode_number || (baseCtx.extracted_params && baseCtx.extracted_params.episode_number) || 1);\nreturn { json: { ...baseCtx, project_id: baseCtx.project_id, project_name: baseCtx.project_name, episode_no: epNo, episode_number: epNo, user_prompt: resolvedPrompt, userPrompt: resolvedPrompt, rawText: baseCtx.rawText || resolvedPrompt, user_infrastructure: baseCtx.user_infrastructure || {}, project_style: baseCtx.project_style || {}, recommended_context_patches: prevOut.recommended_context_patches || baseCtx.recommended_context_patches || {} } };"
+      }
+    },
+    {
+      "id": "restore-ctx-wf06",
+      "name": "Restore Context Before WF-06",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4768,
+        624
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const baseCtx = $('Restore Context After Audit').first().json;\nconst prevOut = $input.item.json || {};\nconst resolvedPrompt = (prevOut.user_prompt || prevOut.userPrompt || baseCtx.userPrompt || baseCtx.rawText || (baseCtx.payload && baseCtx.payload.prompt) || '').toString().trim();\nconst epNo = Number(baseCtx.episode_no || baseCtx.episode_number || (baseCtx.extracted_params && baseCtx.extracted_params.episode_number) || 1);\nreturn { json: { ...baseCtx, project_id: baseCtx.project_id, project_name: baseCtx.project_name, episode_no: epNo, episode_number: epNo, user_prompt: resolvedPrompt, userPrompt: resolvedPrompt, rawText: baseCtx.rawText || resolvedPrompt, user_infrastructure: baseCtx.user_infrastructure || {}, project_style: baseCtx.project_style || {}, recommended_context_patches: prevOut.recommended_context_patches || baseCtx.recommended_context_patches || {} } };"
+      }
+    },
+    {
+      "id": "restore-ctx-wf02",
+      "name": "Restore Context Before WF-02",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4992,
+        624
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const baseCtx = $('Restore Context After Audit').first().json;\nconst prevOut = $input.item.json || {};\nconst resolvedPrompt = (prevOut.user_prompt || prevOut.userPrompt || baseCtx.userPrompt || baseCtx.rawText || (baseCtx.payload && baseCtx.payload.prompt) || '').toString().trim();\nconst epNo = Number(baseCtx.episode_no || baseCtx.episode_number || (baseCtx.extracted_params && baseCtx.extracted_params.episode_number) || 1);\nreturn { json: { ...baseCtx, project_id: baseCtx.project_id, project_name: baseCtx.project_name, episode_no: epNo, episode_number: epNo, user_prompt: resolvedPrompt, userPrompt: resolvedPrompt, rawText: baseCtx.rawText || resolvedPrompt, user_infrastructure: baseCtx.user_infrastructure || {}, project_style: baseCtx.project_style || {}, recommended_context_patches: prevOut.recommended_context_patches || baseCtx.recommended_context_patches || {} } };"
+      }
+    }
+  ],
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "Ingest Gate & Aankh Inspector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Ingest Gate & Aankh Inspector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest Gate & Aankh Inspector": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Lookup Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Lookup Project": {
+      "main": [
+        [
+          {
+            "node": "Project Context Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Context Gate": {
+      "main": [
+        [
+          {
+            "node": "If Project Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Project Valid": {
+      "main": [
+        [
+          {
+            "node": "Layer 1: Prefix Fast-Track",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 1: Prefix Fast-Track": {
+      "main": [
+        [
+          {
+            "node": "If LLM Classification Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If LLM Classification Needed": {
+      "main": [
+        [
+          {
+            "node": "Layer 2A: Groq Primary Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Layer 3: Intent Normalizer & Regex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 2A: Groq Primary Router": {
+      "main": [
+        [
+          {
+            "node": "If Primary LLM Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Primary LLM Failed": {
+      "main": [
+        [
+          {
+            "node": "Layer 2B: Gemini Fallback Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Layer 3: Intent Normalizer & Regex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 2B: Gemini Fallback Router": {
+      "main": [
+        [
+          {
+            "node": "Layer 3: Intent Normalizer & Regex",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Layer 3: Intent Normalizer & Regex": {
+      "main": [
+        [
+          {
+            "node": "Mode & R12 Governance Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mode & R12 Governance Engine": {
+      "main": [
+        [
+          {
+            "node": "If Episode Idempotency Required",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Episode Idempotency Required": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Query Episode States Lock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Query Episode States Lock": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Query Pending Actions Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Query Pending Actions Lock": {
+      "main": [
+        [
+          {
+            "node": "Idempotency Lock Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Idempotency Lock Evaluator": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Restore Context After Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Context After Audit": {
+      "main": [
+        [
+          {
+            "node": "Master Dispatch Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Master Dispatch Switch": {
+      "main": [
+        [
+          {
+            "node": "Dispatch: WF-01 Bible Architect",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pre-Flight 1: WF-10 Quota Guard",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch: WF-03 Production Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch: WF-04 Admin & Voice Engine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch: WF-05 Vision Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Dispatch: Governance Direct (WF-06/08/09/10/11/12/13)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch: WF-01 Bible Architect": {
+      "main": [
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Flight 1: WF-10 Quota Guard": {
+      "main": [
+        [
+          {
+            "node": "Restore Context Before WF-09",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Flight 2: WF-09 Canon Check": {
+      "main": [
+        [
+          {
+            "node": "Restore Context Before WF-06",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Flight 3: WF-06 Continuity Check": {
+      "main": [
+        [
+          {
+            "node": "Restore Context Before WF-02",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch: WF-02 Story Generator": {
+      "main": [
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch: WF-03 Production Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch: WF-04 Admin & Voice Engine": {
+      "main": [
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch: WF-05 Vision Pipeline": {
+      "main": [
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch: Governance Direct (WF-06/08/09/10/11/12/13)": {
+      "main": [
+        [
+          {
+            "node": "Unified Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unified Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Context Before WF-09": {
+      "main": [
+        [
+          {
+            "node": "Pre-Flight 2: WF-09 Canon Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Context Before WF-06": {
+      "main": [
+        [
+          {
+            "node": "Pre-Flight 3: WF-06 Continuity Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Context Before WF-02": {
+      "main": [
+        [
+          {
+            "node": "Dispatch: WF-02 Story Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "U4pLz7pXmG2OqXlt",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T06:11:10.048Z",
+      "updatedAt": "2026-10-26T06:11:10.048Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "da735947-c87d-4d82-bc8d-32d8617a684e",
+    "workflowId": "U4pLz7pXmG2OqXlt",
+    "nodes": [
+      {
+        "id": "44c68559-d7d0-4e17-b316-1bfd3f375921",
+        "name": "Chat Trigger",
+        "webhookId": "wf00-chat-trigger",
+        "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+        "typeVersion": 1.1,
+        "position": [
+          176,
+          1232
+        ],
+        "parameters": {
+          "options": {
+            "allowFileUploads": true
+          }
+        }
+      },
+      {
+        "id": "d2455521-1b95-4744-9c48-6af74f0f04ba",
+        "name": "Webhook Trigger",
+        "webhookId": "wf00-webhook-router",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          176,
+          1424
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "api/v1/router",
+          "responseMode": "responseNode",
+          "options": {}
+        }
+      },
+      {
+        "id": "d04c2735-44ab-44e5-99c7-690f98c7da5e",
+        "name": "Ingest Gate & Aankh Inspector",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          400,
+          1328
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const item = $input.item;\nconst rawJson = item.json || {};\nconst body = rawJson.body || rawJson;\nconst nestedPayload = (body.payload && typeof body.payload === 'object') ? body.payload : {};\nconst binaryData = item.binary || null;\nconst rawText = (body.chatInput || body.rawText || body.text || body.message || body.userPrompt || body.user_prompt || body.prompt || nestedPayload.prompt || nestedPayload.userPrompt || nestedPayload.rawText || '').toString().trim();\nconst sessionId = (body.sessionId || body.session_id || rawJson.sessionId || `sess_${$execution.id}`).toString();\nconst incomingProjectId = (body.project_id || body.projectId || nestedPayload.project_id || (rawJson.headers && rawJson.headers['x-project-id']) || null);\nconst incomingEpisodeNo = Number(body.episode_no || body.episode_number || nestedPayload.episode_no || nestedPayload.episode_number || 1);\nconst incomingMode = (body.mode || nestedPayload.mode) ? (body.mode || nestedPayload.mode).toString().toUpperCase().trim() : null;\nconst youtubeRegex = /(?:https?:\\/\\/)?(?:www\\.|m\\.)?(?:youtube\\.com\\/(?:watch\\?v=|shorts\\/|embed\\/)|youtu\\.be\\/)([a-zA-Z0-9_-]{11})(?:\\S+)?/i;\nconst generalMediaUrlRegex = /(https?:\\/\\/[^\\s]+\\.(?:png|jpg|jpeg|webp|gif|mp3|wav|ogg|m4a|mp4|mov|pdf|doc|docx)(?:\\?[^\\s]*)?)/i;\nlet modality = 'text_only';\nlet mediaUrl = body.mediaUrl || body.media_url || nestedPayload.mediaUrl || null;\nlet binaryMeta = null;\nif (binaryData && Object.keys(binaryData).length > 0) {\n  const firstKey = Object.keys(binaryData)[0];\n  const bin = binaryData[firstKey];\n  const mime = (bin.mimeType || '').toLowerCase();\n  const fileName = (bin.fileName || '').toLowerCase();\n  binaryMeta = { binaryKey: firstKey, mimeType: mime, fileName: bin.fileName || 'attachment', fileSize: bin.fileSize || null };\n  if (mime.startsWith('image/') || /\\.(png|jpg|jpeg|webp|gif)$/.test(fileName)) { modality = 'image'; } else if (mime.startsWith('audio/') || /\\.(mp3|wav|ogg|m4a|flac)$/.test(fileName)) { modality = 'audio'; } else if (mime === 'application/pdf' || mime.includes('word') || mime.includes('document') || /\\.(pdf|doc|docx|txt|md)$/.test(fileName)) { modality = 'document'; }\n}\nconst ytMatch = rawText.match(youtubeRegex) || (mediaUrl && mediaUrl.match(youtubeRegex));\nif (ytMatch) { modality = 'youtube'; mediaUrl = ytMatch[0]; } else if (modality === 'text_only') {\n  const urlMatch = rawText.match(generalMediaUrlRegex) || (mediaUrl && mediaUrl.match(generalMediaUrlRegex));\n  if (urlMatch) { mediaUrl = urlMatch[0]; const lowerUrl = mediaUrl.toLowerCase(); if (/\\.(png|jpg|jpeg|webp|gif)/.test(lowerUrl)) modality = 'image'; else if (/\\.(mp3|wav|ogg|m4a)/.test(lowerUrl)) modality = 'audio'; else if (/\\.(pdf|doc|docx)/.test(lowerUrl)) modality = 'document'; }\n}\nlet userPrompt = rawText;\nif (mediaUrl && userPrompt.includes(mediaUrl)) { userPrompt = userPrompt.replace(mediaUrl, '').replace(/\\s{2,}/g, ' ').trim(); }\nif (!userPrompt && modality !== 'text_only') { userPrompt = `[Attached ${modality.toUpperCase()} Input]`; }\nconst SENSITIVE_KEY_PATTERN = /(api[-_]?key|token|secret|password|authorization|bearer|credential|service[-_]?role)/i;\nfunction sanitizeObject(obj) { if (!obj || typeof obj !== 'object') return obj; const cleaned = Array.isArray(obj) ? [] : {}; for (const [k, v] of Object.entries(obj)) { if (SENSITIVE_KEY_PATTERN.test(k)) { cleaned[k] = '[REDACTED_BY_RULE_16]'; } else if (typeof v === 'object' && v !== null) { cleaned[k] = sanitizeObject(v); } else if (typeof v === 'string' && /(sk-[a-zA-Z0-9]{16,}|gsk_[a-zA-Z0-9]{16,}|eyJ[a-zA-Z0-9_-]{10,}\\.)/.test(v)) { cleaned[k] = '[REDACTED_TOKEN_PATTERN]'; } else { cleaned[k] = v; } } return cleaned; }\nreturn { json: { user_infrastructure: body.user_infrastructure || nestedPayload.user_infrastructure || {}, project_style: body.project_style || nestedPayload.project_style || {}, intent: body.intent || nestedPayload.intent || null, episode_no: incomingEpisodeNo, episode_number: incomingEpisodeNo, payload: nestedPayload, rawText, binary: binaryMeta, modality, mediaUrl, userPrompt, user_prompt: userPrompt, project_id: incomingProjectId, sessionId, mode: incomingMode, trigger_source: rawJson.chatInput !== undefined ? 'CHAT' : 'WEBHOOK', sanitized_payload: sanitizeObject(body) }, binary: binaryData || {} };"
+        }
+      },
+      {
+        "id": "35d570e8-b762-4b8c-9d3c-eea08e12134e",
+        "name": "Supabase: Lookup Project",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          624,
+          1328
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,is_active&{{ $json.project_id ? 'id=eq.' + encodeURIComponent($json.project_id) + '&is_active=eq.true' : 'is_active=eq.true' }}&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "717e1303-3044-4024-b009-352d6adc3410",
+        "name": "Project Context Gate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          848,
+          1328
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ingestContext = $('Ingest Gate & Aankh Inspector').item.json;\nconst supabaseResponse = $input.item.json;\n\nconst resolvedRecord = Array.isArray(supabaseResponse)\n  ? supabaseResponse[0]\n  : (supabaseResponse && supabaseResponse.id ? supabaseResponse : null);\n\nconst isBootstrapCommand = /^([#*!]\\s*(create_project|new_project|db_test|health)|create\\s+(?:a\\s+)?new\\s+project)/i.test(ingestContext.rawText || '');\n\nif (!resolvedRecord || !resolvedRecord.id) {\n  if (isBootstrapCommand) {\n    return {\n      json: {\n        ...ingestContext,\n        project_id: null,\n        project_name: 'BOOTSTRAP_CONTEXT',\n        project_valid: true,\n        is_bootstrap: true\n      },\n      binary: $('Ingest Gate & Aankh Inspector').item.binary || {}\n    };\n  }\n\n  return {\n    json: {\n      ...ingestContext,\n      project_id: null,\n      project_valid: false,\n      error_code: 'ERR_PROJECT_CONTEXT_UNRESOLVED',\n      error_message: ingestContext.project_id\n        ? `Provided project_id (${ingestContext.project_id}) does not exist or is not active.`\n        : 'No active project found in Supabase (projects.is_active = true). Create or activate a project first.'\n    }\n  };\n}\n\nreturn {\n  json: {\n    ...ingestContext,\n    project_id: resolvedRecord.id,\n    project_name: resolvedRecord.name,\n    project_valid: true,\n    is_bootstrap: false\n  },\n  binary: $('Ingest Gate & Aankh Inspector').item.binary || {}\n};"
+        }
+      },
+      {
+        "id": "d196830a-242a-4325-b48b-aaa3b09b0e71",
+        "name": "If Project Valid",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1072,
+          1328
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.project_valid }}",
+                "value2": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "00bc943b-7855-4ae4-940c-5dd0b05a8808",
+        "name": "Layer 1: Prefix Fast-Track",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1296,
+          1008
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $input.item.json; const raw = (ctx.rawText || '').trim(); let matchedIntent = ctx.intent || null; let confidence = matchedIntent ? 1.0 : 0.0; let reason = matchedIntent ? 'Explicit intent provided' : null; let extractedParams = { episode_number: ctx.episode_no || ctx.episode_number || null, mode: ctx.mode || null, character_name: null, voice_id: null }; const epNumMatch = raw.match(/(?:ep(?:isode)?\\s*#?\\s*|#)([0-9]{1,4})\\b/i); if (epNumMatch) extractedParams.episode_number = parseInt(epNumMatch[1], 10); if (!matchedIntent && /^[#*!]/.test(raw)) { const cmdBody = raw.replace(/^[#*!]+\\s*/, '').trim().toLowerCase(); const prefixRules = [{ pattern: /^ep(?:isode)?\\s+\\d+.*(?:regen|retry|redo)/i, intent: 'REGENERATE_EPISODE' }, { pattern: /^regen(?:erate)?\\s+ep/i, intent: 'REGENERATE_EPISODE' }, { pattern: /^cont(?:inue)?\\s+ep/i, intent: 'CONTINUE_EPISODE' }, { pattern: /^ep(?:isode)?\\s+\\d+/i, intent: 'GENERATE_EPISODE' }, { pattern: /^(?:reel|short)\\b/i, intent: 'QUICK_GENERATE_REEL' }, { pattern: /^(?:vid|video|quick_video)\\b/i, intent: 'QUICK_GENERATE_VIDEO' }, { pattern: /^(?:img|image|quick_image)\\b/i, intent: 'QUICK_GENERATE_IMAGE' }]; for (const rule of prefixRules) { if (rule.pattern.test(cmdBody)) { matchedIntent = rule.intent; confidence = 1.0; reason = 'Layer 1 match'; break; } } } return { json: { ...ctx, skip_llm: matchedIntent !== null, classification: matchedIntent ? { intent: matchedIntent, confidence, reason, extracted_params: extractedParams, classifier_layer: 'LAYER_1_PREFIX' } : null }, binary: $input.item.binary || {} };"
+        }
+      },
+      {
+        "id": "213194c4-7876-4158-9f38-3ab9937eef26",
+        "name": "If LLM Classification Needed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1520,
+          1008
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.skip_llm }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "86b82dc4-259d-4236-9999-9ff299ec0ea5",
+        "name": "Layer 2A: Groq Primary Router",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          1744,
+          944
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $json.modality + '\\nMedia URL: ' + ($json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($json.mode || 'none') + '\\nUser Input: ' + ($json.userPrompt || $json.rawText) } ] }) }}",
+          "options": {
+            "timeout": 8000
+          }
+        }
+      },
+      {
+        "id": "13f3a5de-0355-42b9-9ca4-057366d6e976",
+        "name": "If Primary LLM Failed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1968,
+          944
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "3add7694-afc1-41d2-994e-273bcbd443c5",
+        "name": "Layer 2B: Gemini Fallback Router",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          2192,
+          864
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($('Layer 1: Prefix Fast-Track').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $('Layer 1: Prefix Fast-Track').item.json.modality + '\\nMedia URL: ' + ($('Layer 1: Prefix Fast-Track').item.json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($('Layer 1: Prefix Fast-Track').item.json.mode || 'none') + '\\nUser Input: ' + ($('Layer 1: Prefix Fast-Track').item.json.userPrompt || $('Layer 1: Prefix Fast-Track').item.json.rawText) } ] }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        }
+      },
+      {
+        "id": "e3501126-057f-46bc-b60d-363dd45c81c3",
+        "name": "Layer 3: Intent Normalizer & Regex",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2416,
+          1008
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const baseCtx = $('Layer 1: Prefix Fast-Track').item.json;\nif (baseCtx.skip_llm && baseCtx.classification) {\n  return { json: { ...baseCtx, intent: baseCtx.classification.intent, confidence: baseCtx.classification.confidence, intent_reason: baseCtx.classification.reason, extracted_params: baseCtx.classification.extracted_params, classifier_layer: baseCtx.classification.classifier_layer }, binary: $('Layer 1: Prefix Fast-Track').item.binary || {} };\n}\nconst VALID_INTENTS = new Set(['GENERATE_EPISODE', 'REGENERATE_EPISODE', 'CONTINUE_EPISODE', 'QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO', 'QUICK_GENERATE_REEL', 'SAVE_TO_PROJECT', 'VISION_ANALYSIS', 'CHANGE_CHARACTER_VOICE', 'PREVIEW_VOICE', 'LIST_VOICES', 'RESET_VOICE', 'CHECK_CANON', 'VIEW_CANON', 'APPROVE_CANON_CHANGE', 'REJECT_CANON_CHANGE', 'CHECK_CONTINUITY', 'CHECK_QUOTA', 'RETRY_FAILED', 'VIEW_STATE', 'VIEW_AUDIT', 'RUN_QC', 'PUBLISH_NOW', 'VIEW_ANALYTICS', 'ADMIN_START_KAGGLE', 'ADMIN_STOP_KAGGLE', 'ADMIN_STATUS', 'DB_TEST', 'SYSTEM_HEALTH', 'CREATE_PROJECT', 'OPEN_PROJECT', 'SAVE_BIBLE', 'BIBLE_CHAT', 'UNKNOWN']);\nconst llmResponse = $input.item.json;\nlet parsedLlm = null;\nlet classifierLayer = 'LAYER_2_LLM';\ntry {\n  const rawContent = llmResponse?.choices?.[0]?.message?.content;\n  if (rawContent) {\n    const cleanedJsonStr = rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    const candidate = JSON.parse(cleanedJsonStr);\n    if (candidate && VALID_INTENTS.has(candidate.intent)) {\n      parsedLlm = { intent: candidate.intent, confidence: typeof candidate.confidence === 'number' ? candidate.confidence : 0.85, reason: candidate.reason || 'Classified via Layer 2', extracted_params: { episode_number: candidate.extracted_params?.episode_number ?? null, mode: candidate.extracted_params?.mode ?? baseCtx.mode ?? null, character_name: candidate.extracted_params?.character_name ?? null, voice_id: candidate.extracted_params?.voice_id ?? null } };\n    }\n  }\n} catch (err) { parsedLlm = null; }\nif (!parsedLlm) {\n  classifierLayer = 'LAYER_3_REGEX_FALLBACK';\n  const text = (baseCtx.rawText || '').toLowerCase();\n  const epMatch = text.match(/(?:ep(?:isode)?\\s*#?\\s*)([0-9]{1,4})\\b/i);\n  const epNum = epMatch ? parseInt(epMatch[1], 10) : null;\n  let fallbackIntent = 'UNKNOWN';\n  let fallbackReason = 'Layer 3 regex fallback: no pattern matched.';\n  const regexCatalog = [\n    { re: /\\b(regen(?:erate)?|redo|re-run)\\b.*\\bep(?:isode)?\\b/i, intent: 'REGENERATE_EPISODE' },\n    { re: /\\b(continue|resume)\\b.*\\bep(?:isode)?\\b/i, intent: 'CONTINUE_EPISODE' },\n    { re: /\\b(ep(?:isode)?\\s*\\d+|banao|generate\\s+ep|make\\s+ep|produce\\s+ep)/i, intent: 'GENERATE_EPISODE' },\n    { re: /\\b(change|switch|update|modify)\\b.*\\bvoice\\b|\\bvoice\\b.*\\b(change|switch|update)\\b/i, intent: 'CHANGE_CHARACTER_VOICE' },\n    { re: /\\bpreview\\b.*\\bvoice\\b/i, intent: 'PREVIEW_VOICE' },\n    { re: /\\b(list|show|all)\\b.*\\bvoices\\b/i, intent: 'LIST_VOICES' },\n    { re: /\\breset\\b.*\\bvoice\\b/i, intent: 'RESET_VOICE' },\n    { re: /\\bkaggle\\b.*\\b(on|start|boot|launch)\\b/i, intent: 'ADMIN_START_KAGGLE' },\n    { re: /\\bkaggle\\b.*\\b(off|stop|kill|shutdown)\\b/i, intent: 'ADMIN_STOP_KAGGLE' },\n    { re: /\\b(check\\s+canon|canon\\s+check)\\b/i, intent: 'CHECK_CANON' },\n    { re: /\\b(view\\s+canon|show\\s+canon)\\b/i, intent: 'VIEW_CANON' },\n    { re: /\\bapprove\\s+canon\\b/i, intent: 'APPROVE_CANON_CHANGE' },\n    { re: /\\breject\\s+canon\\b/i, intent: 'REJECT_CANON_CHANGE' },\n    { re: /\\bcontinuity\\b/i, intent: 'CHECK_CONTINUITY' },\n    { re: /\\bquota\\b/i, intent: 'CHECK_QUOTA' },\n    { re: /\\bretry\\s+failed\\b/i, intent: 'RETRY_FAILED' },\n    { re: /\\bview\\s+state\\b/i, intent: 'VIEW_STATE' },\n    { re: /\\b(view\\s+audit|audit\\s+log)\\b/i, intent: 'VIEW_AUDIT' },\n    { re: /\\brun\\s+qc\\b|\\bquality\\s+control\\b/i, intent: 'RUN_QC' },\n    { re: /\\bpublish\\s+now\\b/i, intent: 'PUBLISH_NOW' },\n    { re: /\\banalytics\\b/i, intent: 'VIEW_ANALYTICS' },\n    { re: /\\bdb\\s*test\\b/i, intent: 'DB_TEST' },\n    { re: /\\bsystem\\s+health\\b/i, intent: 'SYSTEM_HEALTH' },\n    { re: /\\badmin\\s+status\\b|\\bstatus\\b/i, intent: 'ADMIN_STATUS' },\n    { re: /\\bcreate\\s+project\\b|\\bnew\\s+project\\b/i, intent: 'CREATE_PROJECT' },\n    { re: /\\bopen\\s+project\\b|\\bswitch\\s+project\\b/i, intent: 'OPEN_PROJECT' },\n    { re: /\\bsave\\s+bible\\b/i, intent: 'SAVE_BIBLE' },\n    { re: /\\bbible\\b|\\blore\\b|\\bworldbuilding\\b/i, intent: 'BIBLE_CHAT' },\n    { re: /\\bsave\\s+to\\s+project\\b/i, intent: 'SAVE_TO_PROJECT' },\n    { re: /\\b(generate|create|draw|make)\\b.*\\b(image|pic|frame|art)\\b/i, intent: 'QUICK_GENERATE_IMAGE' },\n    { re: /\\b(generate|create|render|make)\\b.*\\b(video|clip|animation)\\b/i, intent: 'QUICK_GENERATE_VIDEO' },\n    { re: /\\b(reel|short)\\b/i, intent: 'QUICK_GENERATE_REEL' }\n  ];\n  for (const item of regexCatalog) {\n    if (item.re.test(text)) { fallbackIntent = item.intent; fallbackReason = `Layer 3 regex safety net matched: ${item.re.toString()}`; break; }\n  }\n  if (fallbackIntent === 'UNKNOWN' && ['image', 'document', 'youtube'].includes(baseCtx.modality)) { fallbackIntent = 'VISION_ANALYSIS'; fallbackReason = `Layer 3 modality fallback`; }\n  parsedLlm = { intent: fallbackIntent, confidence: fallbackIntent === 'UNKNOWN' ? 0.2 : 0.75, reason: fallbackReason, extracted_params: { episode_number: epNum, mode: baseCtx.mode || null, character_name: null, voice_id: null } };\n}\nreturn { json: { ...baseCtx, intent: parsedLlm.intent, confidence: parsedLlm.confidence, intent_reason: parsedLlm.reason, extracted_params: parsedLlm.extracted_params, classifier_layer: classifierLayer }, binary: $('Layer 1: Prefix Fast-Track').item.binary || {} };"
+        }
+      },
+      {
+        "id": "347480ed-cad8-4019-82b4-0403bec6aee3",
+        "name": "Mode & R12 Governance Engine",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2640,
+          1008
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $input.item.json;\nconst intent = ctx.intent;\nconst userRequestedMode = (ctx.extracted_params?.mode || ctx.mode || '').toString().toUpperCase();\nlet effectiveMode = 'QUICK';\nlet governanceNotes = [];\nlet downstreamCommand = intent;\nlet mutationStrategy = 'STANDARD';\nlet requiresIdempotencyCheck = false;\nif (['GENERATE_EPISODE', 'REGENERATE_EPISODE', 'CONTINUE_EPISODE'].includes(intent)) {\n  effectiveMode = 'SAVE';\n  if (userRequestedMode === 'QUICK') { governanceNotes.push('Rule 45: QUICK overridden to SAVE.'); } else { governanceNotes.push('Rule 45: Episode locked to SAVE.'); }\n} else if (['QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO', 'QUICK_GENERATE_REEL', 'VISION_ANALYSIS'].includes(intent)) {\n  effectiveMode = userRequestedMode === 'SAVE' ? 'SAVE' : 'QUICK';\n  governanceNotes.push('R2 Ad-Hoc: Mode ' + effectiveMode + '.');\n} else if (['SAVE_TO_PROJECT', 'SAVE_BIBLE', 'CREATE_PROJECT', 'APPROVE_CANON_CHANGE', 'REJECT_CANON_CHANGE', 'CHANGE_CHARACTER_VOICE', 'RESET_VOICE'].includes(intent)) {\n  effectiveMode = 'SAVE';\n}\nif (intent === 'CHANGE_CHARACTER_VOICE') { downstreamCommand = 'CHANGE_VOICE'; mutationStrategy = 'VERSIONED_APPEND_ONLY'; governanceNotes.push('R12 Versioned Voice.'); }\nif (intent === 'GENERATE_EPISODE') requiresIdempotencyCheck = true;\nconst routeMap = {\n  CREATE_PROJECT: { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  OPEN_PROJECT:   { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  SAVE_BIBLE:     { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  BIBLE_CHAT:     { branch: 'WF_01', wf_id: $env.WF_01_BIBLE_ID },\n  GENERATE_EPISODE:    { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  QUICK_GENERATE_REEL: { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  REGENERATE_EPISODE:  { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  CONTINUE_EPISODE:    { branch: 'WF_02_CHAINED', wf_id: $env.WF_02_STORY_ID },\n  QUICK_GENERATE_IMAGE: { branch: 'WF_03', wf_id: $env.WF_03_PROD_ID },\n  QUICK_GENERATE_VIDEO: { branch: 'WF_03', wf_id: $env.WF_03_PROD_ID },\n  SAVE_TO_PROJECT:      { branch: 'WF_03', wf_id: $env.WF_03_PROD_ID },\n  CHANGE_CHARACTER_VOICE: { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  PREVIEW_VOICE:          { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  LIST_VOICES:            { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  RESET_VOICE:            { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  VIEW_STATE:             { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  VIEW_AUDIT:             { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  PUBLISH_NOW:            { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  ADMIN_START_KAGGLE:     { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  ADMIN_STOP_KAGGLE:      { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  ADMIN_STATUS:           { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  DB_TEST:                { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  SYSTEM_HEALTH:          { branch: 'WF_04', wf_id: $env.WF_04_ADMIN_ID },\n  VISION_ANALYSIS:      { branch: 'WF_05', wf_id: $env.WF_05_VISION_ID },\n  CHECK_CONTINUITY:     { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_06_CONTINUITY_ID },\n  VIEW_ANALYTICS:       { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_08_ANALYTICS_ID },\n  CHECK_CANON:          { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  VIEW_CANON:           { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  APPROVE_CANON_CHANGE: { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  REJECT_CANON_CHANGE:  { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_09_CANON_ID },\n  RESOLVE_DEADLOCKS:    { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_10_STATE_ID },\n  RUN_QC:               { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_11_QC_ID },\n  CHECK_QUOTA:          { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_12_QUOTA_ID },\n  RETRY_FAILED:         { branch: 'GOVERNANCE_DIRECT', wf_id: $env.WF_13_RETRY_ID }\n};\nconst resolvedRoute = routeMap[intent] || { branch: 'FALLBACK_CLARIFICATION', wf_id: null };\nreturn { json: { ...ctx, mode: effectiveMode, downstream_command: downstreamCommand, mutation_strategy: mutationStrategy, governance_notes: governanceNotes, requires_idempotency_check: requiresIdempotencyCheck, idempotency_blocked: false, dispatch_branch: resolvedRoute.branch, target_workflow_id: resolvedRoute.wf_id, preflight_workflow_ids: { wf_10_quota: $env.WF_12_QUOTA_ID || null, wf_09_canon: $env.WF_09_CANON_ID || null, wf_06_continuity: $env.WF_06_CONTINUITY_ID || null } }, binary: $input.item.binary || {} };"
+        }
+      },
+      {
+        "id": "826f8cac-c92a-4e58-908d-855163b90048",
+        "name": "If Episode Idempotency Required",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          2864,
+          1008
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.requires_idempotency_check }}",
+                "value2": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "93f28d5d-3656-4778-9981-43e41f18a9f1",
+        "name": "Supabase: Query Episode States Lock",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          3088,
+          944
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?select=id,episode_no,current_state,is_locked,updated_at&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.extracted_params.episode_number || 1 }}&current_state=in.(GENERATING,PRODUCTION)&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "aa185ef4-e9c3-483e-a2e7-fd8f44760d24",
+        "name": "Supabase: Query Pending Actions Lock",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          3312,
+          944
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,action_type,status,action_payload,created_at&project_id=eq.{{ $('Mode & R12 Governance Engine').item.json.project_id }}&status=in.(PENDING,RUNNING,IN_PROGRESS,LOCKED)&limit=20",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "2dbd0720-a80e-4647-bdd7-a2462fbb1450",
+        "name": "Idempotency Lock Evaluator",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3536,
+          944
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $('Mode & R12 Governance Engine').item.json;\nconst epStateItems = $('Supabase: Query Episode States Lock').all().map(i => i.json);\nconst pendingActionItems = $('Supabase: Query Pending Actions Lock').all().map(i => i.json);\nconst combined = [...epStateItems, ...pendingActionItems];\n\nconst epNumber = ctx.extracted_params?.episode_number;\nif (!epNumber) {\n  return {\n    json: {\n      ...ctx,\n      idempotency_blocked: true,\n      dispatch_branch: 'IDEMPOTENCY_ABORT',\n      abort_reason: 'Missing episode_number parameter for GENERATE_EPISODE. Specify an episode number (e.g., \"#episode 5 banao\").'\n    }\n  };\n}\n\nconst allRows = [];\nfor (const entry of combined) {\n  if (Array.isArray(entry)) {\n    for (const row of entry) if (row && row.id) allRows.push(row);\n  } else if (entry && entry.id) {\n    allRows.push(entry);\n  }\n}\n\n// pending_actions has no episode_no column -> filter by action_payload\nconst activeConflicts = allRows.filter(row => {\n  const payload = row.action_payload || {};\n  const payloadEp = payload.episode_no ?? payload.episode_number ?? payload.episodeNo;\n  // episode_states rows always match (already filtered by episode_no in URL)\n  // pending_actions rows only match if payload episode matches or is absent\n  if (row.current_state !== undefined) return true;\n  if (payloadEp == null) return true;\n  return Number(payloadEp) === Number(epNumber);\n});\n\nif (activeConflicts.length > 0) {\n  const firstConflict = activeConflicts[0];\n  const conflictState = firstConflict.current_state || firstConflict.status || 'ACTIVE';\n  return {\n    json: {\n      ...ctx,\n      idempotency_blocked: true,\n      dispatch_branch: 'IDEMPOTENCY_ABORT',\n      conflict_record: firstConflict,\n      abort_reason: `Rule 21 Idempotency Lock Active: Project ${ctx.project_id}, Episode ${epNumber} already has an active job (ID: ${firstConflict.id}, State: ${conflictState}). Wait for completion or issue #retry_failed.`\n    }\n  };\n}\n\nreturn {\n  json: { ...ctx, idempotency_blocked: false },\n  binary: $('Mode & R12 Governance Engine').item.binary || {}\n};"
+        }
+      },
+      {
+        "id": "89208a35-4140-4f02-96ac-190ba0f00ff8",
+        "name": "Supabase: Insert Audit Log",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          3760,
+          1008
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.extracted_params?.episode_number || null, workflow_name: 'WF-00', action: $json.intent, entity_type: 'COMMAND', reason: $json.userPrompt || $json.rawText, execution_id: $execution.id, new_value: { downstream_command: $json.downstream_command, mode: $json.mode, modality: $json.modality, classifier_layer: $json.classifier_layer, confidence: $json.confidence, idempotency_blocked: $json.idempotency_blocked || false, sanitized_payload: $json.sanitized_payload } }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "cd70f9de-333c-476a-856a-1a7e031a8d81",
+        "name": "Restore Context After Audit",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3984,
+          1008
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const postIdempotency = $('Idempotency Lock Evaluator').isExecuted\n  ? $('Idempotency Lock Evaluator').first().json\n  : $('Mode & R12 Governance Engine').first().json;\n\nreturn {\n  json: { ...postIdempotency, audit_logged: true },\n  binary: $('Mode & R12 Governance Engine').item.binary || {}\n};"
+        }
+      },
+      {
+        "id": "cd259c39-c3d0-46a6-bc4c-94fbad2591bb",
+        "name": "Master Dispatch Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          4208,
+          928
+        ],
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.dispatch_branch }}",
+                      "rightValue": "WF_01",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "WF-01 Bible"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.dispatch_branch }}",
+                      "rightValue": "WF_02_CHAINED",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "WF-02 Story (Chained)"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.dispatch_branch }}",
+                      "rightValue": "WF_03",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "WF-03 Production"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.dispatch_branch }}",
+                      "rightValue": "WF_04",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "WF-04 Admin & Voice"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.dispatch_branch }}",
+                      "rightValue": "WF_05",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "WF-05 Vision"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.dispatch_branch }}",
+                      "rightValue": "GOVERNANCE_DIRECT",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "Governance Direct"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        }
+      },
+      {
+        "id": "83d7c6b5-362a-48ce-83c1-7a08f8a74687",
+        "name": "Dispatch: WF-01 Bible Architect",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          5104,
+          432
+        ],
+        "parameters": {
+          "workflowId": "={{ $json.target_workflow_id }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "37792bf0-920f-47ed-b35d-89bb37202292",
+        "name": "Pre-Flight 1: WF-10 Quota Guard",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          4432,
+          624
+        ],
+        "parameters": {
+          "workflowId": "={{ $json.preflight_workflow_ids.wf_10_quota }}",
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "d07a4ac5-449c-4511-8d00-8ff6c08a3916",
+        "name": "Pre-Flight 2: WF-09 Canon Check",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          4656,
+          624
+        ],
+        "parameters": {
+          "workflowId": "={{ $('Restore Context After Audit').first().json.preflight_workflow_ids.wf_09_canon }}",
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "0e1b79b0-984d-48da-8f35-e3df7c80f33c",
+        "name": "Pre-Flight 3: WF-06 Continuity Check",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          4880,
+          624
+        ],
+        "parameters": {
+          "workflowId": "={{ $('Restore Context After Audit').first().json.preflight_workflow_ids.wf_06_continuity }}",
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "40e1f590-bba7-4ad4-8e0f-f240ba57988e",
+        "name": "Dispatch: WF-02 Story Generator",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          5104,
+          624
+        ],
+        "parameters": {
+          "workflowId": "={{ $('Restore Context After Audit').first().json.target_workflow_id }}",
+          "options": {
+            "waitForSubWorkflow": true
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "project_id": "={{ $('Restore Context After Audit').first().json.project_id }}",
+              "episode_number": "={{ $('Restore Context After Audit').first().json.extracted_params?.episode_number || 1 }}",
+              "season_number": "={{ $('Restore Context After Audit').first().json.extracted_params?.season_no || 1 }}",
+              "user_prompt": "={{ $('Restore Context After Audit').first().json.userPrompt || $('Restore Context After Audit').first().json.rawText }}",
+              "user_infrastructure": "={{ $('Restore Context After Audit').first().json.user_infrastructure }}",
+              "project_style": "={{ $('Restore Context After Audit').first().json.project_style }}"
+            }
+          }
+        }
+      },
+      {
+        "id": "8de76bea-958b-4668-b01c-d6f6430ef1c3",
+        "name": "Dispatch: WF-03 Production Pipeline",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          5104,
+          816
+        ],
+        "parameters": {
+          "workflowId": "={{ $json.target_workflow_id }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "6e77d7e1-2f48-4f01-bc1a-3e5f78072d80",
+        "name": "Dispatch: WF-04 Admin & Voice Engine",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          5104,
+          1008
+        ],
+        "parameters": {
+          "workflowId": "={{ $json.target_workflow_id }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "87accd4e-d589-4c7f-a667-87e79665f2b1",
+        "name": "Dispatch: WF-05 Vision Pipeline",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          5104,
+          1296
+        ],
+        "parameters": {
+          "workflowId": "={{ $json.target_workflow_id }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "7ee3772e-0fad-42cb-a976-92f9b3970405",
+        "name": "Dispatch: Governance Direct (WF-06/08/09/10/11/12/13)",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          5104,
+          1488
+        ],
+        "parameters": {
+          "workflowId": "={{ $json.target_workflow_id }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "23cbc52b-354a-4f8f-90c6-3e9e550c4a0d",
+        "name": "Unified Response Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5328,
+          1088
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const routerCtx = $('Restore Context After Audit').isExecuted\n  ? $('Restore Context After Audit').first().json\n  : $('Project Context Gate').first().json;\n\nconst currentItem = $input.first().json;\n\nif (routerCtx.project_valid === false) {\n  return { json: { ok: false, status: 'ERROR_PROJECT_ISOLATION', execution_id: $execution.id, project_id: null, output: `\u274c Project Context Error: ${routerCtx.error_message}`, text: `\u274c Project Context Error: ${routerCtx.error_message}`, data: { error_code: routerCtx.error_code } } };\n}\n\nif (routerCtx.idempotency_blocked === true) {\n  return { json: { ok: false, status: 'ABORTED_IDEMPOTENCY_CONFLICT', execution_id: $execution.id, project_id: routerCtx.project_id, intent: routerCtx.intent, mode: routerCtx.mode, output: `\u26a0\ufe0f ${routerCtx.abort_reason}`, text: `\u26a0\ufe0f ${routerCtx.abort_reason}`, data: { conflict: routerCtx.conflict_record || null, episode_number: routerCtx.extracted_params?.episode_number || null } } };\n}\n\nif (routerCtx.dispatch_branch === 'FALLBACK_CLARIFICATION') {\n  const clarificationMsg =\n    `\ud83e\udd16 Command Clarification Needed (Project: ${routerCtx.project_name || routerCtx.project_id})\\n` +\n    `I could not confidently map your request to an active workflow. Try one of:\\n` +\n    `\u2022 #episode 5 banao (Canonical Episode Generation - SAVE mode)\\n` +\n    `\u2022 #img [prompt] or #vid [prompt] (Quick Ad-Hoc Generation)\\n` +\n    `\u2022 #change_voice [character] [voice_id] (Versioned Voice Update)\\n` +\n    `\u2022 #status | #quota | #canon | #continuity`;\n\n  return { json: { ok: true, status: 'CLARIFICATION_REQUIRED', execution_id: $execution.id, project_id: routerCtx.project_id, intent: routerCtx.intent, mode: routerCtx.mode, output: clarificationMsg, text: clarificationMsg } };\n}\n\nconst subWorkflowMessage =\n  currentItem.output ||\n  currentItem.text ||\n  currentItem.message ||\n  `\u2705 Executed ${routerCtx.downstream_command} via ${routerCtx.dispatch_branch} [Mode: ${routerCtx.mode}]`;\n\nreturn {\n  json: {\n    ok: currentItem.ok !== undefined ? currentItem.ok : true,\n    status: currentItem.status || 'COMPLETED',\n    execution_id: $execution.id,\n    project_id: routerCtx.project_id,\n    project_name: routerCtx.project_name,\n    intent: routerCtx.intent,\n    downstream_command: routerCtx.downstream_command,\n    mutation_strategy: routerCtx.mutation_strategy,\n    mode: routerCtx.mode,\n    modality: routerCtx.modality,\n    dispatch_branch: routerCtx.dispatch_branch,\n    output: subWorkflowMessage,\n    text: subWorkflowMessage,\n    data: currentItem.data || currentItem\n  }\n};"
+        }
+      },
+      {
+        "id": "8cdedec0-022f-49fa-8089-9dbfbcfc44ef",
+        "name": "Respond to Webhook",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          5552,
+          1088
+        ],
+        "parameters": {
+          "options": {}
+        }
+      },
+      {
+        "id": "restore-ctx-wf09",
+        "name": "Restore Context Before WF-09",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4544,
+          624
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const baseCtx = $('Restore Context After Audit').first().json;\nconst prevOut = $input.item.json || {};\nconst resolvedPrompt = (prevOut.user_prompt || prevOut.userPrompt || baseCtx.userPrompt || baseCtx.rawText || (baseCtx.payload && baseCtx.payload.prompt) || '').toString().trim();\nconst epNo = Number(baseCtx.episode_no || baseCtx.episode_number || (baseCtx.extracted_params && baseCtx.extracted_params.episode_number) || 1);\nreturn { json: { ...baseCtx, project_id: baseCtx.project_id, project_name: baseCtx.project_name, episode_no: epNo, episode_number: epNo, user_prompt: resolvedPrompt, userPrompt: resolvedPrompt, rawText: baseCtx.rawText || resolvedPrompt, user_infrastructure: baseCtx.user_infrastructure || {}, project_style: baseCtx.project_style || {}, recommended_context_patches: prevOut.recommended_context_patches || baseCtx.recommended_context_patches || {} } };"
+        }
+      },
+      {
+        "id": "restore-ctx-wf06",
+        "name": "Restore Context Before WF-06",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4768,
+          624
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const baseCtx = $('Restore Context After Audit').first().json;\nconst prevOut = $input.item.json || {};\nconst resolvedPrompt = (prevOut.user_prompt || prevOut.userPrompt || baseCtx.userPrompt || baseCtx.rawText || (baseCtx.payload && baseCtx.payload.prompt) || '').toString().trim();\nconst epNo = Number(baseCtx.episode_no || baseCtx.episode_number || (baseCtx.extracted_params && baseCtx.extracted_params.episode_number) || 1);\nreturn { json: { ...baseCtx, project_id: baseCtx.project_id, project_name: baseCtx.project_name, episode_no: epNo, episode_number: epNo, user_prompt: resolvedPrompt, userPrompt: resolvedPrompt, rawText: baseCtx.rawText || resolvedPrompt, user_infrastructure: baseCtx.user_infrastructure || {}, project_style: baseCtx.project_style || {}, recommended_context_patches: prevOut.recommended_context_patches || baseCtx.recommended_context_patches || {} } };"
+        }
+      },
+      {
+        "id": "restore-ctx-wf02",
+        "name": "Restore Context Before WF-02",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4992,
+          624
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const baseCtx = $('Restore Context After Audit').first().json;\nconst prevOut = $input.item.json || {};\nconst resolvedPrompt = (prevOut.user_prompt || prevOut.userPrompt || baseCtx.userPrompt || baseCtx.rawText || (baseCtx.payload && baseCtx.payload.prompt) || '').toString().trim();\nconst epNo = Number(baseCtx.episode_no || baseCtx.episode_number || (baseCtx.extracted_params && baseCtx.extracted_params.episode_number) || 1);\nreturn { json: { ...baseCtx, project_id: baseCtx.project_id, project_name: baseCtx.project_name, episode_no: epNo, episode_number: epNo, user_prompt: resolvedPrompt, userPrompt: resolvedPrompt, rawText: baseCtx.rawText || resolvedPrompt, user_infrastructure: baseCtx.user_infrastructure || {}, project_style: baseCtx.project_style || {}, recommended_context_patches: prevOut.recommended_context_patches || baseCtx.recommended_context_patches || {} } };"
+        }
+      }
+    ],
+    "connections": {
+      "Chat Trigger": {
+        "main": [
+          [
+            {
+              "node": "Ingest Gate & Aankh Inspector",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook Trigger": {
+        "main": [
+          [
+            {
+              "node": "Ingest Gate & Aankh Inspector",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ingest Gate & Aankh Inspector": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Lookup Project",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Lookup Project": {
+        "main": [
+          [
+            {
+              "node": "Project Context Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Project Context Gate": {
+        "main": [
+          [
+            {
+              "node": "If Project Valid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Project Valid": {
+        "main": [
+          [
+            {
+              "node": "Layer 1: Prefix Fast-Track",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Layer 1: Prefix Fast-Track": {
+        "main": [
+          [
+            {
+              "node": "If LLM Classification Needed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If LLM Classification Needed": {
+        "main": [
+          [
+            {
+              "node": "Layer 2A: Groq Primary Router",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Layer 3: Intent Normalizer & Regex",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Layer 2A: Groq Primary Router": {
+        "main": [
+          [
+            {
+              "node": "If Primary LLM Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Primary LLM Failed": {
+        "main": [
+          [
+            {
+              "node": "Layer 2B: Gemini Fallback Router",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Layer 3: Intent Normalizer & Regex",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Layer 2B: Gemini Fallback Router": {
+        "main": [
+          [
+            {
+              "node": "Layer 3: Intent Normalizer & Regex",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Layer 3: Intent Normalizer & Regex": {
+        "main": [
+          [
+            {
+              "node": "Mode & R12 Governance Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mode & R12 Governance Engine": {
+        "main": [
+          [
+            {
+              "node": "If Episode Idempotency Required",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Episode Idempotency Required": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Query Episode States Lock",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Query Episode States Lock": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Query Pending Actions Lock",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Query Pending Actions Lock": {
+        "main": [
+          [
+            {
+              "node": "Idempotency Lock Evaluator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Idempotency Lock Evaluator": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Audit Log": {
+        "main": [
+          [
+            {
+              "node": "Restore Context After Audit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Context After Audit": {
+        "main": [
+          [
+            {
+              "node": "Master Dispatch Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Master Dispatch Switch": {
+        "main": [
+          [
+            {
+              "node": "Dispatch: WF-01 Bible Architect",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Pre-Flight 1: WF-10 Quota Guard",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Dispatch: WF-03 Production Pipeline",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Dispatch: WF-04 Admin & Voice Engine",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Dispatch: WF-05 Vision Pipeline",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Dispatch: Governance Direct (WF-06/08/09/10/11/12/13)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dispatch: WF-01 Bible Architect": {
+        "main": [
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pre-Flight 1: WF-10 Quota Guard": {
+        "main": [
+          [
+            {
+              "node": "Restore Context Before WF-09",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pre-Flight 2: WF-09 Canon Check": {
+        "main": [
+          [
+            {
+              "node": "Restore Context Before WF-06",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pre-Flight 3: WF-06 Continuity Check": {
+        "main": [
+          [
+            {
+              "node": "Restore Context Before WF-02",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dispatch: WF-02 Story Generator": {
+        "main": [
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dispatch: WF-03 Production Pipeline": {
+        "main": [
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dispatch: WF-04 Admin & Voice Engine": {
+        "main": [
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dispatch: WF-05 Vision Pipeline": {
+        "main": [
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dispatch: Governance Direct (WF-06/08/09/10/11/12/13)": {
+        "main": [
+          [
+            {
+              "node": "Unified Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unified Response Formatter": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Context Before WF-09": {
+        "main": [
+          [
+            {
+              "node": "Pre-Flight 2: WF-09 Canon Check",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Context Before WF-06": {
+        "main": [
+          [
+            {
+              "node": "Pre-Flight 3: WF-06 Continuity Check",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Context Before WF-02": {
+        "main": [
+          [
+            {
+              "node": "Dispatch: WF-02 Story Generator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T22:43:44.236Z",
+    "updatedAt": "2026-10-29T22:43:44.236Z",
+    "workflowPublishHistory": [
+      {
+        "id": 194,
+        "workflowId": "U4pLz7pXmG2OqXlt",
+        "versionId": "da735947-c87d-4d82-bc8d-32d8617a684e",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-29T22:43:44.822Z"
+      }
+    ]
+  }
+}

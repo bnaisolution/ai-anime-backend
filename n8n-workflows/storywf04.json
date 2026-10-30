@@ -1,0 +1,3025 @@
+{
+  "id": "8q9tF3VE0mLUZQfa",
+  "name": "storywf04",
+  "description": "WF-04 Admin & Governance: Handles manual reviews, voice changes, and system status.",
+  "active": true,
+  "activeVersionId": "dbecaad7-6444-4e0c-ac50-33ad54637bcd",
+  "createdAt": "2026-10-26T07:50:44.585Z",
+  "updatedAt": "2026-10-29T21:00:24.964Z",
+  "isArchived": false,
+  "versionId": "dbecaad7-6444-4e0c-ac50-33ad54637bcd",
+  "versionCounter": 3,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "id": "ebce0528-c9ec-4ffe-8b9b-916967eaa4aa",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1408
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "7dbcd2bd-87b3-40ed-b61b-01f441522a0e",
+      "name": "Command Gateway & Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1408
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\nconst rawText = (raw.rawText || raw.userPrompt || raw.text || '').toString().trim();\nconst rawCommand = (raw.downstream_command || raw.intent || 'ADMIN_STATUS').toString().toUpperCase().trim();\n\nlet command = rawCommand === 'CHANGE_CHARACTER_VOICE' ? 'CHANGE_VOICE' : rawCommand;\n\nconst isConfirmYes = /^(#?\\s*(haan|yes|confirm|proceed|kar\\s*do))\\b/i.test(rawText);\nconst isConfirmCancel = /^(#?\\s*(cancel|nahi|no|abort|ruk\\s*jao))\\b/i.test(rawText);\n\nif (/^#?\\s*llm_usage\\b/i.test(rawText)) command = 'LLM_USAGE';\nelse if (/^#?\\s*project_list\\b/i.test(rawText)) command = 'PROJECT_LIST';\nelse if (/^#?\\s*episode_list\\b/i.test(rawText)) command = 'EPISODE_LIST';\nelse if (/^#?\\s*(project_switch|open_project)\\b/i.test(rawText)) command = 'PROJECT_SWITCH';\nelse if (/^#?\\s*project_delete\\b/i.test(rawText)) command = 'PROJECT_DELETE';\nelse if (/^#?\\s*view_manual_review/i.test(rawText)) command = 'VIEW_MANUAL_REVIEW_QUEUE';\nelse if (/^#?\\s*retry_vision/i.test(rawText)) command = 'RETRY_VISION_ANALYSIS';\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nlet top_branch = 'DIRECT_SAFE';\n\nif (['PROJECT_DELETE', 'ADMIN_STOP_KAGGLE'].includes(command) || isConfirmYes || isConfirmCancel) {\n  top_branch = 'DESTRUCTIVE_GATE';\n} else if (['CHANGE_VOICE', 'PREVIEW_VOICE', 'LIST_VOICES', 'RESET_VOICE'].includes(command)) {\n  top_branch = 'VOICE_R12';\n} else if (['VIEW_MANUAL_REVIEW_QUEUE', 'RETRY_VISION_ANALYSIS', 'RETRY_FAILED'].includes(command)) {\n  top_branch = 'MANUAL_REVIEW_PART_Q';\n} else if (command === 'PUBLISH_NOW') {\n  top_branch = 'PUBLISH_GATE_WF07';\n} else if (['PROJECT_CREATE', 'PROJECT_UPDATE', 'CHARACTER_ADD', 'CHARACTER_EDIT', 'RULE_ADD', 'UPDATE_ARC', 'UPDATE_POWER', 'UPDATE_RELATIONSHIP', 'UPDATE_KNOWLEDGE', 'UPDATE_LOCATION', 'UPDATE_ARTIFACT', 'UPDATE_MYSTERY', 'UPDATE_FORESHADOW', 'ADD_TIMELINE_EVENT'].includes(command)) {\n  top_branch = 'AI_ASSISTED_MUTATION';\n}\n\nreturn { json: { ...raw, command, top_branch, rawText, project_id, episode_no, sessionId, is_confirm_yes: isConfirmYes, is_confirm_cancel: isConfirmCancel, extracted_params: extracted, timestamp: $now.toISOString() } };"
+      }
+    },
+    {
+      "id": "0ccb2110-f042-409f-8311-f9dbe3f095fb",
+      "name": "Master Admin Branch Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        448,
+        1328
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.top_branch }}",
+                    "rightValue": "DIRECT_SAFE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1_DIRECT_SAFE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.top_branch }}",
+                    "rightValue": "DESTRUCTIVE_GATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2_DESTRUCTIVE_GATE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.top_branch }}",
+                    "rightValue": "VOICE_R12",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3_VOICE_R12"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.top_branch }}",
+                    "rightValue": "MANUAL_REVIEW_PART_Q",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "4_MANUAL_REVIEW"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.top_branch }}",
+                    "rightValue": "PUBLISH_GATE_WF07",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "5_PUBLISH_NOW"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.top_branch }}",
+                    "rightValue": "AI_ASSISTED_MUTATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "6_AI_MUTATION"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "78981c0a-2a41-4c6a-87c0-894aa06d65f3",
+      "name": "Direct Safe Sub-Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1344,
+        176
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "ADMIN_START_KAGGLE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "START_KAGGLE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.command }}",
+                    "rightValue": "PROJECT_SWITCH",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PROJECT_SWITCH"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "357f3198-94b9-45d1-975d-bc07bd36e12d",
+      "name": "Kaggle Worker: Start Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1568,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/admin/start-session",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session_name: 'kaggle_story_engine', action: 'START', requested_by: $json.sessionId }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "c4af4ed1-df8a-40fd-854d-79ea7820c5c0",
+      "name": "Supabase: Activate Switched Project",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1568,
+        192
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?id=eq.{{ $json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ is_active: true }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "357945b7-cf6a-46cc-8ae5-c775538f9f96",
+      "name": "Supabase: Read Projects & System Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1568,
+        384
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,is_active,current_season&limit=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2bbe788e-e680-4073-b8e3-fc8fc0140a8f",
+      "name": "Format Direct Safe Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        192
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst resp = $input.item.json;\nconst rows = Array.isArray(resp) ? resp : (resp && resp.id ? [resp] : []);\n\nlet msg = '';\nif (gw.command === 'ADMIN_START_KAGGLE') {\n  msg = `\ud83d\ude80 **WF-04: Kaggle Session Started!**\\n\u2022 Session \\`kaggle_story_engine\\` boot signal sent successfully.`;\n} else if (gw.command === 'PROJECT_SWITCH') {\n  msg = `\ud83d\udd04 **WF-04: Project Switched!**\\n\u2022 Project \\`${gw.project_id}\\` is now set to \\`is_active = true\\`.`;\n} else if (gw.command === 'PROJECT_LIST') {\n  const listStr = rows.map(r => `\u2022 ${r.name} (\\`${r.id}\\`) \u2014 Active: ${r.is_active}`).join('\\n') || '\u2022 Active project loaded.';\n  msg = `\ud83d\udcc1 **WF-04: Registered Projects:**\\n${listStr}`;\n} else {\n  msg = `\ud83d\udfe2 **WF-04: ${gw.command} \u2014 System Online!**\\n\u2022 Supabase PostgREST: Healthy | Active Project ID: \\`${gw.project_id}\\``;\n}\n\nreturn { json: { ...gw, branch_status: 'DIRECT_COMMAND_COMPLETED', formatted_output: msg } };"
+      }
+    },
+    {
+      "id": "c48692ba-79aa-4640-aa55-7c205833f9a6",
+      "name": "Supabase: Check Active 10-Min Confirmation Lock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1120,
+        816
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,action_type,status,action_payload,created_at,expires_at&status=eq.AWAITING_CONFIRMATION&order=created_at.desc&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b10db3-770a-491e-9755-9e8996d873a1",
+      "name": "10-Min Destructive Confirmation Evaluator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        816
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst rawLock = $input.item.json;\nconst pendingRow = Array.isArray(rawLock) ? rawLock[0] : (rawLock && rawLock.id ? rawLock : null);\n\nconst nowMs = Date.now();\nlet isLockValid = false;\nlet lockedAction = null;\n\nif (pendingRow && pendingRow.expires_at) {\n  const expiresMs = new Date(pendingRow.expires_at).getTime();\n  if (expiresMs > nowMs) {\n    isLockValid = true;\n    lockedAction = pendingRow.action_type;\n  }\n} else if (pendingRow && pendingRow.created_at) {\n  const createdMs = new Date(pendingRow.created_at).getTime();\n  const ageMinutes = (nowMs - createdMs) / 60000;\n  if (ageMinutes <= 10) {\n    isLockValid = true;\n    lockedAction = pendingRow.action_type;\n  }\n}\n\nif (gw.is_confirm_cancel) {\n  return { json: { ...gw, destructive_decision: 'CANCELLED', pending_id: pendingRow?.id || null, formatted_output: `\ud83d\udee1\ufe0f **Destructive Action Cancelled!** Koi bhi project delete ya Kaggle session stop nahi kiya gaya.` } };\n}\n\nif (gw.is_confirm_yes && isLockValid && ['PROJECT_DELETE', 'ADMIN_STOP_KAGGLE'].includes(lockedAction)) {\n  return { json: { ...gw, command: lockedAction, destructive_decision: lockedAction === 'ADMIN_STOP_KAGGLE' ? 'EXECUTE_STOP_KAGGLE' : 'EXECUTE_DELETE_PROJECT', pending_id: pendingRow.id, formatted_output: `\u2705 **Confirmed (${lockedAction})!** Executing destructive operation now.` } };\n}\n\nconst targetAction = ['PROJECT_DELETE', 'ADMIN_STOP_KAGGLE'].includes(gw.command) ? gw.command : 'ADMIN_STOP_KAGGLE';\nconst expiresIso = new Date(nowMs + 10 * 60000).toISOString();\n\nreturn {\n  json: {\n    ...gw,\n    destructive_decision: 'PROMPT_CONFIRMATION',\n    confirmation_insert_payload: {\n      project_id: gw.project_id,\n      action_type: targetAction,\n      status: 'AWAITING_CONFIRMATION',\n      action_payload: { requested_by: gw.sessionId },\n      expires_at: expiresIso\n    },\n    formatted_output: `\u26a0\ufe0f **CRITICAL SAFETY GATE (${targetAction}):**\\nKya aap sach me \\`${targetAction}\\` execute karna chahte hain?\\n\u2022 Ye confirmation **10 minutes** (\\`${expiresIso}\\`) me expire ho jayegi.\\n\u2022 Proceed karne ke liye **\"haan\"** reply karein, ya rokne ke liye **\"cancel\"** likhein.`\n  }\n};"
+      }
+    },
+    {
+      "id": "988eedc3-feeb-45eb-b33a-14c18848b72c",
+      "name": "Destructive Decision Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        1568,
+        784
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.destructive_decision }}",
+                    "rightValue": "PROMPT_CONFIRMATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PROMPT_WAIT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.destructive_decision }}",
+                    "rightValue": "EXECUTE_STOP_KAGGLE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "STOP_KAGGLE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.destructive_decision }}",
+                    "rightValue": "EXECUTE_DELETE_PROJECT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "DELETE_PROJECT"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "516c4d26-dda7-4a27-a302-243cac6ba1da",
+      "name": "Supabase: Store 10-Min Confirmation Prompt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        528
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.confirmation_insert_payload) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "eb67293c-60d8-48f1-b0fb-cb643c1e1d2b",
+      "name": "Kaggle Worker: Confirmed Stop Session",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        720
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/admin/stop-session",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ session_name: 'kaggle_story_engine', action: 'STOP', confirmed: true }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "c65cb660-f94a-4797-96d2-e896bfc56758",
+      "name": "Supabase: Confirmed Deactivate Project",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        912
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?id=eq.{{ $json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ is_active: false }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "948ad01a-69c6-489f-aaa9-015e35dc810f",
+      "name": "Supabase: Fetch Active Voice Catalog",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        672,
+        1296
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/voice_catalog?select=provider,voice_id,voice_name,gender,language&is_active=eq.true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "eb6251eb-475c-49eb-89b5-8c31f2a9b7ef",
+      "name": "Supabase: Fetch Character Voice Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        896,
+        1296
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,voice_config&project_id=eq.{{ $('Command Gateway & Router').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3ec40150-7fab-434e-a35a-cf1916df93af",
+      "name": "R12 Versioned Voice Engine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        1296
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst voicesRaw = $('Supabase: Fetch Active Voice Catalog').all().map(i => i.json);\nconst charsRaw = $input.all().map(i => i.json);\nconst voices = Array.isArray(voicesRaw[0]) ? voicesRaw[0] : voicesRaw.filter(v => v && v.voice_id);\nconst chars = Array.isArray(charsRaw[0]) ? charsRaw[0] : charsRaw.filter(c => c && c.character_code);\n\nif (gw.command === 'LIST_VOICES') {\n  const listText = voices.map(v => `\u2022 \\`${v.voice_id}\\` (${v.voice_name}) \u2014 ${v.provider} | ${v.gender} | ${v.language}`).join('\\n') || '\u2022 Default Svara/Supertonic voices active.';\n  return { json: { ...gw, needs_voice_mutation: false, formatted_output: `\ud83c\udf99\ufe0f **WF-04: Active Voice Catalog (Rule 40):**\\n${listText}` } };\n}\n\nconst targetCharCode = (gw.extracted_params?.character_name || gw.extracted_params?.character_code || 'CHAR_001').toString().toUpperCase().trim();\nconst matchedChar = chars.find(c => (c.character_code || '').toUpperCase() === targetCharCode || (c.name || '').toUpperCase().includes(targetCharCode)) || chars[0] || { character_code: 'CHAR_001', name: 'Protagonist', voice_config: {} };\nconst existingVc = (matchedChar.voice_config && typeof matchedChar.voice_config === 'object') ? matchedChar.voice_config : {};\n\nif (gw.command === 'PREVIEW_VOICE') {\n  const previewVoiceId = gw.extracted_params?.voice_id || existingVc.voice_id || 'svara_hi_male_hero_01';\n  return { json: { ...gw, needs_voice_mutation: false, formatted_output: `\ud83c\udfa7 **WF-04: Voice Preview Generated!**\\n\u2022 Character: \\`${matchedChar.character_code}\\` | Voice ID: \\`${previewVoiceId}\\`\\n\u2022 Preview URL: \\`${$env.SUPABASE_URL}/storage/v1/object/public/previews/${previewVoiceId}_sample.wav\\`` } };\n}\n\nconst currentVer = Number(existingVc.version || 1);\nconst nextVer = currentVer + 1;\nconst newVoiceId = gw.command === 'RESET_VOICE' ? 'svara_hi_male_hero_01' : (gw.extracted_params?.voice_id || 'svara_hi_male_hero_01');\nconst matchedCatalogVoice = voices.find(v => v.voice_id === newVoiceId) || { provider: 'Svara TTS', gender: existingVc.gender || 'male', language: 'hi' };\n\nconst versionedVoiceConfig = {\n  voice_id: newVoiceId,\n  voice_provider: matchedCatalogVoice.provider || 'Svara TTS',\n  voice_model: existingVc.voice_model || 'svara-v2-hi',\n  language: matchedCatalogVoice.language || 'hi',\n  gender: matchedCatalogVoice.gender || 'male',\n  pitch: 1.0,\n  speed: 1.0,\n  version: nextVer,\n  status: 'pending_approval',\n  emotion_profile: { neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 }, joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 } },\n  previous_voice_id: existingVc.voice_id || null,\n  changed_at: $now.toISOString(),\n  changed_by: gw.sessionId\n};\n\nreturn {\n  json: {\n    ...gw,\n    needs_voice_mutation: true,\n    target_character_code: matchedChar.character_code,\n    versioned_voice_config: versionedVoiceConfig,\n    pending_voice_approval: {\n      project_id: gw.project_id,\n      action_type: gw.command,\n      entity_type: 'CHARACTER_VOICE',\n      entity_code: matchedChar.character_code,\n      status: 'PENDING',\n      action_payload: { previous_version: currentVer, new_version: nextVer, new_voice_config: versionedVoiceConfig }\n    },\n    formatted_output: `\ud83c\udf99\ufe0f **WF-04: R12 Versioned Voice Updated (${gw.command})!**\\n\u2022 **Character:** \\`${matchedChar.character_code}\\` (${matchedChar.name})\\n\u2022 **New Voice ID:** \\`${newVoiceId}\\` | **Version:** \\`v${currentVer} -> v${nextVer}\\`\\n\u2022 **Approval State:** Logged in \\`pending_actions\\` (\\`pending_approval\\`).`\n  }\n};"
+      }
+    },
+    {
+      "id": "de7dc03e-b0c1-4c54-8ccc-bb5af3403428",
+      "name": "If Voice DB Mutation Needed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        1296
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needs_voice_mutation }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d2dde92b-e49b-47c6-90f5-110f636844ff",
+      "name": "Supabase: Update Versioned voice_config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1568,
+        1200
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?project_id=eq.{{ $json.project_id }}&character_code=eq.{{ $json.target_character_code }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ voice_config: $json.versioned_voice_config }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "b15d7c9c-3f57-4654-8ac0-1ed07eec405e",
+      "name": "Supabase: Log Voice Approval in pending_actions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        1200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('R12 Versioned Voice Engine').item.json.pending_voice_approval) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "e3c277be-d962-4c38-a24e-6b6550c8b9a5",
+      "name": "Supabase: Fetch MANUAL_REVIEW Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1120,
+        1584
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,action_type,review_type,status,created_at&status=eq.MANUAL_REVIEW&project_id=eq.{{ $json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "6725fe0d-273c-499d-9cb0-7e6e697b6157",
+      "name": "If Operator Requested Retry",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        1584
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ ['RETRY_FAILED', 'RETRY_VISION_ANALYSIS'].includes($('Command Gateway & Router').item.json.command) }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cbe11c5a-8352-4c7b-b1e3-640bf2293001",
+      "name": "Supabase: Re-Queue Stuck MANUAL_REVIEW Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1568,
+        1488
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?status=eq.MANUAL_REVIEW&project_id=eq.{{ $('Command Gateway & Router').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'PENDING' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "47822a24-d75d-4c74-9ece-cc38ba7b7309",
+      "name": "Format Manual Review Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        1584
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst rawQ = $('Supabase: Fetch MANUAL_REVIEW Queue').all().map(i => i.json);\nconst items = Array.isArray(rawQ[0]) ? rawQ[0] : rawQ.filter(r => r && r.id);\nconst isRetry = ['RETRY_FAILED', 'RETRY_VISION_ANALYSIS'].includes(gw.command);\nconst summary = items.length > 0 ? items.map(r => `\u2022 ID \\`${r.id}\\`: ${r.action_type} (${r.review_type || 'REVIEW'})`).join('\\n') : '\u2022 Queue bilkul clean hai (0 items stuck in MANUAL_REVIEW).';\nreturn { json: { ...gw, formatted_output: isRetry ? `\ud83d\udd04 **WF-04: Retried ${items.length} Manual Review Items!**\\nSabhi stuck items ko wapas \\`status = PENDING\\` me push kar diya gaya hai.\\n${summary}` : `\ud83d\udccb **WF-04: Manual Review Queue (${items.length} Items):**\\n${summary}` } };"
+      }
+    },
+    {
+      "id": "cbd5e901-3f7e-4188-9787-fbb53e9dc7bc",
+      "name": "Rule 18 Gate: Invoke WF-07 Publisher",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        1776
+      ],
+      "parameters": {
+        "workflowId": "={{ $env.WF_07_PUBLISHER_ID }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "bfb322ac-8b21-47bd-8481-13c1762a2398",
+      "name": "Groq AI Admin Assistant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        1344,
+        1968
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.groq.api_key || $env.GROQ_API_KEY) }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-04 AI Admin Database Assistant. Parse the operator command into STRICT JSON: {\"target_table\": \"projects|characters|story_rules|character_arcs|power_system|character_relationships|locations|artifacts|mystery_tracker|story_timeline\", \"record\": {...}, \"summary\": \"Hinglish summary\"}.' }, { role: 'user', content: 'Command: ' + $json.command + '\\nProject ID: ' + $json.project_id + '\\nInput: ' + $json.rawText } ] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      }
+    },
+    {
+      "id": "7b6b2fee-10f6-4870-ac54-b664e2ad9b29",
+      "name": "AI Whitelist Validator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1968
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst llmRaw = $input.item.json || {};\nconst WHITELIST = new Set(['projects', 'characters', 'story_rules', 'character_arcs', 'power_system', 'character_relationships', 'locations', 'artifacts', 'mystery_tracker', 'story_timeline']);\nlet parsed = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) parsed = JSON.parse(content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim());\n} catch (e) { parsed = null; }\n\nconst table = (parsed && WHITELIST.has(parsed.target_table)) ? parsed.target_table : 'story_rules';\nconst rec = (parsed && parsed.record && typeof parsed.record === 'object') ? parsed.record : { rule_code: 'RULE_ADMIN', rule_text: gw.rawText };\nif (table !== 'projects') rec.project_id = gw.project_id;\n\nreturn { json: { ...gw, target_table: table, mutation_record: rec, formatted_output: `\u2728 **WF-04: AI Admin Mutation (${gw.command})**\\n\u2022 Target Table: \\`${table}\\`\\n\u2022 Summary: ${parsed?.summary || 'Record updated successfully.'}` } };"
+      }
+    },
+    {
+      "id": "0446ba5c-d5f0-428f-bec1-706533c8a089",
+      "name": "Supabase: Execute Whitelisted AI Mutation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        1968
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/{{ $json.target_table }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.mutation_record) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "98aaadaf-bbf5-4bd5-9307-1a8733c80f46",
+      "name": "Supabase: Insert Audit Log (WF-04)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2016,
+        1184
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Command Gateway & Router').item.json.project_id, workflow_name: 'WF-04', action: $('Command Gateway & Router').item.json.command, execution_id: $execution.id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "798dac61-4ca8-40b0-b9e2-53968c110da6",
+      "name": "Final Admin Response Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        1184
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst activeNode = $('Format Direct Safe Output').isExecuted ? $('Format Direct Safe Output').item.json : $('10-Min Destructive Confirmation Evaluator').isExecuted ? $('10-Min Destructive Confirmation Evaluator').item.json : $('R12 Versioned Voice Engine').isExecuted ? $('R12 Versioned Voice Engine').item.json : $('Format Manual Review Output').isExecuted ? $('Format Manual Review Output').item.json : $('AI Whitelist Validator').isExecuted ? $('AI Whitelist Validator').item.json : $('Rule 18 Gate: Invoke WF-07 Publisher').isExecuted ? $('Rule 18 Gate: Invoke WF-07 Publisher').item.json : gw;\nconst finalMsg = activeNode.formatted_output || activeNode.output || activeNode.text || `\u2705 WF-04 Command ${gw.command} completed.`;\nreturn { json: { ok: true, status: 'ADMIN_COMMAND_COMPLETED', workflow_name: 'WF-04', execution_id: $execution.id, project_id: gw.project_id, command: gw.command, top_branch: gw.top_branch, output: finalMsg, text: finalMsg } };"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Command Gateway & Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Command Gateway & Router": {
+      "main": [
+        [
+          {
+            "node": "Master Admin Branch Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Master Admin Branch Switch": {
+      "main": [
+        [
+          {
+            "node": "Direct Safe Sub-Switch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Check Active 10-Min Confirmation Lock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Fetch Active Voice Catalog",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Fetch MANUAL_REVIEW Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rule 18 Gate: Invoke WF-07 Publisher",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Groq AI Admin Assistant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Direct Safe Sub-Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Direct Safe Sub-Switch": {
+      "main": [
+        [
+          {
+            "node": "Kaggle Worker: Start Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Activate Switched Project",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Read Projects & System Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kaggle Worker: Start Session": {
+      "main": [
+        [
+          {
+            "node": "Format Direct Safe Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Activate Switched Project": {
+      "main": [
+        [
+          {
+            "node": "Format Direct Safe Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Read Projects & System Health": {
+      "main": [
+        [
+          {
+            "node": "Format Direct Safe Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Direct Safe Output": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Check Active 10-Min Confirmation Lock": {
+      "main": [
+        [
+          {
+            "node": "10-Min Destructive Confirmation Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10-Min Destructive Confirmation Evaluator": {
+      "main": [
+        [
+          {
+            "node": "Destructive Decision Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Destructive Decision Switch": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Store 10-Min Confirmation Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Kaggle Worker: Confirmed Stop Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Confirmed Deactivate Project",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Store 10-Min Confirmation Prompt": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kaggle Worker: Confirmed Stop Session": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Confirmed Deactivate Project": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Active Voice Catalog": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Character Voice Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Character Voice Config": {
+      "main": [
+        [
+          {
+            "node": "R12 Versioned Voice Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "R12 Versioned Voice Engine": {
+      "main": [
+        [
+          {
+            "node": "If Voice DB Mutation Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Voice DB Mutation Needed": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Versioned voice_config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Versioned voice_config": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Log Voice Approval in pending_actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Log Voice Approval in pending_actions": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch MANUAL_REVIEW Queue": {
+      "main": [
+        [
+          {
+            "node": "If Operator Requested Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Operator Requested Retry": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Re-Queue Stuck MANUAL_REVIEW Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Manual Review Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Re-Queue Stuck MANUAL_REVIEW Items": {
+      "main": [
+        [
+          {
+            "node": "Format Manual Review Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Manual Review Output": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rule 18 Gate: Invoke WF-07 Publisher": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq AI Admin Assistant": {
+      "main": [
+        [
+          {
+            "node": "AI Whitelist Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Whitelist Validator": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Execute Whitelisted AI Mutation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Execute Whitelisted AI Mutation": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log (WF-04)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Audit Log (WF-04)": {
+      "main": [
+        [
+          {
+            "node": "Final Admin Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "8q9tF3VE0mLUZQfa",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T07:50:44.588Z",
+      "updatedAt": "2026-10-26T07:50:44.588Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "dbecaad7-6444-4e0c-ac50-33ad54637bcd",
+    "workflowId": "8q9tF3VE0mLUZQfa",
+    "nodes": [
+      {
+        "id": "ebce0528-c9ec-4ffe-8b9b-916967eaa4aa",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          1408
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "7dbcd2bd-87b3-40ed-b61b-01f441522a0e",
+        "name": "Command Gateway & Router",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          1408
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\nconst rawText = (raw.rawText || raw.userPrompt || raw.text || '').toString().trim();\nconst rawCommand = (raw.downstream_command || raw.intent || 'ADMIN_STATUS').toString().toUpperCase().trim();\n\nlet command = rawCommand === 'CHANGE_CHARACTER_VOICE' ? 'CHANGE_VOICE' : rawCommand;\n\nconst isConfirmYes = /^(#?\\s*(haan|yes|confirm|proceed|kar\\s*do))\\b/i.test(rawText);\nconst isConfirmCancel = /^(#?\\s*(cancel|nahi|no|abort|ruk\\s*jao))\\b/i.test(rawText);\n\nif (/^#?\\s*llm_usage\\b/i.test(rawText)) command = 'LLM_USAGE';\nelse if (/^#?\\s*project_list\\b/i.test(rawText)) command = 'PROJECT_LIST';\nelse if (/^#?\\s*episode_list\\b/i.test(rawText)) command = 'EPISODE_LIST';\nelse if (/^#?\\s*(project_switch|open_project)\\b/i.test(rawText)) command = 'PROJECT_SWITCH';\nelse if (/^#?\\s*project_delete\\b/i.test(rawText)) command = 'PROJECT_DELETE';\nelse if (/^#?\\s*view_manual_review/i.test(rawText)) command = 'VIEW_MANUAL_REVIEW_QUEUE';\nelse if (/^#?\\s*retry_vision/i.test(rawText)) command = 'RETRY_VISION_ANALYSIS';\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nlet top_branch = 'DIRECT_SAFE';\n\nif (['PROJECT_DELETE', 'ADMIN_STOP_KAGGLE'].includes(command) || isConfirmYes || isConfirmCancel) {\n  top_branch = 'DESTRUCTIVE_GATE';\n} else if (['CHANGE_VOICE', 'PREVIEW_VOICE', 'LIST_VOICES', 'RESET_VOICE'].includes(command)) {\n  top_branch = 'VOICE_R12';\n} else if (['VIEW_MANUAL_REVIEW_QUEUE', 'RETRY_VISION_ANALYSIS', 'RETRY_FAILED'].includes(command)) {\n  top_branch = 'MANUAL_REVIEW_PART_Q';\n} else if (command === 'PUBLISH_NOW') {\n  top_branch = 'PUBLISH_GATE_WF07';\n} else if (['PROJECT_CREATE', 'PROJECT_UPDATE', 'CHARACTER_ADD', 'CHARACTER_EDIT', 'RULE_ADD', 'UPDATE_ARC', 'UPDATE_POWER', 'UPDATE_RELATIONSHIP', 'UPDATE_KNOWLEDGE', 'UPDATE_LOCATION', 'UPDATE_ARTIFACT', 'UPDATE_MYSTERY', 'UPDATE_FORESHADOW', 'ADD_TIMELINE_EVENT'].includes(command)) {\n  top_branch = 'AI_ASSISTED_MUTATION';\n}\n\nreturn { json: { ...raw, command, top_branch, rawText, project_id, episode_no, sessionId, is_confirm_yes: isConfirmYes, is_confirm_cancel: isConfirmCancel, extracted_params: extracted, timestamp: $now.toISOString() } };"
+        }
+      },
+      {
+        "id": "0ccb2110-f042-409f-8311-f9dbe3f095fb",
+        "name": "Master Admin Branch Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          448,
+          1328
+        ],
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.top_branch }}",
+                      "rightValue": "DIRECT_SAFE",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "1_DIRECT_SAFE"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.top_branch }}",
+                      "rightValue": "DESTRUCTIVE_GATE",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "2_DESTRUCTIVE_GATE"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.top_branch }}",
+                      "rightValue": "VOICE_R12",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "3_VOICE_R12"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.top_branch }}",
+                      "rightValue": "MANUAL_REVIEW_PART_Q",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "4_MANUAL_REVIEW"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.top_branch }}",
+                      "rightValue": "PUBLISH_GATE_WF07",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "5_PUBLISH_NOW"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.top_branch }}",
+                      "rightValue": "AI_ASSISTED_MUTATION",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "6_AI_MUTATION"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        }
+      },
+      {
+        "id": "78981c0a-2a41-4c6a-87c0-894aa06d65f3",
+        "name": "Direct Safe Sub-Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          1344,
+          176
+        ],
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "rightValue": "ADMIN_START_KAGGLE",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "START_KAGGLE"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "rightValue": "PROJECT_SWITCH",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "PROJECT_SWITCH"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        }
+      },
+      {
+        "id": "357f3198-94b9-45d1-975d-bc07bd36e12d",
+        "name": "Kaggle Worker: Start Session",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1568,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/admin/start-session",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ session_name: 'kaggle_story_engine', action: 'START', requested_by: $json.sessionId }) }}",
+          "options": {
+            "timeout": 30000
+          }
+        }
+      },
+      {
+        "id": "c4af4ed1-df8a-40fd-854d-79ea7820c5c0",
+        "name": "Supabase: Activate Switched Project",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1568,
+          192
+        ],
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?id=eq.{{ $json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ is_active: true }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "357945b7-cf6a-46cc-8ae5-c775538f9f96",
+        "name": "Supabase: Read Projects & System Health",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1568,
+          384
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,is_active,current_season&limit=20",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "2bbe788e-e680-4073-b8e3-fc8fc0140a8f",
+        "name": "Format Direct Safe Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1792,
+          192
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst resp = $input.item.json;\nconst rows = Array.isArray(resp) ? resp : (resp && resp.id ? [resp] : []);\n\nlet msg = '';\nif (gw.command === 'ADMIN_START_KAGGLE') {\n  msg = `\ud83d\ude80 **WF-04: Kaggle Session Started!**\\n\u2022 Session \\`kaggle_story_engine\\` boot signal sent successfully.`;\n} else if (gw.command === 'PROJECT_SWITCH') {\n  msg = `\ud83d\udd04 **WF-04: Project Switched!**\\n\u2022 Project \\`${gw.project_id}\\` is now set to \\`is_active = true\\`.`;\n} else if (gw.command === 'PROJECT_LIST') {\n  const listStr = rows.map(r => `\u2022 ${r.name} (\\`${r.id}\\`) \u2014 Active: ${r.is_active}`).join('\\n') || '\u2022 Active project loaded.';\n  msg = `\ud83d\udcc1 **WF-04: Registered Projects:**\\n${listStr}`;\n} else {\n  msg = `\ud83d\udfe2 **WF-04: ${gw.command} \u2014 System Online!**\\n\u2022 Supabase PostgREST: Healthy | Active Project ID: \\`${gw.project_id}\\``;\n}\n\nreturn { json: { ...gw, branch_status: 'DIRECT_COMMAND_COMPLETED', formatted_output: msg } };"
+        }
+      },
+      {
+        "id": "c48692ba-79aa-4640-aa55-7c205833f9a6",
+        "name": "Supabase: Check Active 10-Min Confirmation Lock",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1120,
+          816
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,action_type,status,action_payload,created_at,expires_at&status=eq.AWAITING_CONFIRMATION&order=created_at.desc&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "a1b10db3-770a-491e-9755-9e8996d873a1",
+        "name": "10-Min Destructive Confirmation Evaluator",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          816
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst rawLock = $input.item.json;\nconst pendingRow = Array.isArray(rawLock) ? rawLock[0] : (rawLock && rawLock.id ? rawLock : null);\n\nconst nowMs = Date.now();\nlet isLockValid = false;\nlet lockedAction = null;\n\nif (pendingRow && pendingRow.expires_at) {\n  const expiresMs = new Date(pendingRow.expires_at).getTime();\n  if (expiresMs > nowMs) {\n    isLockValid = true;\n    lockedAction = pendingRow.action_type;\n  }\n} else if (pendingRow && pendingRow.created_at) {\n  const createdMs = new Date(pendingRow.created_at).getTime();\n  const ageMinutes = (nowMs - createdMs) / 60000;\n  if (ageMinutes <= 10) {\n    isLockValid = true;\n    lockedAction = pendingRow.action_type;\n  }\n}\n\nif (gw.is_confirm_cancel) {\n  return { json: { ...gw, destructive_decision: 'CANCELLED', pending_id: pendingRow?.id || null, formatted_output: `\ud83d\udee1\ufe0f **Destructive Action Cancelled!** Koi bhi project delete ya Kaggle session stop nahi kiya gaya.` } };\n}\n\nif (gw.is_confirm_yes && isLockValid && ['PROJECT_DELETE', 'ADMIN_STOP_KAGGLE'].includes(lockedAction)) {\n  return { json: { ...gw, command: lockedAction, destructive_decision: lockedAction === 'ADMIN_STOP_KAGGLE' ? 'EXECUTE_STOP_KAGGLE' : 'EXECUTE_DELETE_PROJECT', pending_id: pendingRow.id, formatted_output: `\u2705 **Confirmed (${lockedAction})!** Executing destructive operation now.` } };\n}\n\nconst targetAction = ['PROJECT_DELETE', 'ADMIN_STOP_KAGGLE'].includes(gw.command) ? gw.command : 'ADMIN_STOP_KAGGLE';\nconst expiresIso = new Date(nowMs + 10 * 60000).toISOString();\n\nreturn {\n  json: {\n    ...gw,\n    destructive_decision: 'PROMPT_CONFIRMATION',\n    confirmation_insert_payload: {\n      project_id: gw.project_id,\n      action_type: targetAction,\n      status: 'AWAITING_CONFIRMATION',\n      action_payload: { requested_by: gw.sessionId },\n      expires_at: expiresIso\n    },\n    formatted_output: `\u26a0\ufe0f **CRITICAL SAFETY GATE (${targetAction}):**\\nKya aap sach me \\`${targetAction}\\` execute karna chahte hain?\\n\u2022 Ye confirmation **10 minutes** (\\`${expiresIso}\\`) me expire ho jayegi.\\n\u2022 Proceed karne ke liye **\"haan\"** reply karein, ya rokne ke liye **\"cancel\"** likhein.`\n  }\n};"
+        }
+      },
+      {
+        "id": "988eedc3-feeb-45eb-b33a-14c18848b72c",
+        "name": "Destructive Decision Switch",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          1568,
+          784
+        ],
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.destructive_decision }}",
+                      "rightValue": "PROMPT_CONFIRMATION",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "PROMPT_WAIT"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.destructive_decision }}",
+                      "rightValue": "EXECUTE_STOP_KAGGLE",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "STOP_KAGGLE"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.destructive_decision }}",
+                      "rightValue": "EXECUTE_DELETE_PROJECT",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "DELETE_PROJECT"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        }
+      },
+      {
+        "id": "516c4d26-dda7-4a27-a302-243cac6ba1da",
+        "name": "Supabase: Store 10-Min Confirmation Prompt",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          528
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.confirmation_insert_payload) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "eb67293c-60d8-48f1-b0fb-cb643c1e1d2b",
+        "name": "Kaggle Worker: Confirmed Stop Session",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          720
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/admin/stop-session",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ session_name: 'kaggle_story_engine', action: 'STOP', confirmed: true }) }}",
+          "options": {
+            "timeout": 30000
+          }
+        }
+      },
+      {
+        "id": "c65cb660-f94a-4797-96d2-e896bfc56758",
+        "name": "Supabase: Confirmed Deactivate Project",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          912
+        ],
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?id=eq.{{ $json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ is_active: false }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "948ad01a-69c6-489f-aaa9-015e35dc810f",
+        "name": "Supabase: Fetch Active Voice Catalog",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          672,
+          1296
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/voice_catalog?select=provider,voice_id,voice_name,gender,language&is_active=eq.true",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "eb6251eb-475c-49eb-89b5-8c31f2a9b7ef",
+        "name": "Supabase: Fetch Character Voice Config",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          896,
+          1296
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,voice_config&project_id=eq.{{ $('Command Gateway & Router').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "3ec40150-7fab-434e-a35a-cf1916df93af",
+        "name": "R12 Versioned Voice Engine",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          1296
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst voicesRaw = $('Supabase: Fetch Active Voice Catalog').all().map(i => i.json);\nconst charsRaw = $input.all().map(i => i.json);\nconst voices = Array.isArray(voicesRaw[0]) ? voicesRaw[0] : voicesRaw.filter(v => v && v.voice_id);\nconst chars = Array.isArray(charsRaw[0]) ? charsRaw[0] : charsRaw.filter(c => c && c.character_code);\n\nif (gw.command === 'LIST_VOICES') {\n  const listText = voices.map(v => `\u2022 \\`${v.voice_id}\\` (${v.voice_name}) \u2014 ${v.provider} | ${v.gender} | ${v.language}`).join('\\n') || '\u2022 Default Svara/Supertonic voices active.';\n  return { json: { ...gw, needs_voice_mutation: false, formatted_output: `\ud83c\udf99\ufe0f **WF-04: Active Voice Catalog (Rule 40):**\\n${listText}` } };\n}\n\nconst targetCharCode = (gw.extracted_params?.character_name || gw.extracted_params?.character_code || 'CHAR_001').toString().toUpperCase().trim();\nconst matchedChar = chars.find(c => (c.character_code || '').toUpperCase() === targetCharCode || (c.name || '').toUpperCase().includes(targetCharCode)) || chars[0] || { character_code: 'CHAR_001', name: 'Protagonist', voice_config: {} };\nconst existingVc = (matchedChar.voice_config && typeof matchedChar.voice_config === 'object') ? matchedChar.voice_config : {};\n\nif (gw.command === 'PREVIEW_VOICE') {\n  const previewVoiceId = gw.extracted_params?.voice_id || existingVc.voice_id || 'svara_hi_male_hero_01';\n  return { json: { ...gw, needs_voice_mutation: false, formatted_output: `\ud83c\udfa7 **WF-04: Voice Preview Generated!**\\n\u2022 Character: \\`${matchedChar.character_code}\\` | Voice ID: \\`${previewVoiceId}\\`\\n\u2022 Preview URL: \\`${$env.SUPABASE_URL}/storage/v1/object/public/previews/${previewVoiceId}_sample.wav\\`` } };\n}\n\nconst currentVer = Number(existingVc.version || 1);\nconst nextVer = currentVer + 1;\nconst newVoiceId = gw.command === 'RESET_VOICE' ? 'svara_hi_male_hero_01' : (gw.extracted_params?.voice_id || 'svara_hi_male_hero_01');\nconst matchedCatalogVoice = voices.find(v => v.voice_id === newVoiceId) || { provider: 'Svara TTS', gender: existingVc.gender || 'male', language: 'hi' };\n\nconst versionedVoiceConfig = {\n  voice_id: newVoiceId,\n  voice_provider: matchedCatalogVoice.provider || 'Svara TTS',\n  voice_model: existingVc.voice_model || 'svara-v2-hi',\n  language: matchedCatalogVoice.language || 'hi',\n  gender: matchedCatalogVoice.gender || 'male',\n  pitch: 1.0,\n  speed: 1.0,\n  version: nextVer,\n  status: 'pending_approval',\n  emotion_profile: { neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 }, joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 } },\n  previous_voice_id: existingVc.voice_id || null,\n  changed_at: $now.toISOString(),\n  changed_by: gw.sessionId\n};\n\nreturn {\n  json: {\n    ...gw,\n    needs_voice_mutation: true,\n    target_character_code: matchedChar.character_code,\n    versioned_voice_config: versionedVoiceConfig,\n    pending_voice_approval: {\n      project_id: gw.project_id,\n      action_type: gw.command,\n      entity_type: 'CHARACTER_VOICE',\n      entity_code: matchedChar.character_code,\n      status: 'PENDING',\n      action_payload: { previous_version: currentVer, new_version: nextVer, new_voice_config: versionedVoiceConfig }\n    },\n    formatted_output: `\ud83c\udf99\ufe0f **WF-04: R12 Versioned Voice Updated (${gw.command})!**\\n\u2022 **Character:** \\`${matchedChar.character_code}\\` (${matchedChar.name})\\n\u2022 **New Voice ID:** \\`${newVoiceId}\\` | **Version:** \\`v${currentVer} -> v${nextVer}\\`\\n\u2022 **Approval State:** Logged in \\`pending_actions\\` (\\`pending_approval\\`).`\n  }\n};"
+        }
+      },
+      {
+        "id": "de7dc03e-b0c1-4c54-8ccc-bb5af3403428",
+        "name": "If Voice DB Mutation Needed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1344,
+          1296
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.needs_voice_mutation }}",
+                "value2": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "d2dde92b-e49b-47c6-90f5-110f636844ff",
+        "name": "Supabase: Update Versioned voice_config",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1568,
+          1200
+        ],
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?project_id=eq.{{ $json.project_id }}&character_code=eq.{{ $json.target_character_code }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ voice_config: $json.versioned_voice_config }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "b15d7c9c-3f57-4654-8ac0-1ed07eec405e",
+        "name": "Supabase: Log Voice Approval in pending_actions",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          1200
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('R12 Versioned Voice Engine').item.json.pending_voice_approval) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "e3c277be-d962-4c38-a24e-6b6550c8b9a5",
+        "name": "Supabase: Fetch MANUAL_REVIEW Queue",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1120,
+          1584
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,action_type,review_type,status,created_at&status=eq.MANUAL_REVIEW&project_id=eq.{{ $json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "6725fe0d-273c-499d-9cb0-7e6e697b6157",
+        "name": "If Operator Requested Retry",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1344,
+          1584
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ ['RETRY_FAILED', 'RETRY_VISION_ANALYSIS'].includes($('Command Gateway & Router').item.json.command) }}",
+                "value2": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "cbe11c5a-8352-4c7b-b1e3-640bf2293001",
+        "name": "Supabase: Re-Queue Stuck MANUAL_REVIEW Items",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1568,
+          1488
+        ],
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?status=eq.MANUAL_REVIEW&project_id=eq.{{ $('Command Gateway & Router').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'PENDING' }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "47822a24-d75d-4c74-9ece-cc38ba7b7309",
+        "name": "Format Manual Review Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1792,
+          1584
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst rawQ = $('Supabase: Fetch MANUAL_REVIEW Queue').all().map(i => i.json);\nconst items = Array.isArray(rawQ[0]) ? rawQ[0] : rawQ.filter(r => r && r.id);\nconst isRetry = ['RETRY_FAILED', 'RETRY_VISION_ANALYSIS'].includes(gw.command);\nconst summary = items.length > 0 ? items.map(r => `\u2022 ID \\`${r.id}\\`: ${r.action_type} (${r.review_type || 'REVIEW'})`).join('\\n') : '\u2022 Queue bilkul clean hai (0 items stuck in MANUAL_REVIEW).';\nreturn { json: { ...gw, formatted_output: isRetry ? `\ud83d\udd04 **WF-04: Retried ${items.length} Manual Review Items!**\\nSabhi stuck items ko wapas \\`status = PENDING\\` me push kar diya gaya hai.\\n${summary}` : `\ud83d\udccb **WF-04: Manual Review Queue (${items.length} Items):**\\n${summary}` } };"
+        }
+      },
+      {
+        "id": "cbd5e901-3f7e-4188-9787-fbb53e9dc7bc",
+        "name": "Rule 18 Gate: Invoke WF-07 Publisher",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          1776
+        ],
+        "parameters": {
+          "workflowId": "={{ $env.WF_07_PUBLISHER_ID }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "bfb322ac-8b21-47bd-8481-13c1762a2398",
+        "name": "Groq AI Admin Assistant",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          1344,
+          1968
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.groq.api_key || $env.GROQ_API_KEY) }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-04 AI Admin Database Assistant. Parse the operator command into STRICT JSON: {\"target_table\": \"projects|characters|story_rules|character_arcs|power_system|character_relationships|locations|artifacts|mystery_tracker|story_timeline\", \"record\": {...}, \"summary\": \"Hinglish summary\"}.' }, { role: 'user', content: 'Command: ' + $json.command + '\\nProject ID: ' + $json.project_id + '\\nInput: ' + $json.rawText } ] }) }}",
+          "options": {
+            "timeout": 20000
+          }
+        }
+      },
+      {
+        "id": "7b6b2fee-10f6-4870-ac54-b664e2ad9b29",
+        "name": "AI Whitelist Validator",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1568,
+          1968
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst llmRaw = $input.item.json || {};\nconst WHITELIST = new Set(['projects', 'characters', 'story_rules', 'character_arcs', 'power_system', 'character_relationships', 'locations', 'artifacts', 'mystery_tracker', 'story_timeline']);\nlet parsed = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) parsed = JSON.parse(content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim());\n} catch (e) { parsed = null; }\n\nconst table = (parsed && WHITELIST.has(parsed.target_table)) ? parsed.target_table : 'story_rules';\nconst rec = (parsed && parsed.record && typeof parsed.record === 'object') ? parsed.record : { rule_code: 'RULE_ADMIN', rule_text: gw.rawText };\nif (table !== 'projects') rec.project_id = gw.project_id;\n\nreturn { json: { ...gw, target_table: table, mutation_record: rec, formatted_output: `\u2728 **WF-04: AI Admin Mutation (${gw.command})**\\n\u2022 Target Table: \\`${table}\\`\\n\u2022 Summary: ${parsed?.summary || 'Record updated successfully.'}` } };"
+        }
+      },
+      {
+        "id": "0446ba5c-d5f0-428f-bec1-706533c8a089",
+        "name": "Supabase: Execute Whitelisted AI Mutation",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          1968
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/{{ $json.target_table }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.mutation_record) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "98aaadaf-bbf5-4bd5-9307-1a8733c80f46",
+        "name": "Supabase: Insert Audit Log (WF-04)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2016,
+          1184
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Command Gateway & Router').item.json.project_id, workflow_name: 'WF-04', action: $('Command Gateway & Router').item.json.command, execution_id: $execution.id }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "798dac61-4ca8-40b0-b9e2-53968c110da6",
+        "name": "Final Admin Response Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          1184
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const gw = $('Command Gateway & Router').item.json;\nconst activeNode = $('Format Direct Safe Output').isExecuted ? $('Format Direct Safe Output').item.json : $('10-Min Destructive Confirmation Evaluator').isExecuted ? $('10-Min Destructive Confirmation Evaluator').item.json : $('R12 Versioned Voice Engine').isExecuted ? $('R12 Versioned Voice Engine').item.json : $('Format Manual Review Output').isExecuted ? $('Format Manual Review Output').item.json : $('AI Whitelist Validator').isExecuted ? $('AI Whitelist Validator').item.json : $('Rule 18 Gate: Invoke WF-07 Publisher').isExecuted ? $('Rule 18 Gate: Invoke WF-07 Publisher').item.json : gw;\nconst finalMsg = activeNode.formatted_output || activeNode.output || activeNode.text || `\u2705 WF-04 Command ${gw.command} completed.`;\nreturn { json: { ok: true, status: 'ADMIN_COMMAND_COMPLETED', workflow_name: 'WF-04', execution_id: $execution.id, project_id: gw.project_id, command: gw.command, top_branch: gw.top_branch, output: finalMsg, text: finalMsg } };"
+        }
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Command Gateway & Router",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Command Gateway & Router": {
+        "main": [
+          [
+            {
+              "node": "Master Admin Branch Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Master Admin Branch Switch": {
+        "main": [
+          [
+            {
+              "node": "Direct Safe Sub-Switch",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Check Active 10-Min Confirmation Lock",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Fetch Active Voice Catalog",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Fetch MANUAL_REVIEW Queue",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Rule 18 Gate: Invoke WF-07 Publisher",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Groq AI Admin Assistant",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Direct Safe Sub-Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Direct Safe Sub-Switch": {
+        "main": [
+          [
+            {
+              "node": "Kaggle Worker: Start Session",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Activate Switched Project",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Read Projects & System Health",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Kaggle Worker: Start Session": {
+        "main": [
+          [
+            {
+              "node": "Format Direct Safe Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Activate Switched Project": {
+        "main": [
+          [
+            {
+              "node": "Format Direct Safe Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Read Projects & System Health": {
+        "main": [
+          [
+            {
+              "node": "Format Direct Safe Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Direct Safe Output": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Check Active 10-Min Confirmation Lock": {
+        "main": [
+          [
+            {
+              "node": "10-Min Destructive Confirmation Evaluator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "10-Min Destructive Confirmation Evaluator": {
+        "main": [
+          [
+            {
+              "node": "Destructive Decision Switch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Destructive Decision Switch": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Store 10-Min Confirmation Prompt",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Kaggle Worker: Confirmed Stop Session",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Confirmed Deactivate Project",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Store 10-Min Confirmation Prompt": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Kaggle Worker: Confirmed Stop Session": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Confirmed Deactivate Project": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Active Voice Catalog": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Character Voice Config",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Character Voice Config": {
+        "main": [
+          [
+            {
+              "node": "R12 Versioned Voice Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "R12 Versioned Voice Engine": {
+        "main": [
+          [
+            {
+              "node": "If Voice DB Mutation Needed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Voice DB Mutation Needed": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Update Versioned voice_config",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Update Versioned voice_config": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Log Voice Approval in pending_actions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Log Voice Approval in pending_actions": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch MANUAL_REVIEW Queue": {
+        "main": [
+          [
+            {
+              "node": "If Operator Requested Retry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Operator Requested Retry": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Re-Queue Stuck MANUAL_REVIEW Items",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Format Manual Review Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Re-Queue Stuck MANUAL_REVIEW Items": {
+        "main": [
+          [
+            {
+              "node": "Format Manual Review Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Manual Review Output": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rule 18 Gate: Invoke WF-07 Publisher": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Groq AI Admin Assistant": {
+        "main": [
+          [
+            {
+              "node": "AI Whitelist Validator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Whitelist Validator": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Execute Whitelisted AI Mutation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Execute Whitelisted AI Mutation": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log (WF-04)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Audit Log (WF-04)": {
+        "main": [
+          [
+            {
+              "node": "Final Admin Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T21:00:24.978Z",
+    "updatedAt": "2026-10-29T21:00:24.978Z",
+    "workflowPublishHistory": [
+      {
+        "id": 144,
+        "workflowId": "8q9tF3VE0mLUZQfa",
+        "versionId": "dbecaad7-6444-4e0c-ac50-33ad54637bcd",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-29T21:00:25.177Z"
+      }
+    ]
+  }
+}

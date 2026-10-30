@@ -1,0 +1,1427 @@
+{
+  "id": "PFXwsrQDk9nSIkRY",
+  "name": "Storywf11",
+  "description": "WF-11 QC Gate: Validates audio, video, and script quality before approval.",
+  "active": true,
+  "activeVersionId": "1f221f3c-b600-443a-8130-9eb6fc5386b7",
+  "createdAt": "2026-10-26T10:07:34.388Z",
+  "updatedAt": "2026-10-26T10:08:28.672Z",
+  "isArchived": false,
+  "versionId": "1f221f3c-b600-443a-8130-9eb6fc5386b7",
+  "versionCounter": 2,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "0c0936c0-dc5a-4be2-b288-e6a0a19bb989",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || 1);\n\nconst rawIntent = (raw.intent || raw.downstream_command || 'AUTO_QC').toString().toUpperCase().trim();\nconst qc_intent = (rawIntent === 'MANUAL_APPROVE' || rawIntent === 'APPROVE_QC') ? 'MANUAL_APPROVE' : 'AUTO_QC';\n\nconst media_url = raw.media_url || raw.final_video_url || raw.output_media?.master_video_url || raw.output_media?.final_video_url || null;\nconst file_size = Number(raw.file_size || raw.output_media?.file_size_bytes || 0);\nconst duration_sec = Number(raw.duration_sec || raw.output_media?.duration_sec || 0);\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-11 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { ...raw, project_id, episode_no, season_no, qc_intent, media_url, file_size, duration_sec, sessionId, evaluated_at: $now.toISOString() } };"
+      },
+      "id": "360cc48c-ab11-4fe4-8d95-3426a6923622",
+      "name": "Input Normalizer & QC Intent Resolver",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?select=id,project_id,episode_no,title,script_json,output_media,current_state,qc_status&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9828e4c4-9eb6-44d6-9778-9097c8a2da8e",
+      "name": "Supabase: Fetch Episode Metadata",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Input Normalizer & QC Intent Resolver').item.json.qc_intent }}",
+                    "rightValue": "AUTO_QC",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "AUTO_QC"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Input Normalizer & QC Intent Resolver').item.json.qc_intent }}",
+                    "rightValue": "MANUAL_APPROVE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MANUAL_APPROVE"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "f3b3fab9-3e1a-4bb1-a9a1-c7fd55dc69fc",
+      "name": "Router Switch (AUTO_QC vs MANUAL_APPROVE)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        672,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base = $('Input Normalizer & QC Intent Resolver').item.json;\nconst rawEp = $input.item.json;\nconst epRow = Array.isArray(rawEp) ? rawEp[0] : (rawEp && rawEp.episode_no !== undefined ? rawEp : {});\n\nconst outputMedia = (epRow?.output_media && typeof epRow.output_media === 'object') ? epRow.output_media : {};\nconst scriptJson = (epRow?.script_json && typeof epRow.script_json === 'object') ? epRow.script_json : {};\nconst scenes = Array.isArray(scriptJson.scenes) ? scriptJson.scenes : [];\n\nconst resolvedUrl = (base.media_url || outputMedia.final_video_url || outputMedia.master_video_url || '').toString().trim();\nconst resolvedSize = Number(base.file_size || outputMedia.file_size_bytes || 0);\nconst expectedDuration = scenes.reduce((acc, s) => acc + Number(s.duration_sec || 5), 0) || 15;\nconst actualDuration = Number(base.duration_sec || outputMedia.duration_sec || expectedDuration);\n\nconst MIN_FILE_SIZE_BYTES = Number($env.QC_MIN_FILE_SIZE_BYTES || 1048576);\nconst failures = [];\n\nif (!resolvedSize || resolvedSize < MIN_FILE_SIZE_BYTES) {\n  failures.push(`File size validation failed: ${resolvedSize} bytes is below minimum 1MB (${MIN_FILE_SIZE_BYTES} bytes).`);\n}\n\nif (!/^https?:\\/\\/.+\\.(mp4|mov|mkv|webm)(\\?.*)?$/i.test(resolvedUrl)) {\n  failures.push(`Invalid master video URL structure: '${resolvedUrl || 'EMPTY'}'.`);\n}\n\nconst durationDelta = Math.abs(actualDuration - expectedDuration);\nif (actualDuration <= 0 || (expectedDuration > 0 && durationDelta > expectedDuration * 0.35)) {\n  failures.push(`Duration mismatch: actual=${actualDuration}s vs expected=${expectedDuration}s.`);\n}\n\nif (!epRow?.title && !scriptJson?.title) {\n  failures.push('Metadata incomplete: Episode title is missing.');\n}\n\nconst qc_passed = failures.length === 0;\nconst next_qc_status = qc_passed ? 'PENDING_HUMAN_APPROVAL' : 'REJECTED';\n\nreturn {\n  json: {\n    ...base, episode_title: epRow?.title || scriptJson?.title || `Episode ${base.episode_no}`,\n    resolved_media_url: resolvedUrl, resolved_file_size: resolvedSize, expected_duration_sec: expectedDuration, actual_duration_sec: actualDuration,\n    qc_passed, next_qc_status, qc_failures: failures,\n    human_approval_task: {\n      project_id: base.project_id, episode_no: base.episode_no, action_type: 'QC_HUMAN_APPROVAL', review_type: 'AUTO_QC_PASSED_AWAITING_HUMAN', status: 'MANUAL_REVIEW',\n      action_payload: { media_url: resolvedUrl, file_size_bytes: resolvedSize, duration_sec: actualDuration, checked_at: base.evaluated_at }\n    },\n    wf13_retry_task: {\n      project_id: base.project_id, episode_no: base.episode_no, action_type: 'REGENERATE_EPISODE', review_type: 'QC_REJECTED_AUTO_HEAL', status: 'FAILED', retry_count: 0,\n      action_payload: { failed_workflow: 'WF-11', qc_failures: failures, media_url: resolvedUrl, file_size_bytes: resolvedSize, rejected_at: base.evaluated_at }\n    }\n  }\n};"
+      },
+      "id": "b93e8586-34d7-4a33-a9a2-7e68c8aba4bb",
+      "name": "Automated QC Inspector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.qc_passed }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "d073f3a9-4fd6-41ce-a84f-c6dae57ff2fb",
+      "name": "If Automated QC Passed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ qc_status: 'PENDING_HUMAN_APPROVAL' }) }}",
+        "options": {}
+      },
+      "id": "fbdcfa79-82ef-43fa-ad78-cc6445d48cd6",
+      "name": "Supabase: Set qc_status PENDING_HUMAN_APPROVAL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        0
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Automated QC Inspector').item.json.human_approval_task) }}",
+        "options": {}
+      },
+      "id": "f8e39a76-5267-47c4-9949-98aa5d06d2a0",
+      "name": "Supabase: Insert Human Approval Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        0
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ qc_status: 'REJECTED' }) }}",
+        "options": {}
+      },
+      "id": "94294168-7cd0-4bd6-af50-e0ea94462375",
+      "name": "Supabase: Set qc_status REJECTED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Automated QC Inspector').item.json.wf13_retry_task) }}",
+        "options": {}
+      },
+      "id": "fb174e9c-124f-4f50-967c-e9cf4b98b6ea",
+      "name": "Supabase: Queue FAILED Job for WF-13 Retry Manager",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.project_id }}&episode_no=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.episode_no }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ qc_status: 'APPROVED' }) }}",
+        "options": {}
+      },
+      "id": "47e47a43-0ad9-4ac0-9cb4-30a7e54e0fe0",
+      "name": "Supabase: Set qc_status APPROVED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        384
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.project_id }}&episode_no=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.episode_no }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ current_state: 'QC_APPROVED', updated_at: $now.toISOString() }) }}",
+        "options": {}
+      },
+      "id": "e289670a-c865-43fb-a959-c0843736b43f",
+      "name": "Supabase: Update Episode State QC_APPROVED",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        384
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?project_id=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.project_id }}&action_type=eq.QC_HUMAN_APPROVAL&status=eq.MANUAL_REVIEW",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'COMPLETED' }) }}",
+        "options": {}
+      },
+      "id": "72d959b4-ccba-428c-9836-fdc42374ec2a",
+      "name": "Supabase: Resolve Human Approval Task",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        384
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Input Normalizer & QC Intent Resolver').item.json.project_id, episode_no: $('Input Normalizer & QC Intent Resolver').item.json.episode_no, workflow_name: 'WF-11', action: $('Input Normalizer & QC Intent Resolver').item.json.qc_intent, execution_id: $execution.id }) }}",
+        "options": {}
+      },
+      "id": "2bca9f9b-3458-4609-9076-06ff5ab8362c",
+      "name": "Supabase: Insert Audit Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1792,
+        192
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base = $('Input Normalizer & QC Intent Resolver').item.json;\n\nif (base.qc_intent === 'MANUAL_APPROVE') {\n  const msg = [\n    `\u2705 **WF-11: Human QC Approval Committed (Rule 18)!**`,\n    `\u2022 **Project ID:** \\`${base.project_id}\\` | **Episode:** ${base.episode_no}`,\n    `\u2022 **QC Status:** \\`APPROVED\\` | **Episode State:** \\`QC_APPROVED\\``,\n    `\u2022 Episode ab **WF-07 (Publisher)** ke liye unlocked hai.`\n  ].join('\\n');\n  return { json: { ok: true, status: 'QC_APPROVED', qc_status: 'APPROVED', workflow_name: 'WF-11', execution_id: $execution.id, project_id: base.project_id, episode_no: base.episode_no, output: msg, text: msg } };\n}\n\nconst autoState = $('Automated QC Inspector').item.json;\nif (autoState.qc_passed) {\n  const passMsg = [\n    `\ud83d\udd0e **WF-11: Automated QC Checks PASSED!**`,\n    `\u2022 **Episode:** ${autoState.episode_no} (${autoState.episode_title})`,\n    `\u2022 **File Size:** ${(autoState.resolved_file_size / 1048576).toFixed(2)} MB (>= 1MB Required)`,\n    `\u2022 **Duration:** ${autoState.actual_duration_sec}s (Expected: ${autoState.expected_duration_sec}s)`,\n    `\u2022 **Next Step (Rule 18):** Marked \\`PENDING_HUMAN_APPROVAL\\` in \\`episodes\\` & queued in \\`pending_actions\\`.`\n  ].join('\\n');\n  return { json: { ok: true, status: 'PENDING_HUMAN_APPROVAL', qc_status: 'PENDING_HUMAN_APPROVAL', workflow_name: 'WF-11', execution_id: $execution.id, project_id: base.project_id, episode_no: base.episode_no, output: passMsg, text: passMsg } };\n}\n\nconst failMsg = [\n  `\ud83d\uded1 **WF-11: Automated QC REJECTED \u2014 Dispatched to WF-13 Healer!**`,\n  `\u2022 **Episode:** ${autoState.episode_no}`,\n  `\u2022 **Failures Detected:**`,\n  ...autoState.qc_failures.map(f => `  - ${f}`),\n  `\u2022 **Action Taken:** \\`episodes.qc_status = REJECTED\\` & job queued in \\`pending_actions\\` (\\`status = FAILED\\`) for **WF-13 Retry Manager**.`\n].join('\\n');\n\nreturn { json: { ok: false, status: 'QC_REJECTED', qc_status: 'REJECTED', workflow_name: 'WF-11', execution_id: $execution.id, project_id: base.project_id, episode_no: base.episode_no, qc_failures: autoState.qc_failures, output: failMsg, text: failMsg } };"
+      },
+      "id": "423d6034-0024-4ac0-b09c-bd2b5bf88a1b",
+      "name": "Final QC Response Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        192
+      ]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Input Normalizer & QC Intent Resolver",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Normalizer & QC Intent Resolver": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Episode Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Episode Metadata": {
+      "main": [
+        [
+          {
+            "node": "Router Switch (AUTO_QC vs MANUAL_APPROVE)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router Switch (AUTO_QC vs MANUAL_APPROVE)": {
+      "main": [
+        [
+          {
+            "node": "Automated QC Inspector",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Set qc_status APPROVED",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Automated QC Inspector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Automated QC Inspector": {
+      "main": [
+        [
+          {
+            "node": "If Automated QC Passed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Automated QC Passed": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Set qc_status PENDING_HUMAN_APPROVAL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Set qc_status REJECTED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Set qc_status PENDING_HUMAN_APPROVAL": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Human Approval Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Human Approval Task": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Set qc_status REJECTED": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Queue FAILED Job for WF-13 Retry Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Queue FAILED Job for WF-13 Retry Manager": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Set qc_status APPROVED": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Episode State QC_APPROVED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Episode State QC_APPROVED": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Resolve Human Approval Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Resolve Human Approval Task": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Final QC Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "PFXwsrQDk9nSIkRY",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T10:07:34.391Z",
+      "updatedAt": "2026-10-26T10:07:34.391Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "1f221f3c-b600-443a-8130-9eb6fc5386b7",
+    "workflowId": "PFXwsrQDk9nSIkRY",
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "0c0936c0-dc5a-4be2-b288-e6a0a19bb989",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || 1);\n\nconst rawIntent = (raw.intent || raw.downstream_command || 'AUTO_QC').toString().toUpperCase().trim();\nconst qc_intent = (rawIntent === 'MANUAL_APPROVE' || rawIntent === 'APPROVE_QC') ? 'MANUAL_APPROVE' : 'AUTO_QC';\n\nconst media_url = raw.media_url || raw.final_video_url || raw.output_media?.master_video_url || raw.output_media?.final_video_url || null;\nconst file_size = Number(raw.file_size || raw.output_media?.file_size_bytes || 0);\nconst duration_sec = Number(raw.duration_sec || raw.output_media?.duration_sec || 0);\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-11 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { ...raw, project_id, episode_no, season_no, qc_intent, media_url, file_size, duration_sec, sessionId, evaluated_at: $now.toISOString() } };"
+        },
+        "id": "360cc48c-ab11-4fe4-8d95-3426a6923622",
+        "name": "Input Normalizer & QC Intent Resolver",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?select=id,project_id,episode_no,title,script_json,output_media,current_state,qc_status&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9828e4c4-9eb6-44d6-9778-9097c8a2da8e",
+        "name": "Supabase: Fetch Episode Metadata",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          448,
+          192
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $('Input Normalizer & QC Intent Resolver').item.json.qc_intent }}",
+                      "rightValue": "AUTO_QC",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "AUTO_QC"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $('Input Normalizer & QC Intent Resolver').item.json.qc_intent }}",
+                      "rightValue": "MANUAL_APPROVE",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "MANUAL_APPROVE"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        },
+        "id": "f3b3fab9-3e1a-4bb1-a9a1-c7fd55dc69fc",
+        "name": "Router Switch (AUTO_QC vs MANUAL_APPROVE)",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          672,
+          176
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const base = $('Input Normalizer & QC Intent Resolver').item.json;\nconst rawEp = $input.item.json;\nconst epRow = Array.isArray(rawEp) ? rawEp[0] : (rawEp && rawEp.episode_no !== undefined ? rawEp : {});\n\nconst outputMedia = (epRow?.output_media && typeof epRow.output_media === 'object') ? epRow.output_media : {};\nconst scriptJson = (epRow?.script_json && typeof epRow.script_json === 'object') ? epRow.script_json : {};\nconst scenes = Array.isArray(scriptJson.scenes) ? scriptJson.scenes : [];\n\nconst resolvedUrl = (base.media_url || outputMedia.final_video_url || outputMedia.master_video_url || '').toString().trim();\nconst resolvedSize = Number(base.file_size || outputMedia.file_size_bytes || 0);\nconst expectedDuration = scenes.reduce((acc, s) => acc + Number(s.duration_sec || 5), 0) || 15;\nconst actualDuration = Number(base.duration_sec || outputMedia.duration_sec || expectedDuration);\n\nconst MIN_FILE_SIZE_BYTES = Number($env.QC_MIN_FILE_SIZE_BYTES || 1048576);\nconst failures = [];\n\nif (!resolvedSize || resolvedSize < MIN_FILE_SIZE_BYTES) {\n  failures.push(`File size validation failed: ${resolvedSize} bytes is below minimum 1MB (${MIN_FILE_SIZE_BYTES} bytes).`);\n}\n\nif (!/^https?:\\/\\/.+\\.(mp4|mov|mkv|webm)(\\?.*)?$/i.test(resolvedUrl)) {\n  failures.push(`Invalid master video URL structure: '${resolvedUrl || 'EMPTY'}'.`);\n}\n\nconst durationDelta = Math.abs(actualDuration - expectedDuration);\nif (actualDuration <= 0 || (expectedDuration > 0 && durationDelta > expectedDuration * 0.35)) {\n  failures.push(`Duration mismatch: actual=${actualDuration}s vs expected=${expectedDuration}s.`);\n}\n\nif (!epRow?.title && !scriptJson?.title) {\n  failures.push('Metadata incomplete: Episode title is missing.');\n}\n\nconst qc_passed = failures.length === 0;\nconst next_qc_status = qc_passed ? 'PENDING_HUMAN_APPROVAL' : 'REJECTED';\n\nreturn {\n  json: {\n    ...base, episode_title: epRow?.title || scriptJson?.title || `Episode ${base.episode_no}`,\n    resolved_media_url: resolvedUrl, resolved_file_size: resolvedSize, expected_duration_sec: expectedDuration, actual_duration_sec: actualDuration,\n    qc_passed, next_qc_status, qc_failures: failures,\n    human_approval_task: {\n      project_id: base.project_id, episode_no: base.episode_no, action_type: 'QC_HUMAN_APPROVAL', review_type: 'AUTO_QC_PASSED_AWAITING_HUMAN', status: 'MANUAL_REVIEW',\n      action_payload: { media_url: resolvedUrl, file_size_bytes: resolvedSize, duration_sec: actualDuration, checked_at: base.evaluated_at }\n    },\n    wf13_retry_task: {\n      project_id: base.project_id, episode_no: base.episode_no, action_type: 'REGENERATE_EPISODE', review_type: 'QC_REJECTED_AUTO_HEAL', status: 'FAILED', retry_count: 0,\n      action_payload: { failed_workflow: 'WF-11', qc_failures: failures, media_url: resolvedUrl, file_size_bytes: resolvedSize, rejected_at: base.evaluated_at }\n    }\n  }\n};"
+        },
+        "id": "b93e8586-34d7-4a33-a9a2-7e68c8aba4bb",
+        "name": "Automated QC Inspector",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.qc_passed }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "d073f3a9-4fd6-41ce-a84f-c6dae57ff2fb",
+        "name": "If Automated QC Passed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1120,
+          96
+        ]
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ qc_status: 'PENDING_HUMAN_APPROVAL' }) }}",
+          "options": {}
+        },
+        "id": "fbdcfa79-82ef-43fa-ad78-cc6445d48cd6",
+        "name": "Supabase: Set qc_status PENDING_HUMAN_APPROVAL",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1344,
+          0
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Automated QC Inspector').item.json.human_approval_task) }}",
+          "options": {}
+        },
+        "id": "f8e39a76-5267-47c4-9949-98aa5d06d2a0",
+        "name": "Supabase: Insert Human Approval Task",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          0
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ qc_status: 'REJECTED' }) }}",
+          "options": {}
+        },
+        "id": "94294168-7cd0-4bd6-af50-e0ea94462375",
+        "name": "Supabase: Set qc_status REJECTED",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1344,
+          192
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Automated QC Inspector').item.json.wf13_retry_task) }}",
+          "options": {}
+        },
+        "id": "fb174e9c-124f-4f50-967c-e9cf4b98b6ea",
+        "name": "Supabase: Queue FAILED Job for WF-13 Retry Manager",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          192
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.project_id }}&episode_no=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.episode_no }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ qc_status: 'APPROVED' }) }}",
+          "options": {}
+        },
+        "id": "47e47a43-0ad9-4ac0-9cb4-30a7e54e0fe0",
+        "name": "Supabase: Set qc_status APPROVED",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1120,
+          384
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.project_id }}&episode_no=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.episode_no }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ current_state: 'QC_APPROVED', updated_at: $now.toISOString() }) }}",
+          "options": {}
+        },
+        "id": "e289670a-c865-43fb-a959-c0843736b43f",
+        "name": "Supabase: Update Episode State QC_APPROVED",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1344,
+          384
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?project_id=eq.{{ $('Input Normalizer & QC Intent Resolver').item.json.project_id }}&action_type=eq.QC_HUMAN_APPROVAL&status=eq.MANUAL_REVIEW",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'COMPLETED' }) }}",
+          "options": {}
+        },
+        "id": "72d959b4-ccba-428c-9836-fdc42374ec2a",
+        "name": "Supabase: Resolve Human Approval Task",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          384
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Input Normalizer & QC Intent Resolver').item.json.project_id, episode_no: $('Input Normalizer & QC Intent Resolver').item.json.episode_no, workflow_name: 'WF-11', action: $('Input Normalizer & QC Intent Resolver').item.json.qc_intent, execution_id: $execution.id }) }}",
+          "options": {}
+        },
+        "id": "2bca9f9b-3458-4609-9076-06ff5ab8362c",
+        "name": "Supabase: Insert Audit Log",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1792,
+          192
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const base = $('Input Normalizer & QC Intent Resolver').item.json;\n\nif (base.qc_intent === 'MANUAL_APPROVE') {\n  const msg = [\n    `\u2705 **WF-11: Human QC Approval Committed (Rule 18)!**`,\n    `\u2022 **Project ID:** \\`${base.project_id}\\` | **Episode:** ${base.episode_no}`,\n    `\u2022 **QC Status:** \\`APPROVED\\` | **Episode State:** \\`QC_APPROVED\\``,\n    `\u2022 Episode ab **WF-07 (Publisher)** ke liye unlocked hai.`\n  ].join('\\n');\n  return { json: { ok: true, status: 'QC_APPROVED', qc_status: 'APPROVED', workflow_name: 'WF-11', execution_id: $execution.id, project_id: base.project_id, episode_no: base.episode_no, output: msg, text: msg } };\n}\n\nconst autoState = $('Automated QC Inspector').item.json;\nif (autoState.qc_passed) {\n  const passMsg = [\n    `\ud83d\udd0e **WF-11: Automated QC Checks PASSED!**`,\n    `\u2022 **Episode:** ${autoState.episode_no} (${autoState.episode_title})`,\n    `\u2022 **File Size:** ${(autoState.resolved_file_size / 1048576).toFixed(2)} MB (>= 1MB Required)`,\n    `\u2022 **Duration:** ${autoState.actual_duration_sec}s (Expected: ${autoState.expected_duration_sec}s)`,\n    `\u2022 **Next Step (Rule 18):** Marked \\`PENDING_HUMAN_APPROVAL\\` in \\`episodes\\` & queued in \\`pending_actions\\`.`\n  ].join('\\n');\n  return { json: { ok: true, status: 'PENDING_HUMAN_APPROVAL', qc_status: 'PENDING_HUMAN_APPROVAL', workflow_name: 'WF-11', execution_id: $execution.id, project_id: base.project_id, episode_no: base.episode_no, output: passMsg, text: passMsg } };\n}\n\nconst failMsg = [\n  `\ud83d\uded1 **WF-11: Automated QC REJECTED \u2014 Dispatched to WF-13 Healer!**`,\n  `\u2022 **Episode:** ${autoState.episode_no}`,\n  `\u2022 **Failures Detected:**`,\n  ...autoState.qc_failures.map(f => `  - ${f}`),\n  `\u2022 **Action Taken:** \\`episodes.qc_status = REJECTED\\` & job queued in \\`pending_actions\\` (\\`status = FAILED\\`) for **WF-13 Retry Manager**.`\n].join('\\n');\n\nreturn { json: { ok: false, status: 'QC_REJECTED', qc_status: 'REJECTED', workflow_name: 'WF-11', execution_id: $execution.id, project_id: base.project_id, episode_no: base.episode_no, qc_failures: autoState.qc_failures, output: failMsg, text: failMsg } };"
+        },
+        "id": "423d6034-0024-4ac0-b09c-bd2b5bf88a1b",
+        "name": "Final QC Response Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          192
+        ]
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Input Normalizer & QC Intent Resolver",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Input Normalizer & QC Intent Resolver": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Episode Metadata",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Episode Metadata": {
+        "main": [
+          [
+            {
+              "node": "Router Switch (AUTO_QC vs MANUAL_APPROVE)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Router Switch (AUTO_QC vs MANUAL_APPROVE)": {
+        "main": [
+          [
+            {
+              "node": "Automated QC Inspector",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Set qc_status APPROVED",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Automated QC Inspector",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Automated QC Inspector": {
+        "main": [
+          [
+            {
+              "node": "If Automated QC Passed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Automated QC Passed": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Set qc_status PENDING_HUMAN_APPROVAL",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Set qc_status REJECTED",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Set qc_status PENDING_HUMAN_APPROVAL": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Human Approval Task",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Human Approval Task": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Set qc_status REJECTED": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Queue FAILED Job for WF-13 Retry Manager",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Queue FAILED Job for WF-13 Retry Manager": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Set qc_status APPROVED": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Update Episode State QC_APPROVED",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Update Episode State QC_APPROVED": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Resolve Human Approval Task",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Resolve Human Approval Task": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Audit Log": {
+        "main": [
+          [
+            {
+              "node": "Final QC Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": "Version 1f221f3c",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-10-26T10:07:54.925Z",
+    "updatedAt": "2026-10-26T10:08:00.000Z",
+    "workflowPublishHistory": [
+      {
+        "id": 129,
+        "workflowId": "PFXwsrQDk9nSIkRY",
+        "versionId": "1f221f3c-b600-443a-8130-9eb6fc5386b7",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-26T10:08:00.809Z"
+      }
+    ]
+  }
+}

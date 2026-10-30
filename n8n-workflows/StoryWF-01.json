@@ -1,0 +1,2957 @@
+{
+  "id": "BwP2L3HccmQ7dwmJ",
+  "name": "StoryWF-01",
+  "description": "WF-01 Bible Architect: Creates Story Bible, characters, visual DNA, and assigns voices.",
+  "active": true,
+  "activeVersionId": "cde23840-dbe2-42ac-9e1a-cdc191ebb824",
+  "createdAt": "2026-10-26T06:21:50.078Z",
+  "updatedAt": "2026-10-29T21:21:30.859Z",
+  "isArchived": false,
+  "versionId": "cde23840-dbe2-42ac-9e1a-cdc191ebb824",
+  "versionCounter": 3,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "id": "346893da-bc0b-4987-9093-bc9ac3d80396",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        80
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "3d0aae06-0e96-49df-b813-3732e4042249",
+      "name": "Normalize Trigger Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst intent = (raw.intent || raw.downstream_command || 'BIBLE_CHAT').toString().toUpperCase().trim();\nconst rawText = (raw.rawText || raw.userPrompt || raw.text || '').toString().trim();\nconst userPrompt = (raw.userPrompt || raw.rawText || '').toString().trim();\nconst project_id = raw.project_id || null;\nconst project_name = raw.project_name || 'Active Anime Project';\nconst current_season = Number(raw.current_season || extracted.season_no || 1);\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\nconst modality = (raw.modality || 'text_only').toString();\n\nif (!project_id) {\n  throw new Error('WF-01 Error: project_id is required to hydrate or mutate Story Bible state.');\n}\n\nreturn {\n  json: {\n    intent,\n    rawText,\n    userPrompt,\n    project_id,\n    project_name,\n    current_season,\n    sessionId,\n    modality\n  }\n};"
+      }
+    },
+    {
+      "id": "b99c1ed8-d880-4278-b64b-b2cda86b4a34",
+      "name": "Supabase: Fetch Existing Bible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        448,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season,is_active&id=eq.{{ $json.project_id }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "55437a8a-fb17-4f00-95f5-9a0dcb19bd33",
+      "name": "Supabase: Fetch Existing Characters",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        672,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "43f760cf-fbf3-429a-9b4a-b2b1eb317046",
+      "name": "Supabase: Fetch Character Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        896,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a2e07855-0717-4126-8382-a1246151f210",
+      "name": "Supabase: Fetch Story Rules",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1120,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b37568c2-1d31-47b1-862a-30c708bf6409",
+      "name": "Supabase: Fetch Character Arcs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1344,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_arcs?select=character_code,arc_name,current_stage,stages,flaw,goal&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "839e0f5d-a4d7-494a-81b6-1992efd23055",
+      "name": "Supabase: Fetch Power System",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1568,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/power_system?select=power_name,power_level,abilities,limitations&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7a52291d-200f-43fd-8ab3-9f308e9f852d",
+      "name": "Supabase: Fetch Relationships",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_relationships?select=char_a_code,char_b_code,trust_level&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d71a47e8-7a16-48a2-8b5e-6d31909a4bf1",
+      "name": "Supabase: Fetch Locations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2016,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/locations?select=location_code,name,visual_description&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2801ffb9-5f7b-46a5-af33-994b75804631",
+      "name": "Supabase: Fetch Artifacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2240,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/artifacts?select=artifact_code,name,powers,current_owner_code&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "65566666-d8a4-434d-ac52-7394d3a85b75",
+      "name": "Supabase: Fetch Available Voices",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2464,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/voice_catalog?select=provider,voice_id,voice_name,gender,language&is_active=eq.true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ea77c5e2-9898-43e1-b2f8-f5017865466d",
+      "name": "Context Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const triggerCtx = $('Normalize Trigger Input').item.json;\n\nfunction cleanRows(nodeName, requiredField) {\n  try {\n    const items = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of items) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) {\n          if (r && r[requiredField] !== undefined) rows.push(r);\n        }\n      } else if (entry && entry[requiredField] !== undefined) {\n        rows.push(entry);\n      }\n    }\n    return rows;\n  } catch (e) {\n    return [];\n  }\n}\n\nconst projectRows = cleanRows('Supabase: Fetch Existing Bible', 'id');\nconst projectRecord = projectRows[0] || {};\nconst existingBible = projectRecord.story_bible || {};\nconst resolvedSeason = Number(projectRecord.current_season || triggerCtx.current_season || 1);\n\nconst existingCharacters = cleanRows('Supabase: Fetch Existing Characters', 'character_code');\nconst existingStatus = cleanRows('Supabase: Fetch Character Status', 'character_code');\nconst existingRules = cleanRows('Supabase: Fetch Story Rules', 'rule_code');\nconst existingArcs = cleanRows('Supabase: Fetch Character Arcs', 'arc_name');\nconst existingPowers = cleanRows('Supabase: Fetch Power System', 'power_name');\nconst existingRelationships = cleanRows('Supabase: Fetch Relationships', 'char_a_code');\nconst existingLocations = cleanRows('Supabase: Fetch Locations', 'name');\nconst existingArtifacts = cleanRows('Supabase: Fetch Artifacts', 'artifact_code');\nconst availableVoices = cleanRows('Supabase: Fetch Available Voices', 'voice_id');\n\nconst fallbackVoices = availableVoices.length > 0 ? availableVoices : [\n  { provider: 'Svara TTS', voice_id: 'svara_hi_male_hero_01', voice_name: 'Aarav Heroic', gender: 'male', language: 'hi' },\n  { provider: 'Svara TTS', voice_id: 'svara_hi_female_lead_01', voice_name: 'Meera Fierce', gender: 'female', language: 'hi' },\n  { provider: 'Supertonic TTS', voice_id: 'supertonic_hi_male_deep_02', voice_name: 'Vikram Villain', gender: 'male', language: 'hi' },\n  { provider: 'Supertonic TTS', voice_id: 'supertonic_hi_female_calm_02', voice_name: 'Tara Mystic', gender: 'female', language: 'hi' }\n];\n\nconst charSummary = existingCharacters.length > 0\n  ? existingCharacters.map(c => `- ${c.character_code} (${c.name}): ref_v${c.reference_version || 1}, voice=${c.voice_config?.voice_id || 'unassigned'}`).join('\\n')\n  : 'None (Fresh Project)';\n\nconst voiceSummary = fallbackVoices.map(v => `- voice_id: \"${v.voice_id}\" | provider: \"${v.provider}\" | name: \"${v.voice_name}\" | gender: \"${v.gender}\" | lang: \"${v.language}\"`).join('\\n');\n\nconst loreSummary = [\n  `Existing Story Bible Keys: ${Object.keys(existingBible).join(', ') || 'Empty'}`,\n  `Character Status Rows: ${existingStatus.length}`,\n  `Story Rules: ${existingRules.map(r => r.rule_code).join(', ') || 'None'}`,\n  `Character Arcs: ${existingArcs.map(a => a.arc_name).join(', ') || 'None'}`,\n  `Power System: ${existingPowers.map(p => p.power_name).join(', ') || 'None'}`,\n  `Relationships: ${existingRelationships.length}`,\n  `Locations: ${existingLocations.map(l => l.name).join(', ') || 'None'}`,\n  `Artifacts: ${existingArtifacts.map(a => a.artifact_code).join(', ') || 'None'}`\n].join('\\n');\n\nconst isExplicitSave = triggerCtx.intent === 'SAVE_BIBLE' || /\\b(save\\s*karo|lock\\s*karo|save\\s*bible|lock\\s*bible|bible\\s*save|finalize\\s*karo|db\\s*me\\s*save)\\b/i.test(triggerCtx.rawText);\nconst operationRoute = isExplicitSave ? 'BIBLE_SAVE' : 'BIBLE_CHAT';\n\nconst styleMeta = $('When Executed by Another Workflow').first().json.project_style || {};\nconst visualStyle = styleMeta.visual_style || 'ANIME';\nconst styleProfile = styleMeta.profile || {};\nconst stylePrefix = styleProfile.prompt_prefix || (visualStyle === 'REALISTIC' ? 'photorealistic, cinematic lighting, 8k, raw photo' : 'anime, cel shaded, highly detailed, masterpiece');\n\n  `=== VISUAL STYLE: ${visualStyle} ===`,\n  `PREFIX: ${stylePrefix}`,\nconst hydratedContextText = [\n  `=== PROJECT CONTEXT: ${projectRecord.name || triggerCtx.project_name} (Season ${resolvedSeason}) ===`,\n  `=== EXISTING CHARACTERS (DO NOT CREATE DUPLICATE CODES) ===`,\n  charSummary,\n  `=== ACTIVE VOICE CATALOG (Rule 39: Assign strictly from this list) ===`,\n  voiceSummary,\n  `=== SUPPORTING LORE SUMMARY ===`,\n  loreSummary,\n  `=== CURRENT STORY BIBLE JSON ===`,\n  JSON.stringify(existingBible)\n].join('\\n\\n');\n\nreturn {\n  json: {\n    ...triggerCtx,\n    current_season: resolvedSeason,\n    operation_route: operationRoute,\n    existing_bible: existingBible,\n    existing_characters: existingCharacters,\n    available_voices: fallbackVoices,\n    hydrated_context_text: hydratedContextText\n  }\n};"
+      }
+    },
+    {
+      "id": "44849e42-1ef9-4810-a008-aec036c35673",
+      "name": "Primary Groq Bible Architect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        2912,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Anime Story & Bible Architect (WF-01). Speak naturally in Hinglish. Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}. CRITICAL: Never duplicate existing character_code. Every character visual_dna MUST include face, hair, clothing, weapons, color_palette.' }, { role: 'user', content: 'Current Mode: ' + $json.operation_route + '\\n\\n' + $json.hydrated_context_text + '\\n\\nUser Input: ' + ($json.userPrompt || $json.rawText) } ] }) }}",
+        "options": {
+          "timeout": 25000
+        }
+      }
+    },
+    {
+      "id": "06e8ff8f-5875-49da-8abe-e775268d3a30",
+      "name": "If Primary Groq Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        80
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "1455e412-97f3-422a-92df-444e95a7e0a8",
+      "name": "Fallback Gemini Bible Architect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        3360,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Anime Story & Bible Architect (WF-01). Speak naturally in Hinglish. Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}.' }, { role: 'user', content: 'Current Mode: ' + $('Context Builder').item.json.operation_route + '\\n\\n' + $('Context Builder').item.json.hydrated_context_text + '\\n\\nUser Input: ' + ($('Context Builder').item.json.userPrompt || $('Context Builder').item.json.rawText) } ] }) }}",
+        "options": {
+          "timeout": 25000
+        }
+      }
+    },
+    {
+      "id": "2978bf16-f0de-4cea-9c86-6c27e8fa0999",
+      "name": "Voice Profiler & Visual DNA Validator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Context Builder').item.json;\nconst llmRaw = $input.item.json;\nconst availableVoices = ctx.available_voices || [];\nconst nowIso = $now.toISOString();\n\nlet parsed = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) {\n    const cleanStr = content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsed = JSON.parse(cleanStr);\n  }\n} catch (e) {\n  parsed = null;\n}\n\nif (!parsed || typeof parsed !== 'object') {\n  parsed = {\n    route_mode: ctx.operation_route,\n    chat_response: 'Bhai, LLM response parse karne me issue aaya, par maine existing Story Bible state preserve rakha hai.',\n    change_summary: 'Fallback state preservation',\n    bible: ctx.existing_bible || {},\n    characters: [], arcs: [], powers: [], relationships: [], locations: [], artifacts: [], rules: []\n  };\n}\n\nconst finalRouteMode = (ctx.operation_route === 'BIBLE_SAVE' || parsed.route_mode === 'BIBLE_SAVE') ? 'BIBLE_SAVE' : 'BIBLE_CHAT';\nconst rawCharacters = Array.isArray(parsed.characters) ? parsed.characters : [];\n\nconst normalizedCharacters = rawCharacters.map((char, idx) => {\n  const charCode = (char.character_code || `CHAR_${String(idx + 1).padStart(3, '0')}`).toString().toUpperCase().trim();\n  const charName = (char.name || charCode).toString().trim();\n  const charGender = (char.gender || 'male').toString().toLowerCase().trim() === 'female' ? 'female' : 'male';\n\n  const rawDna = (char.visual_dna && typeof char.visual_dna === 'object') ? char.visual_dna : {};\n  const validatedVisualDna = {\n    face: (rawDna.face || 'Sharp anime facial structure').toString(),\n    hair: (rawDna.hair || 'Stylized layered anime hair').toString(),\n    clothing: (rawDna.clothing || 'Signature tactical anime attire').toString(),\n    weapons: (rawDna.weapons || 'None').toString(),\n    color_palette: (rawDna.color_palette || 'High-contrast cinematic tones').toString(),\n    ...rawDna\n  };\n\n  let matchedVoice = availableVoices.find(v => v.voice_id === char.voice_id);\n  if (!matchedVoice) {\n    matchedVoice = availableVoices.find(v => (v.gender || '').toLowerCase() === charGender) || availableVoices[0] || {\n      provider: 'Svara TTS', voice_id: charGender === 'female' ? 'svara_hi_female_lead_01' : 'svara_hi_male_hero_01', voice_name: 'Default Voice', gender: charGender, language: 'hi'\n    };\n  }\n\n  const providerName = (matchedVoice.provider || 'Svara TTS').toString();\n  const voiceConfig = {\n    voice_id: matchedVoice.voice_id,\n    voice_provider: providerName,\n    voice_model: char.voice_config?.voice_model || (providerName.toLowerCase().includes('supertonic') ? 'supertonic-v1-hi' : 'svara-v2-hi'),\n    language: matchedVoice.language || 'hi',\n    gender: charGender,\n    pitch: Number(char.voice_config?.pitch || 1.0),\n    speed: Number(char.voice_config?.speed || 1.0),\n    version: 1,\n    status: 'pending_approval',\n    emotion_profile: {\n      neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 },\n      joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 }\n    },\n    assigned_at: nowIso\n  };\n\n  return {\n    character_code: charCode, name: charName, gender: charGender, visual_dna: validatedVisualDna,\n    voice_config: voiceConfig, source: 'MANUAL', validation_status: 'PENDING', reference_version: 1\n  };\n});\n\nreturn {\n  json: {\n    ...ctx, operation_route: finalRouteMode,\n    chat_response: parsed.chat_response || 'Story Bible update ready!',\n    change_summary: parsed.change_summary || 'Updated Story Bible via WF-01',\n    bible_payload: {\n      bible: (parsed.bible && Object.keys(parsed.bible).length > 0) ? parsed.bible : ctx.existing_bible,\n      characters: normalizedCharacters,\n      arcs: Array.isArray(parsed.arcs) ? parsed.arcs : [],\n      powers: Array.isArray(parsed.powers) ? parsed.powers : [],\n      relationships: Array.isArray(parsed.relationships) ? parsed.relationships : [],\n      locations: Array.isArray(parsed.locations) ? parsed.locations : [],\n      artifacts: Array.isArray(parsed.artifacts) ? parsed.artifacts : [],\n      rules: Array.isArray(parsed.rules) ? parsed.rules : []\n    }\n  }\n};"
+      }
+    },
+    {
+      "id": "d058ce05-566b-4aca-9662-7679c0ca281f",
+      "name": "Intent Switch (BIBLE_SAVE vs BIBLE_CHAT)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        3808,
+        80
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.operation_route }}",
+                    "rightValue": "BIBLE_SAVE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "BIBLE_SAVE"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      }
+    },
+    {
+      "id": "c923349f-43ed-4b50-897e-99a172e13418",
+      "name": "Supabase: Update Master Bible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4032,
+        0
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?id=eq.{{ $json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ story_bible: $json.bible_payload.bible, current_season: $json.current_season }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a8db08b1-3eb6-41bb-be63-1a3dbd19f546",
+      "name": "Supabase: Insert Bible Version Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4256,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/bible_versions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, season_no: $('Voice Profiler & Visual DNA Validator').item.json.current_season, episode_no: 0, bible_snapshot: $('Voice Profiler & Visual DNA Validator').item.json.bible_payload.bible, change_summary: $('Voice Profiler & Visual DNA Validator').item.json.change_summary }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "c5f39a84-f97e-4573-8d12-d71d9491b486",
+      "name": "Split Characters & Prepare Upsert Batches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4480,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base = $('Voice Profiler & Visual DNA Validator').item.json;\nconst project_id = base.project_id;\nconst payload = base.bible_payload;\n\nconst characters_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, name: c.name, visual_dna: c.visual_dna,\n  voice_config: c.voice_config, source: 'MANUAL', validation_status: 'PENDING', reference_version: 1\n}));\n\nconst char_ref_history_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, reference_version: 1, visual_dna: c.visual_dna,\n  valid_from_episode: 0, valid_to_episode: null, reason: 'Initial Bible Creation'\n}));\n\nconst char_status_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, status: 'alive', status_changed_ep: 0\n}));\n\nconst char_status_history_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, old_status: null, new_status: 'alive', episode_no: 0, reason: 'Initial Bible Creation'\n}));\n\nconst char_arcs_db = (payload.arcs || []).map(a => ({\n  project_id, character_code: a.character_code || (characters_db[0]?.character_code || 'CHAR_001'),\n  arc_name: a.arc_name || 'Main Character Arc', current_stage: a.current_stage || 'Introduction',\n  stages: Array.isArray(a.stages) ? a.stages : [], flaw: a.flaw || 'Internal conflict', goal: a.goal || 'Primary objective'\n}));\n\nconst powers_db = (payload.powers || []).map(p => ({\n  project_id, power_name: p.power_name || 'Core Energy System',\n  power_level: parseInt(p.power_level, 10) || 1, abilities: Array.isArray(p.abilities) ? p.abilities : [], limitations: Array.isArray(p.limitations) ? p.limitations : []\n}));\n\nconst relationships_db = (payload.relationships || []).map(r => ({\n  project_id, char_a_code: r.char_a_code || 'CHAR_001', char_b_code: r.char_b_code || 'CHAR_002', trust_level: Number(r.trust_level ?? 50)\n}));\n\nconst locations_db = (payload.locations || []).map((l, idx) => ({\n  project_id, location_code: l.location_code || `LOC_${String(idx + 1).padStart(3, '0')}`,\n  name: l.name || `Location ${idx + 1}`, visual_description: l.visual_description || 'Cinematic anime environment'\n}));\n\nconst artifacts_db = (payload.artifacts || []).map((art, idx) => ({\n  project_id, artifact_code: art.artifact_code || `ART_${String(idx + 1).padStart(3, '0')}`,\n  name: art.name || `Artifact ${idx + 1}`, powers: Array.isArray(art.powers) ? art.powers : [],\n  current_owner_code: art.owner || (characters_db[0]?.character_code || null)\n}));\n\nconst rules_db = (payload.rules || []).map((rule, idx) => ({\n  project_id, rule_code: rule.rule_code || `RULE_${String(idx + 1).padStart(3, '0')}`,\n  rule_text: rule.rule_text || 'World canon rule', priority: String(rule.priority ?? 'high'), tags: Array.isArray(rule.tags) ? rule.tags : []\n}));\n\nreturn {\n  json: {\n    ...base,\n    db_batches: { characters_db, char_ref_history_db, char_status_db, char_status_history_db, char_arcs_db, powers_db, relationships_db, locations_db, artifacts_db, rules_db }\n  }\n};"
+      }
+    },
+    {
+      "id": "62c08273-7324-425f-ad1e-29e28a858121",
+      "name": "Supabase: Upsert Characters",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4704,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?on_conflict=project_id,character_code",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.characters_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "ef84a787-be26-4d67-aae5-7af49064b5b7",
+      "name": "Supabase: Upsert Character Reference History (R4)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4928,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_ref_history_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "6f2c9548-47ae-434f-9cf3-a55b1e91dfd3",
+      "name": "Supabase: Upsert Character Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        5152,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?on_conflict=project_id,character_code",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "359dcc2e-d1f4-43dd-b615-3e56ef694517",
+      "name": "Supabase: Insert Character Status History",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        5376,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status_history",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_history_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "bcc0becf-fbc6-4f54-b277-b43fcfa83c8c",
+      "name": "Supabase: Insert Character Arcs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        5600,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_arcs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_arcs_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "b9fa3c6f-b74b-4a64-9f22-7338c895afb9",
+      "name": "Supabase: Insert Power System",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        5824,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/power_system",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.powers_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "48b07488-33c9-4850-b4e0-c96efba8a34c",
+      "name": "Supabase: Insert Character Relationships",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        6048,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_relationships",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.relationships_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "bac70f9f-992f-4dc3-9d20-4ff2792d1bbb",
+      "name": "Supabase: Upsert Locations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        6272,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/locations?on_conflict=project_id,name",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.locations_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "6be85d50-61d8-4359-8669-75f2e13db0fc",
+      "name": "Supabase: Insert Artifacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        6496,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/artifacts?on_conflict=project_id,artifact_code",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.artifacts_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "b4ac445a-6e90-4d57-814d-f750f3a27fc8",
+      "name": "Supabase: Insert Story Rules",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        6720,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?on_conflict=project_id,rule_code",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.rules_db) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "509e455a-8309-4265-a678-f70a33ddd458",
+      "name": "Supabase: Audit Logger",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        6944,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, workflow_name: 'WF-01', action: $('Voice Profiler & Visual DNA Validator').item.json.operation_route === 'BIBLE_SAVE' ? 'SAVE_BIBLE' : 'BIBLE_CHAT', execution_id: $execution.id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "34dd22a9-1e15-42d8-b85e-a781f6a0c135",
+      "name": "Final Response Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7168,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const state = $('Voice Profiler & Visual DNA Validator').item.json;\nconst payload = state.bible_payload;\nconst isSaved = state.operation_route === 'BIBLE_SAVE';\nconst chars = payload.characters || [];\n\nconst voiceAssignmentsText = chars.length > 0\n  ? chars.map(c => `\u2022 ${c.character_code} (${c.name}) -> Voice: ${c.voice_config.voice_id} [${c.voice_config.status}]`).join('\\n')\n  : '\u2022 Koi naya character assign nahi hua.';\n\nlet finalMessage = '';\nif (isSaved) {\n  finalMessage = [\n    `\u2705 **WF-01: Story Bible & Universe Successfully Saved!**`,\n    `\ud83d\udcc1 **Project:** ${state.project_name} (\\`${state.project_id}\\`) | **Season:** ${state.current_season}`,\n    `\ud83d\udcca **Saved Entities:** ${chars.length} Characters | ${payload.rules?.length || 0} Rules | ${payload.powers?.length || 0} Powers | ${payload.locations?.length || 0} Locations`,\n    `\ud83c\udf99\ufe0f **Rule 39 Voice Assignments:**\\n${voiceAssignmentsText}`,\n    `\ud83d\udcac **Architect Note:** ${state.chat_response}`\n  ].join('\\n');\n} else {\n  finalMessage = [\n    `\ud83e\udde0 **WF-01: Bible Architect (Brainstorming Mode)**`,\n    state.chat_response,\n    chars.length > 0 ? `\ud83c\udf99\ufe0f **Draft Voice Previews:**\\n${voiceAssignmentsText}\\n` : '',\n    `\ud83d\udca1 *Tip: Jab universe lock karne ke liye ready hon, bas \"save karo\" ya \"#save_bible\" bol dena!*`\n  ].filter(Boolean).join('\\n');\n}\n\nreturn {\n  json: {\n    ok: true, status: isSaved ? 'BIBLE_SAVED' : 'BIBLE_CHAT_COMPLETED', workflow_name: 'WF-01', execution_id: $execution.id,\n    project_id: state.project_id, project_name: state.project_name, operation_route: state.operation_route,\n    counts: { characters: chars.length, rules: payload.rules?.length || 0, powers: payload.powers?.length || 0, locations: payload.locations?.length || 0, arcs: payload.arcs?.length || 0, relationships: payload.relationships?.length || 0, artifacts: payload.artifacts?.length || 0 },\n    output: finalMessage, text: finalMessage\n  }\n};"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize Trigger Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Trigger Input": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Existing Bible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Existing Bible": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Existing Characters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Existing Characters": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Character Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Character Status": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Story Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Story Rules": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Character Arcs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Character Arcs": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Power System",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Power System": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Relationships",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Relationships": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Locations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Locations": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Artifacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Artifacts": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Available Voices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Available Voices": {
+      "main": [
+        [
+          {
+            "node": "Context Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context Builder": {
+      "main": [
+        [
+          {
+            "node": "Primary Groq Bible Architect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Primary Groq Bible Architect": {
+      "main": [
+        [
+          {
+            "node": "If Primary Groq Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Primary Groq Failed": {
+      "main": [
+        [
+          {
+            "node": "Fallback Gemini Bible Architect",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Voice Profiler & Visual DNA Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Gemini Bible Architect": {
+      "main": [
+        [
+          {
+            "node": "Voice Profiler & Visual DNA Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voice Profiler & Visual DNA Validator": {
+      "main": [
+        [
+          {
+            "node": "Intent Switch (BIBLE_SAVE vs BIBLE_CHAT)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Switch (BIBLE_SAVE vs BIBLE_CHAT)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Master Bible",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Audit Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Master Bible": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Bible Version Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Bible Version Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Split Characters & Prepare Upsert Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Characters & Prepare Upsert Batches": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Upsert Characters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Upsert Characters": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Upsert Character Reference History (R4)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Upsert Character Reference History (R4)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Upsert Character Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Upsert Character Status": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Character Status History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Character Status History": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Character Arcs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Character Arcs": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Power System",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Power System": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Character Relationships",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Character Relationships": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Upsert Locations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Upsert Locations": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Artifacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Artifacts": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Story Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Story Rules": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Audit Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Audit Logger": {
+      "main": [
+        [
+          {
+            "node": "Final Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "BwP2L3HccmQ7dwmJ",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T06:21:50.081Z",
+      "updatedAt": "2026-10-26T06:21:50.081Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "cde23840-dbe2-42ac-9e1a-cdc191ebb824",
+    "workflowId": "BwP2L3HccmQ7dwmJ",
+    "nodes": [
+      {
+        "id": "346893da-bc0b-4987-9093-bc9ac3d80396",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          80
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "3d0aae06-0e96-49df-b813-3732e4042249",
+        "name": "Normalize Trigger Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst intent = (raw.intent || raw.downstream_command || 'BIBLE_CHAT').toString().toUpperCase().trim();\nconst rawText = (raw.rawText || raw.userPrompt || raw.text || '').toString().trim();\nconst userPrompt = (raw.userPrompt || raw.rawText || '').toString().trim();\nconst project_id = raw.project_id || null;\nconst project_name = raw.project_name || 'Active Anime Project';\nconst current_season = Number(raw.current_season || extracted.season_no || 1);\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\nconst modality = (raw.modality || 'text_only').toString();\n\nif (!project_id) {\n  throw new Error('WF-01 Error: project_id is required to hydrate or mutate Story Bible state.');\n}\n\nreturn {\n  json: {\n    intent,\n    rawText,\n    userPrompt,\n    project_id,\n    project_name,\n    current_season,\n    sessionId,\n    modality\n  }\n};"
+        }
+      },
+      {
+        "id": "b99c1ed8-d880-4278-b64b-b2cda86b4a34",
+        "name": "Supabase: Fetch Existing Bible",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          448,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season,is_active&id=eq.{{ $json.project_id }}&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "55437a8a-fb17-4f00-95f5-9a0dcb19bd33",
+        "name": "Supabase: Fetch Existing Characters",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          672,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "43f760cf-fbf3-429a-9b4a-b2b1eb317046",
+        "name": "Supabase: Fetch Character Status",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          896,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "a2e07855-0717-4126-8382-a1246151f210",
+        "name": "Supabase: Fetch Story Rules",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1120,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "b37568c2-1d31-47b1-862a-30c708bf6409",
+        "name": "Supabase: Fetch Character Arcs",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1344,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_arcs?select=character_code,arc_name,current_stage,stages,flaw,goal&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "839e0f5d-a4d7-494a-81b6-1992efd23055",
+        "name": "Supabase: Fetch Power System",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1568,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/power_system?select=power_name,power_level,abilities,limitations&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "7a52291d-200f-43fd-8ab3-9f308e9f852d",
+        "name": "Supabase: Fetch Relationships",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_relationships?select=char_a_code,char_b_code,trust_level&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "d71a47e8-7a16-48a2-8b5e-6d31909a4bf1",
+        "name": "Supabase: Fetch Locations",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2016,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/locations?select=location_code,name,visual_description&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "2801ffb9-5f7b-46a5-af33-994b75804631",
+        "name": "Supabase: Fetch Artifacts",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2240,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/artifacts?select=artifact_code,name,powers,current_owner_code&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "65566666-d8a4-434d-ac52-7394d3a85b75",
+        "name": "Supabase: Fetch Available Voices",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2464,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/voice_catalog?select=provider,voice_id,voice_name,gender,language&is_active=eq.true",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "ea77c5e2-9898-43e1-b2f8-f5017865466d",
+        "name": "Context Builder",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2688,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const triggerCtx = $('Normalize Trigger Input').item.json;\n\nfunction cleanRows(nodeName, requiredField) {\n  try {\n    const items = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of items) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) {\n          if (r && r[requiredField] !== undefined) rows.push(r);\n        }\n      } else if (entry && entry[requiredField] !== undefined) {\n        rows.push(entry);\n      }\n    }\n    return rows;\n  } catch (e) {\n    return [];\n  }\n}\n\nconst projectRows = cleanRows('Supabase: Fetch Existing Bible', 'id');\nconst projectRecord = projectRows[0] || {};\nconst existingBible = projectRecord.story_bible || {};\nconst resolvedSeason = Number(projectRecord.current_season || triggerCtx.current_season || 1);\n\nconst existingCharacters = cleanRows('Supabase: Fetch Existing Characters', 'character_code');\nconst existingStatus = cleanRows('Supabase: Fetch Character Status', 'character_code');\nconst existingRules = cleanRows('Supabase: Fetch Story Rules', 'rule_code');\nconst existingArcs = cleanRows('Supabase: Fetch Character Arcs', 'arc_name');\nconst existingPowers = cleanRows('Supabase: Fetch Power System', 'power_name');\nconst existingRelationships = cleanRows('Supabase: Fetch Relationships', 'char_a_code');\nconst existingLocations = cleanRows('Supabase: Fetch Locations', 'name');\nconst existingArtifacts = cleanRows('Supabase: Fetch Artifacts', 'artifact_code');\nconst availableVoices = cleanRows('Supabase: Fetch Available Voices', 'voice_id');\n\nconst fallbackVoices = availableVoices.length > 0 ? availableVoices : [\n  { provider: 'Svara TTS', voice_id: 'svara_hi_male_hero_01', voice_name: 'Aarav Heroic', gender: 'male', language: 'hi' },\n  { provider: 'Svara TTS', voice_id: 'svara_hi_female_lead_01', voice_name: 'Meera Fierce', gender: 'female', language: 'hi' },\n  { provider: 'Supertonic TTS', voice_id: 'supertonic_hi_male_deep_02', voice_name: 'Vikram Villain', gender: 'male', language: 'hi' },\n  { provider: 'Supertonic TTS', voice_id: 'supertonic_hi_female_calm_02', voice_name: 'Tara Mystic', gender: 'female', language: 'hi' }\n];\n\nconst charSummary = existingCharacters.length > 0\n  ? existingCharacters.map(c => `- ${c.character_code} (${c.name}): ref_v${c.reference_version || 1}, voice=${c.voice_config?.voice_id || 'unassigned'}`).join('\\n')\n  : 'None (Fresh Project)';\n\nconst voiceSummary = fallbackVoices.map(v => `- voice_id: \"${v.voice_id}\" | provider: \"${v.provider}\" | name: \"${v.voice_name}\" | gender: \"${v.gender}\" | lang: \"${v.language}\"`).join('\\n');\n\nconst loreSummary = [\n  `Existing Story Bible Keys: ${Object.keys(existingBible).join(', ') || 'Empty'}`,\n  `Character Status Rows: ${existingStatus.length}`,\n  `Story Rules: ${existingRules.map(r => r.rule_code).join(', ') || 'None'}`,\n  `Character Arcs: ${existingArcs.map(a => a.arc_name).join(', ') || 'None'}`,\n  `Power System: ${existingPowers.map(p => p.power_name).join(', ') || 'None'}`,\n  `Relationships: ${existingRelationships.length}`,\n  `Locations: ${existingLocations.map(l => l.name).join(', ') || 'None'}`,\n  `Artifacts: ${existingArtifacts.map(a => a.artifact_code).join(', ') || 'None'}`\n].join('\\n');\n\nconst isExplicitSave = triggerCtx.intent === 'SAVE_BIBLE' || /\\b(save\\s*karo|lock\\s*karo|save\\s*bible|lock\\s*bible|bible\\s*save|finalize\\s*karo|db\\s*me\\s*save)\\b/i.test(triggerCtx.rawText);\nconst operationRoute = isExplicitSave ? 'BIBLE_SAVE' : 'BIBLE_CHAT';\n\nconst styleMeta = $('When Executed by Another Workflow').first().json.project_style || {};\nconst visualStyle = styleMeta.visual_style || 'ANIME';\nconst styleProfile = styleMeta.profile || {};\nconst stylePrefix = styleProfile.prompt_prefix || (visualStyle === 'REALISTIC' ? 'photorealistic, cinematic lighting, 8k, raw photo' : 'anime, cel shaded, highly detailed, masterpiece');\n\n  `=== VISUAL STYLE: ${visualStyle} ===`,\n  `PREFIX: ${stylePrefix}`,\nconst hydratedContextText = [\n  `=== PROJECT CONTEXT: ${projectRecord.name || triggerCtx.project_name} (Season ${resolvedSeason}) ===`,\n  `=== EXISTING CHARACTERS (DO NOT CREATE DUPLICATE CODES) ===`,\n  charSummary,\n  `=== ACTIVE VOICE CATALOG (Rule 39: Assign strictly from this list) ===`,\n  voiceSummary,\n  `=== SUPPORTING LORE SUMMARY ===`,\n  loreSummary,\n  `=== CURRENT STORY BIBLE JSON ===`,\n  JSON.stringify(existingBible)\n].join('\\n\\n');\n\nreturn {\n  json: {\n    ...triggerCtx,\n    current_season: resolvedSeason,\n    operation_route: operationRoute,\n    existing_bible: existingBible,\n    existing_characters: existingCharacters,\n    available_voices: fallbackVoices,\n    hydrated_context_text: hydratedContextText\n  }\n};"
+        }
+      },
+      {
+        "id": "44849e42-1ef9-4810-a008-aec036c35673",
+        "name": "Primary Groq Bible Architect",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          2912,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Anime Story & Bible Architect (WF-01). Speak naturally in Hinglish. Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}. CRITICAL: Never duplicate existing character_code. Every character visual_dna MUST include face, hair, clothing, weapons, color_palette.' }, { role: 'user', content: 'Current Mode: ' + $json.operation_route + '\\n\\n' + $json.hydrated_context_text + '\\n\\nUser Input: ' + ($json.userPrompt || $json.rawText) } ] }) }}",
+          "options": {
+            "timeout": 25000
+          }
+        }
+      },
+      {
+        "id": "06e8ff8f-5875-49da-8abe-e775268d3a30",
+        "name": "If Primary Groq Failed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          3136,
+          80
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "1455e412-97f3-422a-92df-444e95a7e0a8",
+        "name": "Fallback Gemini Bible Architect",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          3360,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Anime Story & Bible Architect (WF-01). Speak naturally in Hinglish. Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}.' }, { role: 'user', content: 'Current Mode: ' + $('Context Builder').item.json.operation_route + '\\n\\n' + $('Context Builder').item.json.hydrated_context_text + '\\n\\nUser Input: ' + ($('Context Builder').item.json.userPrompt || $('Context Builder').item.json.rawText) } ] }) }}",
+          "options": {
+            "timeout": 25000
+          }
+        }
+      },
+      {
+        "id": "2978bf16-f0de-4cea-9c86-6c27e8fa0999",
+        "name": "Voice Profiler & Visual DNA Validator",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3584,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $('Context Builder').item.json;\nconst llmRaw = $input.item.json;\nconst availableVoices = ctx.available_voices || [];\nconst nowIso = $now.toISOString();\n\nlet parsed = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) {\n    const cleanStr = content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsed = JSON.parse(cleanStr);\n  }\n} catch (e) {\n  parsed = null;\n}\n\nif (!parsed || typeof parsed !== 'object') {\n  parsed = {\n    route_mode: ctx.operation_route,\n    chat_response: 'Bhai, LLM response parse karne me issue aaya, par maine existing Story Bible state preserve rakha hai.',\n    change_summary: 'Fallback state preservation',\n    bible: ctx.existing_bible || {},\n    characters: [], arcs: [], powers: [], relationships: [], locations: [], artifacts: [], rules: []\n  };\n}\n\nconst finalRouteMode = (ctx.operation_route === 'BIBLE_SAVE' || parsed.route_mode === 'BIBLE_SAVE') ? 'BIBLE_SAVE' : 'BIBLE_CHAT';\nconst rawCharacters = Array.isArray(parsed.characters) ? parsed.characters : [];\n\nconst normalizedCharacters = rawCharacters.map((char, idx) => {\n  const charCode = (char.character_code || `CHAR_${String(idx + 1).padStart(3, '0')}`).toString().toUpperCase().trim();\n  const charName = (char.name || charCode).toString().trim();\n  const charGender = (char.gender || 'male').toString().toLowerCase().trim() === 'female' ? 'female' : 'male';\n\n  const rawDna = (char.visual_dna && typeof char.visual_dna === 'object') ? char.visual_dna : {};\n  const validatedVisualDna = {\n    face: (rawDna.face || 'Sharp anime facial structure').toString(),\n    hair: (rawDna.hair || 'Stylized layered anime hair').toString(),\n    clothing: (rawDna.clothing || 'Signature tactical anime attire').toString(),\n    weapons: (rawDna.weapons || 'None').toString(),\n    color_palette: (rawDna.color_palette || 'High-contrast cinematic tones').toString(),\n    ...rawDna\n  };\n\n  let matchedVoice = availableVoices.find(v => v.voice_id === char.voice_id);\n  if (!matchedVoice) {\n    matchedVoice = availableVoices.find(v => (v.gender || '').toLowerCase() === charGender) || availableVoices[0] || {\n      provider: 'Svara TTS', voice_id: charGender === 'female' ? 'svara_hi_female_lead_01' : 'svara_hi_male_hero_01', voice_name: 'Default Voice', gender: charGender, language: 'hi'\n    };\n  }\n\n  const providerName = (matchedVoice.provider || 'Svara TTS').toString();\n  const voiceConfig = {\n    voice_id: matchedVoice.voice_id,\n    voice_provider: providerName,\n    voice_model: char.voice_config?.voice_model || (providerName.toLowerCase().includes('supertonic') ? 'supertonic-v1-hi' : 'svara-v2-hi'),\n    language: matchedVoice.language || 'hi',\n    gender: charGender,\n    pitch: Number(char.voice_config?.pitch || 1.0),\n    speed: Number(char.voice_config?.speed || 1.0),\n    version: 1,\n    status: 'pending_approval',\n    emotion_profile: {\n      neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 },\n      joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 }\n    },\n    assigned_at: nowIso\n  };\n\n  return {\n    character_code: charCode, name: charName, gender: charGender, visual_dna: validatedVisualDna,\n    voice_config: voiceConfig, source: 'MANUAL', validation_status: 'PENDING', reference_version: 1\n  };\n});\n\nreturn {\n  json: {\n    ...ctx, operation_route: finalRouteMode,\n    chat_response: parsed.chat_response || 'Story Bible update ready!',\n    change_summary: parsed.change_summary || 'Updated Story Bible via WF-01',\n    bible_payload: {\n      bible: (parsed.bible && Object.keys(parsed.bible).length > 0) ? parsed.bible : ctx.existing_bible,\n      characters: normalizedCharacters,\n      arcs: Array.isArray(parsed.arcs) ? parsed.arcs : [],\n      powers: Array.isArray(parsed.powers) ? parsed.powers : [],\n      relationships: Array.isArray(parsed.relationships) ? parsed.relationships : [],\n      locations: Array.isArray(parsed.locations) ? parsed.locations : [],\n      artifacts: Array.isArray(parsed.artifacts) ? parsed.artifacts : [],\n      rules: Array.isArray(parsed.rules) ? parsed.rules : []\n    }\n  }\n};"
+        }
+      },
+      {
+        "id": "d058ce05-566b-4aca-9662-7679c0ca281f",
+        "name": "Intent Switch (BIBLE_SAVE vs BIBLE_CHAT)",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3,
+        "position": [
+          3808,
+          80
+        ],
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.operation_route }}",
+                      "rightValue": "BIBLE_SAVE",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "BIBLE_SAVE"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        }
+      },
+      {
+        "id": "c923349f-43ed-4b50-897e-99a172e13418",
+        "name": "Supabase: Update Master Bible",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4032,
+          0
+        ],
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?id=eq.{{ $json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ story_bible: $json.bible_payload.bible, current_season: $json.current_season }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "a8db08b1-3eb6-41bb-be63-1a3dbd19f546",
+        "name": "Supabase: Insert Bible Version Snapshot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4256,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/bible_versions",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, season_no: $('Voice Profiler & Visual DNA Validator').item.json.current_season, episode_no: 0, bible_snapshot: $('Voice Profiler & Visual DNA Validator').item.json.bible_payload.bible, change_summary: $('Voice Profiler & Visual DNA Validator').item.json.change_summary }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "c5f39a84-f97e-4573-8d12-d71d9491b486",
+        "name": "Split Characters & Prepare Upsert Batches",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4480,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const base = $('Voice Profiler & Visual DNA Validator').item.json;\nconst project_id = base.project_id;\nconst payload = base.bible_payload;\n\nconst characters_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, name: c.name, visual_dna: c.visual_dna,\n  voice_config: c.voice_config, source: 'MANUAL', validation_status: 'PENDING', reference_version: 1\n}));\n\nconst char_ref_history_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, reference_version: 1, visual_dna: c.visual_dna,\n  valid_from_episode: 0, valid_to_episode: null, reason: 'Initial Bible Creation'\n}));\n\nconst char_status_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, status: 'alive', status_changed_ep: 0\n}));\n\nconst char_status_history_db = (payload.characters || []).map(c => ({\n  project_id, character_code: c.character_code, old_status: null, new_status: 'alive', episode_no: 0, reason: 'Initial Bible Creation'\n}));\n\nconst char_arcs_db = (payload.arcs || []).map(a => ({\n  project_id, character_code: a.character_code || (characters_db[0]?.character_code || 'CHAR_001'),\n  arc_name: a.arc_name || 'Main Character Arc', current_stage: a.current_stage || 'Introduction',\n  stages: Array.isArray(a.stages) ? a.stages : [], flaw: a.flaw || 'Internal conflict', goal: a.goal || 'Primary objective'\n}));\n\nconst powers_db = (payload.powers || []).map(p => ({\n  project_id, power_name: p.power_name || 'Core Energy System',\n  power_level: parseInt(p.power_level, 10) || 1, abilities: Array.isArray(p.abilities) ? p.abilities : [], limitations: Array.isArray(p.limitations) ? p.limitations : []\n}));\n\nconst relationships_db = (payload.relationships || []).map(r => ({\n  project_id, char_a_code: r.char_a_code || 'CHAR_001', char_b_code: r.char_b_code || 'CHAR_002', trust_level: Number(r.trust_level ?? 50)\n}));\n\nconst locations_db = (payload.locations || []).map((l, idx) => ({\n  project_id, location_code: l.location_code || `LOC_${String(idx + 1).padStart(3, '0')}`,\n  name: l.name || `Location ${idx + 1}`, visual_description: l.visual_description || 'Cinematic anime environment'\n}));\n\nconst artifacts_db = (payload.artifacts || []).map((art, idx) => ({\n  project_id, artifact_code: art.artifact_code || `ART_${String(idx + 1).padStart(3, '0')}`,\n  name: art.name || `Artifact ${idx + 1}`, powers: Array.isArray(art.powers) ? art.powers : [],\n  current_owner_code: art.owner || (characters_db[0]?.character_code || null)\n}));\n\nconst rules_db = (payload.rules || []).map((rule, idx) => ({\n  project_id, rule_code: rule.rule_code || `RULE_${String(idx + 1).padStart(3, '0')}`,\n  rule_text: rule.rule_text || 'World canon rule', priority: String(rule.priority ?? 'high'), tags: Array.isArray(rule.tags) ? rule.tags : []\n}));\n\nreturn {\n  json: {\n    ...base,\n    db_batches: { characters_db, char_ref_history_db, char_status_db, char_status_history_db, char_arcs_db, powers_db, relationships_db, locations_db, artifacts_db, rules_db }\n  }\n};"
+        }
+      },
+      {
+        "id": "62c08273-7324-425f-ad1e-29e28a858121",
+        "name": "Supabase: Upsert Characters",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4704,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?on_conflict=project_id,character_code",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.characters_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "ef84a787-be26-4d67-aae5-7af49064b5b7",
+        "name": "Supabase: Upsert Character Reference History (R4)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4928,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_ref_history_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "6f2c9548-47ae-434f-9cf3-a55b1e91dfd3",
+        "name": "Supabase: Upsert Character Status",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          5152,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?on_conflict=project_id,character_code",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "359dcc2e-d1f4-43dd-b615-3e56ef694517",
+        "name": "Supabase: Insert Character Status History",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          5376,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status_history",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_history_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "bcc0becf-fbc6-4f54-b277-b43fcfa83c8c",
+        "name": "Supabase: Insert Character Arcs",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          5600,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_arcs",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_arcs_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "b9fa3c6f-b74b-4a64-9f22-7338c895afb9",
+        "name": "Supabase: Insert Power System",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          5824,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/power_system",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.powers_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "48b07488-33c9-4850-b4e0-c96efba8a34c",
+        "name": "Supabase: Insert Character Relationships",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          6048,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_relationships",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.relationships_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "bac70f9f-992f-4dc3-9d20-4ff2792d1bbb",
+        "name": "Supabase: Upsert Locations",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          6272,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/locations?on_conflict=project_id,name",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.locations_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "6be85d50-61d8-4359-8669-75f2e13db0fc",
+        "name": "Supabase: Insert Artifacts",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          6496,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/artifacts?on_conflict=project_id,artifact_code",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.artifacts_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "b4ac445a-6e90-4d57-814d-f750f3a27fc8",
+        "name": "Supabase: Insert Story Rules",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          6720,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?on_conflict=project_id,rule_code",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.rules_db) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "509e455a-8309-4265-a678-f70a33ddd458",
+        "name": "Supabase: Audit Logger",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          6944,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, workflow_name: 'WF-01', action: $('Voice Profiler & Visual DNA Validator').item.json.operation_route === 'BIBLE_SAVE' ? 'SAVE_BIBLE' : 'BIBLE_CHAT', execution_id: $execution.id }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "34dd22a9-1e15-42d8-b85e-a781f6a0c135",
+        "name": "Final Response Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          7168,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const state = $('Voice Profiler & Visual DNA Validator').item.json;\nconst payload = state.bible_payload;\nconst isSaved = state.operation_route === 'BIBLE_SAVE';\nconst chars = payload.characters || [];\n\nconst voiceAssignmentsText = chars.length > 0\n  ? chars.map(c => `\u2022 ${c.character_code} (${c.name}) -> Voice: ${c.voice_config.voice_id} [${c.voice_config.status}]`).join('\\n')\n  : '\u2022 Koi naya character assign nahi hua.';\n\nlet finalMessage = '';\nif (isSaved) {\n  finalMessage = [\n    `\u2705 **WF-01: Story Bible & Universe Successfully Saved!**`,\n    `\ud83d\udcc1 **Project:** ${state.project_name} (\\`${state.project_id}\\`) | **Season:** ${state.current_season}`,\n    `\ud83d\udcca **Saved Entities:** ${chars.length} Characters | ${payload.rules?.length || 0} Rules | ${payload.powers?.length || 0} Powers | ${payload.locations?.length || 0} Locations`,\n    `\ud83c\udf99\ufe0f **Rule 39 Voice Assignments:**\\n${voiceAssignmentsText}`,\n    `\ud83d\udcac **Architect Note:** ${state.chat_response}`\n  ].join('\\n');\n} else {\n  finalMessage = [\n    `\ud83e\udde0 **WF-01: Bible Architect (Brainstorming Mode)**`,\n    state.chat_response,\n    chars.length > 0 ? `\ud83c\udf99\ufe0f **Draft Voice Previews:**\\n${voiceAssignmentsText}\\n` : '',\n    `\ud83d\udca1 *Tip: Jab universe lock karne ke liye ready hon, bas \"save karo\" ya \"#save_bible\" bol dena!*`\n  ].filter(Boolean).join('\\n');\n}\n\nreturn {\n  json: {\n    ok: true, status: isSaved ? 'BIBLE_SAVED' : 'BIBLE_CHAT_COMPLETED', workflow_name: 'WF-01', execution_id: $execution.id,\n    project_id: state.project_id, project_name: state.project_name, operation_route: state.operation_route,\n    counts: { characters: chars.length, rules: payload.rules?.length || 0, powers: payload.powers?.length || 0, locations: payload.locations?.length || 0, arcs: payload.arcs?.length || 0, relationships: payload.relationships?.length || 0, artifacts: payload.artifacts?.length || 0 },\n    output: finalMessage, text: finalMessage\n  }\n};"
+        }
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Normalize Trigger Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Trigger Input": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Existing Bible",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Existing Bible": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Existing Characters",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Existing Characters": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Character Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Character Status": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Story Rules",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Story Rules": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Character Arcs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Character Arcs": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Power System",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Power System": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Relationships",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Relationships": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Locations",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Locations": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Artifacts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Artifacts": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Available Voices",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Available Voices": {
+        "main": [
+          [
+            {
+              "node": "Context Builder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Context Builder": {
+        "main": [
+          [
+            {
+              "node": "Primary Groq Bible Architect",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Primary Groq Bible Architect": {
+        "main": [
+          [
+            {
+              "node": "If Primary Groq Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Primary Groq Failed": {
+        "main": [
+          [
+            {
+              "node": "Fallback Gemini Bible Architect",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Voice Profiler & Visual DNA Validator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fallback Gemini Bible Architect": {
+        "main": [
+          [
+            {
+              "node": "Voice Profiler & Visual DNA Validator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Voice Profiler & Visual DNA Validator": {
+        "main": [
+          [
+            {
+              "node": "Intent Switch (BIBLE_SAVE vs BIBLE_CHAT)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Intent Switch (BIBLE_SAVE vs BIBLE_CHAT)": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Update Master Bible",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Audit Logger",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Update Master Bible": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Bible Version Snapshot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Bible Version Snapshot": {
+        "main": [
+          [
+            {
+              "node": "Split Characters & Prepare Upsert Batches",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split Characters & Prepare Upsert Batches": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Upsert Characters",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Upsert Characters": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Upsert Character Reference History (R4)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Upsert Character Reference History (R4)": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Upsert Character Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Upsert Character Status": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Character Status History",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Character Status History": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Character Arcs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Character Arcs": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Power System",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Power System": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Character Relationships",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Character Relationships": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Upsert Locations",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Upsert Locations": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Artifacts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Artifacts": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Story Rules",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Story Rules": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Audit Logger",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Audit Logger": {
+        "main": [
+          [
+            {
+              "node": "Final Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T21:21:30.860Z",
+    "updatedAt": "2026-10-29T21:21:30.860Z",
+    "workflowPublishHistory": [
+      {
+        "id": 158,
+        "workflowId": "BwP2L3HccmQ7dwmJ",
+        "versionId": "cde23840-dbe2-42ac-9e1a-cdc191ebb824",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-29T21:21:31.362Z"
+      }
+    ]
+  }
+}

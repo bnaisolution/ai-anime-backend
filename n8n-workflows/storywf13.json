@@ -1,0 +1,960 @@
+{
+  "id": "jI39p4vr4CnWhpgw",
+  "name": "storywf13",
+  "description": "WF-13 Retry Manager: Scans for failed jobs and retries them with exponential backoff.",
+  "active": true,
+  "activeVersionId": "2a4f4570-0643-45b6-805b-9e23be95c1b3",
+  "createdAt": "2026-10-26T10:13:35.403Z",
+  "updatedAt": "2026-10-26T10:14:20.031Z",
+  "isArchived": false,
+  "versionId": "2a4f4570-0643-45b6-805b-9e23be95c1b3",
+  "versionCounter": 2,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "37c99b0f-985d-41c4-8d4a-19424cc11e32",
+      "name": "Schedule Trigger (Every 15 Mins)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        80,
+        -144
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "3d08008d-f1b0-40f9-8a1c-ee7c7acb4d0e",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        80,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,project_id,action_type,status,retry_count,ready_at,action_payload,created_at&or=(status.eq.FAILED,and(status.eq.RETRY_SCHEDULED,ready_at.lte.{{ $now.toISOString() }}))&order=created_at.asc&limit=25",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9a36c079-febe-4a44-b7de-e18b61b10c37",
+      "name": "Supabase: Fetch Failed & Due Retry Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        -48
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawItems = $input.all().map(i => i.json);\nconst jobs = [];\n\nfor (const entry of rawItems) {\n  if (Array.isArray(entry)) { for (const r of entry) { if (r && r.id) jobs.push({ json: r }); } }\n  else if (entry && entry.id) { jobs.push({ json: entry }); }\n}\n\nif (jobs.length === 0) { return [{ json: { no_jobs: true, jobs_count: 0 } }]; }\nreturn jobs;"
+      },
+      "id": "c2fa6ed0-2897-46a4-872a-c4696ac7907d",
+      "name": "Unpack Actionable Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($json.no_jobs) }}"
+            }
+          ]
+        }
+      },
+      "id": "a64fff41-f820-4e3d-8da8-01e53abd8fa7",
+      "name": "If Failed Jobs Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        832,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "e51e4882-bfe3-434c-a0b8-adfb65650d71",
+      "name": "Split In Batches (Process Each Failed Job)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1072,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const job = $input.item.json || {};\nconst currentRetryCount = Number(job.retry_count || 0);\nconst maxRetries = Number($env.MAX_RETRY_LIMIT || 3);\nconst baseDelayMinutes = Number($env.RETRY_BASE_DELAY_MINS || 15);\nconst nowMs = Date.now();\nconst nowIso = new Date(nowMs).toISOString();\n\nconst isScheduledAndDue = Boolean(job.status === 'RETRY_SCHEDULED' && job.ready_at && new Date(job.ready_at).getTime() <= nowMs);\n\nif (currentRetryCount >= maxRetries && !isScheduledAndDue) {\n  return { json: { job_id: job.id, project_id: job.project_id, episode_no: job.action_payload?.episode_no || 1, action_type: job.action_type || 'GENERATE_EPISODE', previous_retry_count: currentRetryCount, new_retry_count: currentRetryCount, next_status: 'DEAD_LETTER', next_schedule: null, dispatch_now: false, backoff_delay_mins: 0, router_payload: null } };\n}\n\nconst newRetryCount = isScheduledAndDue ? currentRetryCount : (currentRetryCount + 1);\nconst backoffMultiplier = Math.pow(2, currentRetryCount);\nconst backoffDelayMins = baseDelayMinutes * backoffMultiplier;\nconst nextScheduleIso = new Date(nowMs + backoffDelayMins * 60000).toISOString();\n\nconst dispatchNow = Boolean(isScheduledAndDue || job.action_payload?.immediate_retry === true);\nconst nextStatus = dispatchNow ? 'RUNNING' : 'RETRY_SCHEDULED';\n\nconst routerWebhookPayload = {\n  project_id: job.project_id,\n  episode_number: job.action_payload?.episode_no || 1,\n  intent: job.action_type || 'REGENERATE_EPISODE',\n  mode: 'SAVE',\n  rawText: `#retry_job_${job.id} ${job.action_type || 'REGENERATE_EPISODE'} ep ${job.action_payload?.episode_no || 1}`,\n  userPrompt: `Automated WF-13 Surgical Retry #${newRetryCount} for ${job.action_type || 'REGENERATE_EPISODE'}`,\n  sessionId: `wf13_retry_${job.id}_v${newRetryCount}`\n};\n\nreturn { json: { job_id: job.id, project_id: job.project_id, episode_no: job.action_payload?.episode_no || 1, action_type: job.action_type || 'REGENERATE_EPISODE', previous_retry_count: currentRetryCount, new_retry_count: newRetryCount, next_status: nextStatus, next_schedule: dispatchNow ? nowIso : nextScheduleIso, dispatch_now: dispatchNow, backoff_delay_mins: backoffDelayMins, router_payload: routerWebhookPayload } };"
+      },
+      "id": "38db2198-f79f-4ac8-8542-3ea489387319",
+      "name": "Exponential Backoff & Dead-Letter Math",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?id=eq.{{ $json.job_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: $json.next_status, retry_count: $json.new_retry_count, ready_at: $json.next_schedule }) }}",
+        "options": {}
+      },
+      "id": "4c46ee0a-37bd-46cc-b39e-95a3af70176c",
+      "name": "Supabase: PATCH pending_actions Retry State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -48
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $('Exponential Backoff & Dead-Letter Math').item.json.dispatch_now }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "91d7c4d4-493a-47d4-b5a1-17d26df1459d",
+      "name": "If Ready for Retry Dispatch NOW",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WF_00_WEBHOOK_URL || ($env.N8N_BASE_URL + '/webhook/api/v1/router') }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Exponential Backoff & Dead-Letter Math').item.json.router_payload) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "12a38d54-05b0-4f18-a6bd-44d6c651ecea",
+      "name": "Execution Dispatcher: Call WF-00 Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2048,
+        -144
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Exponential Backoff & Dead-Letter Math').item.json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').item.json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').item.json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').item.json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').item.json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').item.json.next_schedule } }) }}",
+        "options": {}
+      },
+      "id": "90adc41d-9330-41f1-b289-29e29cc7b3ee",
+      "name": "Supabase: Insert Retry Audit Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2288,
+        -48
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const calc = $('Exponential Backoff & Dead-Letter Math').item.json;\nreturn { json: calc };"
+      },
+      "id": "e41d1d16-a2b6-42ee-819d-d3773f4aa1eb",
+      "name": "Return Item to Batch Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2528,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `\u2728 **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `\ud83e\ude7a **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `\u2022 **Total Jobs Evaluated:** ${processed.length}`,\n  `\u2022 **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `\u2022 **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `\u2022 **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
+      },
+      "id": "263f696b-6638-48b9-a9ee-9a8e5f86f859",
+      "name": "Final Healer Response Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        -288
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Every 15 Mins)": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Failed & Due Retry Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Failed & Due Retry Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Failed & Due Retry Jobs": {
+      "main": [
+        [
+          {
+            "node": "Unpack Actionable Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unpack Actionable Jobs": {
+      "main": [
+        [
+          {
+            "node": "If Failed Jobs Exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Failed Jobs Exist": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (Process Each Failed Job)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Final Healer Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches (Process Each Failed Job)": {
+      "main": [
+        [
+          {
+            "node": "Final Healer Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Exponential Backoff & Dead-Letter Math",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exponential Backoff & Dead-Letter Math": {
+      "main": [
+        [
+          {
+            "node": "Supabase: PATCH pending_actions Retry State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: PATCH pending_actions Retry State": {
+      "main": [
+        [
+          {
+            "node": "If Ready for Retry Dispatch NOW",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Ready for Retry Dispatch NOW": {
+      "main": [
+        [
+          {
+            "node": "Execution Dispatcher: Call WF-00 Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Insert Retry Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execution Dispatcher: Call WF-00 Webhook": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Retry Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Retry Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Return Item to Batch Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Item to Batch Loop": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches (Process Each Failed Job)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Schedule Trigger (Every 15 Mins)": {
+      "recurrenceRules": [
+        null
+      ],
+      "recurrenceRuleSignatures": [
+        null
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "jI39p4vr4CnWhpgw",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T10:13:35.405Z",
+      "updatedAt": "2026-10-26T10:13:35.405Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "2a4f4570-0643-45b6-805b-9e23be95c1b3",
+    "workflowId": "jI39p4vr4CnWhpgw",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 15
+              }
+            ]
+          }
+        },
+        "id": "37c99b0f-985d-41c4-8d4a-19424cc11e32",
+        "name": "Schedule Trigger (Every 15 Mins)",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          80,
+          -144
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "3d08008d-f1b0-40f9-8a1c-ee7c7acb4d0e",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          80,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,project_id,action_type,status,retry_count,ready_at,action_payload,created_at&or=(status.eq.FAILED,and(status.eq.RETRY_SCHEDULED,ready_at.lte.{{ $now.toISOString() }}))&order=created_at.asc&limit=25",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "9a36c079-febe-4a44-b7de-e18b61b10c37",
+        "name": "Supabase: Fetch Failed & Due Retry Jobs",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          352,
+          -48
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "jsCode": "const rawItems = $input.all().map(i => i.json);\nconst jobs = [];\n\nfor (const entry of rawItems) {\n  if (Array.isArray(entry)) { for (const r of entry) { if (r && r.id) jobs.push({ json: r }); } }\n  else if (entry && entry.id) { jobs.push({ json: entry }); }\n}\n\nif (jobs.length === 0) { return [{ json: { no_jobs: true, jobs_count: 0 } }]; }\nreturn jobs;"
+        },
+        "id": "c2fa6ed0-2897-46a4-872a-c4696ac7907d",
+        "name": "Unpack Actionable Jobs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          592,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ Boolean($json.no_jobs) }}"
+              }
+            ]
+          }
+        },
+        "id": "a64fff41-f820-4e3d-8da8-01e53abd8fa7",
+        "name": "If Failed Jobs Exist",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          832,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "e51e4882-bfe3-434c-a0b8-adfb65650d71",
+        "name": "Split In Batches (Process Each Failed Job)",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          1072,
+          -144
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const job = $input.item.json || {};\nconst currentRetryCount = Number(job.retry_count || 0);\nconst maxRetries = Number($env.MAX_RETRY_LIMIT || 3);\nconst baseDelayMinutes = Number($env.RETRY_BASE_DELAY_MINS || 15);\nconst nowMs = Date.now();\nconst nowIso = new Date(nowMs).toISOString();\n\nconst isScheduledAndDue = Boolean(job.status === 'RETRY_SCHEDULED' && job.ready_at && new Date(job.ready_at).getTime() <= nowMs);\n\nif (currentRetryCount >= maxRetries && !isScheduledAndDue) {\n  return { json: { job_id: job.id, project_id: job.project_id, episode_no: job.action_payload?.episode_no || 1, action_type: job.action_type || 'GENERATE_EPISODE', previous_retry_count: currentRetryCount, new_retry_count: currentRetryCount, next_status: 'DEAD_LETTER', next_schedule: null, dispatch_now: false, backoff_delay_mins: 0, router_payload: null } };\n}\n\nconst newRetryCount = isScheduledAndDue ? currentRetryCount : (currentRetryCount + 1);\nconst backoffMultiplier = Math.pow(2, currentRetryCount);\nconst backoffDelayMins = baseDelayMinutes * backoffMultiplier;\nconst nextScheduleIso = new Date(nowMs + backoffDelayMins * 60000).toISOString();\n\nconst dispatchNow = Boolean(isScheduledAndDue || job.action_payload?.immediate_retry === true);\nconst nextStatus = dispatchNow ? 'RUNNING' : 'RETRY_SCHEDULED';\n\nconst routerWebhookPayload = {\n  project_id: job.project_id,\n  episode_number: job.action_payload?.episode_no || 1,\n  intent: job.action_type || 'REGENERATE_EPISODE',\n  mode: 'SAVE',\n  rawText: `#retry_job_${job.id} ${job.action_type || 'REGENERATE_EPISODE'} ep ${job.action_payload?.episode_no || 1}`,\n  userPrompt: `Automated WF-13 Surgical Retry #${newRetryCount} for ${job.action_type || 'REGENERATE_EPISODE'}`,\n  sessionId: `wf13_retry_${job.id}_v${newRetryCount}`\n};\n\nreturn { json: { job_id: job.id, project_id: job.project_id, episode_no: job.action_payload?.episode_no || 1, action_type: job.action_type || 'REGENERATE_EPISODE', previous_retry_count: currentRetryCount, new_retry_count: newRetryCount, next_status: nextStatus, next_schedule: dispatchNow ? nowIso : nextScheduleIso, dispatch_now: dispatchNow, backoff_delay_mins: backoffDelayMins, router_payload: routerWebhookPayload } };"
+        },
+        "id": "38db2198-f79f-4ac8-8542-3ea489387319",
+        "name": "Exponential Backoff & Dead-Letter Math",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1328,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "method": "PATCH",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?id=eq.{{ $json.job_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: $json.next_status, retry_count: $json.new_retry_count, ready_at: $json.next_schedule }) }}",
+          "options": {}
+        },
+        "id": "4c46ee0a-37bd-46cc-b39e-95a3af70176c",
+        "name": "Supabase: PATCH pending_actions Retry State",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          -48
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $('Exponential Backoff & Dead-Letter Math').item.json.dispatch_now }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "91d7c4d4-493a-47d4-b5a1-17d26df1459d",
+        "name": "If Ready for Retry Dispatch NOW",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          1808,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.WF_00_WEBHOOK_URL || ($env.N8N_BASE_URL + '/webhook/api/v1/router') }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Exponential Backoff & Dead-Letter Math').item.json.router_payload) }}",
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "id": "12a38d54-05b0-4f18-a6bd-44d6c651ecea",
+        "name": "Execution Dispatcher: Call WF-00 Webhook",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2048,
+          -144
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Exponential Backoff & Dead-Letter Math').item.json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').item.json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').item.json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').item.json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').item.json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').item.json.next_schedule } }) }}",
+          "options": {}
+        },
+        "id": "90adc41d-9330-41f1-b289-29e29cc7b3ee",
+        "name": "Supabase: Insert Retry Audit Log",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2288,
+          -48
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const calc = $('Exponential Backoff & Dead-Letter Math').item.json;\nreturn { json: calc };"
+        },
+        "id": "e41d1d16-a2b6-42ee-819d-d3773f4aa1eb",
+        "name": "Return Item to Batch Loop",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2528,
+          -48
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `\u2728 **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `\ud83e\ude7a **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `\u2022 **Total Jobs Evaluated:** ${processed.length}`,\n  `\u2022 **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `\u2022 **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `\u2022 **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
+        },
+        "id": "263f696b-6638-48b9-a9ee-9a8e5f86f859",
+        "name": "Final Healer Response Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1328,
+          -288
+        ]
+      }
+    ],
+    "connections": {
+      "Schedule Trigger (Every 15 Mins)": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Failed & Due Retry Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Failed & Due Retry Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Failed & Due Retry Jobs": {
+        "main": [
+          [
+            {
+              "node": "Unpack Actionable Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unpack Actionable Jobs": {
+        "main": [
+          [
+            {
+              "node": "If Failed Jobs Exist",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Failed Jobs Exist": {
+        "main": [
+          [
+            {
+              "node": "Split In Batches (Process Each Failed Job)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Final Healer Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split In Batches (Process Each Failed Job)": {
+        "main": [
+          [
+            {
+              "node": "Final Healer Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Exponential Backoff & Dead-Letter Math",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Exponential Backoff & Dead-Letter Math": {
+        "main": [
+          [
+            {
+              "node": "Supabase: PATCH pending_actions Retry State",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: PATCH pending_actions Retry State": {
+        "main": [
+          [
+            {
+              "node": "If Ready for Retry Dispatch NOW",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Ready for Retry Dispatch NOW": {
+        "main": [
+          [
+            {
+              "node": "Execution Dispatcher: Call WF-00 Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Insert Retry Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Execution Dispatcher: Call WF-00 Webhook": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Retry Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Retry Audit Log": {
+        "main": [
+          [
+            {
+              "node": "Return Item to Batch Loop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Return Item to Batch Loop": {
+        "main": [
+          [
+            {
+              "node": "Split In Batches (Process Each Failed Job)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": "Version 2a4f4570",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-10-26T10:13:49.631Z",
+    "updatedAt": "2026-10-26T10:14:25.000Z",
+    "workflowPublishHistory": [
+      {
+        "id": 130,
+        "workflowId": "jI39p4vr4CnWhpgw",
+        "versionId": "2a4f4570-0643-45b6-805b-9e23be95c1b3",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-26T10:14:25.448Z"
+      }
+    ]
+  }
+}

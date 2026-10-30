@@ -1,0 +1,639 @@
+{
+  "id": "y5DW83fQjvyrzE98",
+  "name": "StoryWf12",
+  "description": "WF-12 Quota Governor: Tracks API/GPU usage and blocks requests if limits are exceeded.",
+  "active": true,
+  "activeVersionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
+  "createdAt": "2026-10-26T10:10:44.896Z",
+  "updatedAt": "2026-10-26T10:11:29.447Z",
+  "isArchived": false,
+  "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
+  "versionCounter": 2,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "66409776-b8b6-4373-9721-d495d20704f1",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? 'GPU' : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISOString().slice(0, 10);\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn { json: { ...raw, project_id, service_type, estimated_cost_units, usage_date, sessionId: (raw.sessionId || `sess_${$execution.id}`).toString() } };"
+      },
+      "id": "2d4d7178-e840-44b1-a03f-d3c1c832e843",
+      "name": "Input Normalizer & Cost Estimator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/quota_usage?select=id,project_id,usage_date,service_type,accumulated_units,updated_at&project_id=eq.{{ $json.project_id }}&usage_date=eq.{{ $json.usage_date }}&service_type=eq.{{ $json.service_type }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c83896ce-9baf-4ff2-a502-728213851295",
+      "name": "Supabase: Fetch Daily Quota Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        80
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base = $('Input Normalizer & Cost Estimator').item.json;\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISOString() }\n  }\n};"
+      },
+      "id": "9f131fca-b8de-4d4a-9b85-6444786d05da",
+      "name": "Quota & Throttling Evaluator",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_allowed }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "eb8abb3a-3911-4221-b409-ec205cf42d3c",
+      "name": "Approval / Rejection Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        896,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/quota_usage?on_conflict=project_id,usage_date,service_type",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.upsert_payload) }}",
+        "options": {}
+      },
+      "id": "0243c6d0-b8a1-448f-8443-79ae32625740",
+      "name": "Supabase: Upsert Quota Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Quota & Throttling Evaluator').item.json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').item.json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').item.json.service_type, projected_total: $('Quota & Throttling Evaluator').item.json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').item.json.daily_quota_limit } }) }}",
+        "options": {}
+      },
+      "id": "540090fa-d4dc-4663-91e5-250409f4c384",
+      "name": "Supabase: Insert Audit Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1344,
+        80
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const state = $('Quota & Throttling Evaluator').item.json;\n\nconst msg = state.is_allowed\n  ? [\n      `\u2705 **WF-12: Quota Approved (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `\u2022 **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `\u2022 **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `\ud83d\uded1 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `\u2022 **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `\u2022 **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};"
+      },
+      "id": "7065e197-7638-4671-9c32-72189905a44e",
+      "name": "Final Quota Response Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        80
+      ]
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Input Normalizer & Cost Estimator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Normalizer & Cost Estimator": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Daily Quota Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Daily Quota Usage": {
+      "main": [
+        [
+          {
+            "node": "Quota & Throttling Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quota & Throttling Evaluator": {
+      "main": [
+        [
+          {
+            "node": "Approval / Rejection Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval / Rejection Gate": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Upsert Quota Usage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Upsert Quota Usage": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Final Quota Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "y5DW83fQjvyrzE98",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T10:10:44.899Z",
+      "updatedAt": "2026-10-26T10:10:44.899Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
+    "workflowId": "y5DW83fQjvyrzE98",
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "66409776-b8b6-4373-9721-d495d20704f1",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? 'GPU' : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISOString().slice(0, 10);\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn { json: { ...raw, project_id, service_type, estimated_cost_units, usage_date, sessionId: (raw.sessionId || `sess_${$execution.id}`).toString() } };"
+        },
+        "id": "2d4d7178-e840-44b1-a03f-d3c1c832e843",
+        "name": "Input Normalizer & Cost Estimator",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/quota_usage?select=id,project_id,usage_date,service_type,accumulated_units,updated_at&project_id=eq.{{ $json.project_id }}&usage_date=eq.{{ $json.usage_date }}&service_type=eq.{{ $json.service_type }}&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "c83896ce-9baf-4ff2-a502-728213851295",
+        "name": "Supabase: Fetch Daily Quota Usage",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          448,
+          80
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const base = $('Input Normalizer & Cost Estimator').item.json;\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISOString() }\n  }\n};"
+        },
+        "id": "9f131fca-b8de-4d4a-9b85-6444786d05da",
+        "name": "Quota & Throttling Evaluator",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ $json.is_allowed }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "id": "eb8abb3a-3911-4221-b409-ec205cf42d3c",
+        "name": "Approval / Rejection Gate",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          896,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/quota_usage?on_conflict=project_id,usage_date,service_type",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.upsert_payload) }}",
+          "options": {}
+        },
+        "id": "0243c6d0-b8a1-448f-8443-79ae32625740",
+        "name": "Supabase: Upsert Quota Usage",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1120,
+          0
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Quota & Throttling Evaluator').item.json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').item.json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').item.json.service_type, projected_total: $('Quota & Throttling Evaluator').item.json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').item.json.daily_quota_limit } }) }}",
+          "options": {}
+        },
+        "id": "540090fa-d4dc-4663-91e5-250409f4c384",
+        "name": "Supabase: Insert Audit Log",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1344,
+          80
+        ],
+        "alwaysOutputData": true,
+        "continueOnFail": true
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const state = $('Quota & Throttling Evaluator').item.json;\n\nconst msg = state.is_allowed\n  ? [\n      `\u2705 **WF-12: Quota Approved (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `\u2022 **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `\u2022 **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `\ud83d\uded1 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `\u2022 **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `\u2022 **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};"
+        },
+        "id": "7065e197-7638-4671-9c32-72189905a44e",
+        "name": "Final Quota Response Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1568,
+          80
+        ]
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Input Normalizer & Cost Estimator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Input Normalizer & Cost Estimator": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Daily Quota Usage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Daily Quota Usage": {
+        "main": [
+          [
+            {
+              "node": "Quota & Throttling Evaluator",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Quota & Throttling Evaluator": {
+        "main": [
+          [
+            {
+              "node": "Approval / Rejection Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Approval / Rejection Gate": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Upsert Quota Usage",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Upsert Quota Usage": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Audit Log": {
+        "main": [
+          [
+            {
+              "node": "Final Quota Response Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": "StoryWf12",
+    "description": null,
+    "autosaved": true,
+    "createdAt": "2026-10-26T10:10:52.595Z",
+    "updatedAt": "2026-10-26T10:14:50.000Z",
+    "workflowPublishHistory": [
+      {
+        "id": 131,
+        "workflowId": "y5DW83fQjvyrzE98",
+        "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-26T10:14:43.351Z"
+      },
+      {
+        "id": 132,
+        "workflowId": "y5DW83fQjvyrzE98",
+        "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
+        "event": "deactivated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-26T10:14:50.940Z"
+      },
+      {
+        "id": 133,
+        "workflowId": "y5DW83fQjvyrzE98",
+        "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-26T10:14:50.941Z"
+      }
+    ]
+  }
+}

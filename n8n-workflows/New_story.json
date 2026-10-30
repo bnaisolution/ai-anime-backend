@@ -1,0 +1,1387 @@
+{
+  "id": "NbOPXGwd3Vz1SPLR",
+  "name": "New story",
+  "description": null,
+  "active": false,
+  "activeVersionId": null,
+  "createdAt": "2026-10-25T19:44:43.604Z",
+  "updatedAt": "2026-10-26T06:08:21.000Z",
+  "isArchived": true,
+  "versionId": "5341d348-78dd-4998-b0da-f585e24f4c66",
+  "versionCounter": 6,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf07-memory",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d2becd6a-74a0-4182-ba50-9c8ee57991cc",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        64,
+        1216
+      ],
+      "webhookId": "wf07-memory",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()?.json??{};\nconst headers=(input.headers&&typeof input.headers==='object')?input.headers:((input.body&&typeof input.body==='object'&&input.body.headers&&typeof input.body.headers==='object')?input.body.headers:{});\nlet b=input.body??input;\nconst fail=(category,message,httpStatus)=>[{json:{ok:false,request_id:typeof b?.request_id==='string'?b.request_id.trim()||null:null,user_id:typeof b?.user_id==='string'?b.user_id:null,workspace_id:typeof b?.workspace_id==='string'?b.workspace_id:null,project_id:typeof b?.project_id==='string'?b.project_id:null,conversation_id:typeof b?.conversation_id==='string'?b.conversation_id:null,task_id:typeof b?.task_id==='string'?b.task_id:null,category,message,http_status:httpStatus||400}}];\nif(!b||typeof b!=='object'||Array.isArray(b))return fail('INVALID_INPUT','Expected JSON object body');\nif(typeof b.request_id!=='string'||!b.request_id.trim())return fail('INVALID_INPUT','request_id required');\nconst requestId=b.request_id.trim();\nif(requestId.length>100)return fail('INVALID_INPUT','request_id too long');\nlet envToken=undefined;let requireToken=true;let envAccessible=true;\ntry{envToken=$env?.WF07_SERVICE_TOKEN;const rt=$env?.WF07_REQUIRE_TOKEN;requireToken=(rt===undefined||rt===null)?true:(String(rt).toLowerCase()!=='false');}catch(e){envAccessible=false;}\nlet tokenCheckStatus='disabled_empty';\nif(!envAccessible&&requireToken)return fail('INTERNAL_ERROR','token_required_but_env_unavailable',503);\nif(requireToken&&(typeof envToken!=='string'||envToken===''))return fail('INTERNAL_ERROR','token_required_but_not_configured',503);\nif(!envAccessible){tokenCheckStatus='disabled_env_blocked';}\nelse if(typeof envToken==='string'&&envToken!==''){tokenCheckStatus='enforced';const provided=headers['x-service-token']||headers['X-Service-Token']||null;if(!provided||provided!==envToken)return fail('UNAUTHORIZED','service_token_invalid',401);}\nconst validOps=['READ_MEMORY','WRITE_MEMORY','UPDATE_MEMORY','SEARCH_MEMORY','MARK_SUPERSEDED'];\nconst operation=typeof b.operation==='string'?b.operation.trim().toUpperCase():null;\nif(!operation||!validOps.includes(operation))return fail('INVALID_INPUT','Invalid operation');\nconst validScopes=['conversation','project','workflow','skill','user_global','workspace'];\nconst scope=typeof b.scope==='string'?b.scope.trim().toLowerCase():null;\nconst userId=typeof b.user_id==='string'?b.user_id.trim():null;\nconst workspaceId=typeof b.workspace_id==='string'?b.workspace_id.trim():null;\nconst projectId=(typeof b.project_id==='string'&&b.project_id.trim())?b.project_id.trim():null;\nconst conversationId=typeof b.conversation_id==='string'?b.conversation_id.trim():null;\nconst workflowId=typeof b.workflow_id==='string'?b.workflow_id.trim():null;\nconst skillId=typeof b.skill_id==='string'?b.skill_id.trim():null;\nconst taskId=typeof b.task_id==='string'?b.task_id.trim():null;\nif(!userId)return fail('UNAUTHORIZED','user_id is required',401);\nconst uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;\nconst isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);\nif(!isUuid(userId))return fail('INVALID_INPUT','user_id must be valid UUID');\nif(workspaceId&&!isUuid(workspaceId))return fail('INVALID_INPUT','workspace_id must be valid UUID');\nif(projectId&&!isUuid(projectId))return fail('INVALID_INPUT','project_id must be valid UUID');\nif(conversationId&&!isUuid(conversationId))return fail('INVALID_INPUT','conversation_id must be valid UUID');\nif(userId.length>100)return fail('INVALID_INPUT','user_id exceeds 100 chars');\nif(workspaceId&&workspaceId.length>100)return fail('INVALID_INPUT','workspace_id exceeds 100 chars');\nif(projectId&&projectId.length>100)return fail('INVALID_INPUT','project_id exceeds 100 chars');\nif(conversationId&&conversationId.length>200)return fail('INVALID_INPUT','conversation_id exceeds 200 chars');\nif(workflowId&&workflowId.length>200)return fail('INVALID_INPUT','workflow_id exceeds 200 chars');\nif(skillId&&skillId.length>200)return fail('INVALID_INPUT','skill_id exceeds 200 chars');\nconst includeSuperseded=b.include_superseded===true;\nconst idempotencyKey=(typeof b.idempotency_key==='string'&&b.idempotency_key.trim())?b.idempotency_key.trim().slice(0,200):null;\nconst duplicatePolicy=(typeof b.duplicate_policy==='string'&&['allow','reject'].includes(b.duplicate_policy.trim()))?b.duplicate_policy.trim():'allow';\nconst sensitiveKey=/(password|passwd|secret|token|api.?key|authorization|auth.?header|client.?secret|access.?key|private.?key|credential|cookie)/i;\nconst valueSecretPatterns=[/gsk_[A-Za-z0-9]{20,}/g,/sk-proj-[A-Za-z0-9_-]{20,}/g,/sk-[A-Za-z0-9]{20,}/g,/AIza[\\w-]{30,}/g,/gh[pousr]_[A-Za-z0-9]{20,}/g,/xox[baprs]-[A-Za-z0-9-]{10,}/g,/Bearer\\s+[A-Za-z0-9._~+\\/-]{12,}=*/gi];\nconst redactedFields=[];\nfunction redactText(s,label){let out=String(s);for(const re of valueSecretPatterns){re.lastIndex=0;if(re.test(out)){redactedFields.push(label+'(value-pattern)');re.lastIndex=0;out=out.replace(re,'[REDACTED_SECRET]')}}return out;}\nfunction redactValue(v,key='',depth=0){if(depth>20)return '[REDACTED:DEPTH_LIMIT]';if(sensitiveKey.test(key)){redactedFields.push(key);return '[REDACTED]';}if(typeof v==='string')return redactText(v,key);if(Array.isArray(v))return v.map(x=>redactValue(x,key,depth+1));if(v&&typeof v==='object'){const o={};for(const[k,val]of Object.entries(v))o[k]=redactValue(val,k,depth+1);return o}return v;}\nfunction validateTags(tags){if(!Array.isArray(tags))return{ok:false,error:'tags must be array'};if(tags.length>20)return{ok:false,error:'tags max 20 items'};const out=[];for(const t of tags){if(typeof t!=='string')return{ok:false,error:'each tag must be string'};const trimmed=t.trim();if(trimmed.length===0)return{ok:false,error:'tag cannot be empty'};if(trimmed.length>100)return{ok:false,error:'tag max 100 chars'};out.push(redactText(trimmed,'tags'));}return{ok:true,value:out};}\nfunction checkSourceRefSize(sr){if(sr===null||sr===undefined)return{ok:true};if(typeof sr!=='object'||Array.isArray(sr))return{ok:false,error:'source_reference must be object'};try{const str=JSON.stringify(sr);if(str.length>10240)return{ok:false,error:'source_reference exceeds 10KB'};}catch(e){return{ok:false,error:'source_reference not serializable'}}return{ok:true};}\nlet content=null,category=null,key=null,knowledgeStatus=null,sourceRef=null,sourceRefProvided=false,confidence=null,tags=null,memoryId=null,supersededBy=null,query=null,limit=20;\nlet contentProvided=false,categoryProvided=false,tagsProvided=false,knowledgeStatusProvided=false,confidenceProvided=false;\nconst CLIENT_KS=['proposed','observed','tested'];\nconst ALL_KS=['proposed','observed','tested','verified','approved'];\nconst buildAutoSourceRef=(base)=>{const s=(base&&typeof base==='object'&&!Array.isArray(base))?{...base}:{};if(scope==='conversation'&&conversationId)s.conversation_id=conversationId;if(scope==='project'&&projectId)s.project_id=projectId;if(scope==='workflow'&&workflowId)s.workflow_id=workflowId;if(scope==='skill'&&skillId)s.skill_id=skillId;if(scope==='workspace'&&workspaceId)s.workspace_id=workspaceId;return s;};\nif(operation==='READ_MEMORY'){\n  if(!scope||!validScopes.includes(scope))return fail('INVALID_INPUT','scope required');\n  if(scope==='conversation'&&!conversationId)return fail('INVALID_INPUT','conversation_id required');\n  if(scope==='project'&&!projectId)return fail('INVALID_INPUT','project_id required');\n  if(scope==='workflow'&&!workflowId)return fail('INVALID_INPUT','workflow_id required');\n  if(scope==='skill'&&!skillId)return fail('INVALID_INPUT','skill_id required');\n  if(scope==='workspace'&&!workspaceId)return fail('INVALID_INPUT','workspace_id required');\n  if(typeof b.limit==='number'&&b.limit>0)limit=Math.min(Math.floor(b.limit),100);\n} else if(operation==='WRITE_MEMORY'){\n  if(!scope||!validScopes.includes(scope))return fail('INVALID_INPUT','scope required');\n  if(typeof b.content!=='string'||!b.content.trim())return fail('INVALID_INPUT','content required');\n  if(b.content.length>10000)return fail('INVALID_INPUT','content exceeds 10000 chars');\n  content=redactText(b.content,'content');contentProvided=true;\n  const ksRaw=typeof b.knowledge_status==='string'?b.knowledge_status.trim().toLowerCase():'proposed';\n  if(!ALL_KS.includes(ksRaw))return fail('INVALID_INPUT','invalid knowledge_status');\n  if(!CLIENT_KS.includes(ksRaw))return fail('FORBIDDEN','knowledge_status='+ksRaw+' cannot be set via this workflow',403);\n  knowledgeStatus=ksRaw;knowledgeStatusProvided=true;\n  category=typeof b.category==='string'?redactText(b.category.trim().slice(0,100),'category'):'general';categoryProvided=true;\n  if(b.key!==undefined){if(typeof b.key!=='string')return fail('INVALID_INPUT','key must be string');const kt=b.key.trim();if(kt.length===0)return fail('INVALID_INPUT','key cannot be empty when provided');key=redactText(kt.slice(0,200),'key');}\n  if(b.source_reference===null)return fail('INVALID_INPUT','source_reference cannot be null');\n  if(b.source_reference!==undefined){const sr=redactValue(b.source_reference);const sz=checkSourceRefSize(sr);if(!sz.ok)return fail('INVALID_INPUT',sz.error);sourceRef=buildAutoSourceRef(sr);sourceRefProvided=true;}else{sourceRef=buildAutoSourceRef({});sourceRefProvided=true;}\n  if(b.confidence!==undefined){if(typeof b.confidence!=='number'||b.confidence<0||b.confidence>1)return fail('INVALID_INPUT','confidence must be number in [0,1]');confidence=b.confidence;confidenceProvided=true;}\n  if(b.tags!==undefined){const tv=validateTags(b.tags);if(!tv.ok)return fail('INVALID_INPUT','Invalid tags: '+tv.error);tags=tv.value;tagsProvided=true;}else{tags=null;tagsProvided=true;}\n  if(scope==='conversation'&&!conversationId)return fail('INVALID_INPUT','conversation_id required');\n  if(scope==='project'&&!projectId)return fail('INVALID_INPUT','project_id required');\n  if(scope==='workflow'&&!workflowId)return fail('INVALID_INPUT','workflow_id required');\n  if(scope==='skill'&&!skillId)return fail('INVALID_INPUT','skill_id required');\n  if(scope==='workspace'&&!workspaceId)return fail('INVALID_INPUT','workspace_id required');\n} else if(operation==='UPDATE_MEMORY'){\n  if(typeof b.memory_id!=='string'||!b.memory_id.trim())return fail('INVALID_INPUT','memory_id required');\n  memoryId=b.memory_id.trim();\n  if(!isUuid(memoryId))return fail('INVALID_INPUT','memory_id must be valid UUID');\n  if(b.content!==undefined){if(typeof b.content!=='string'||!b.content.trim())return fail('INVALID_INPUT','content must be non-empty string');if(b.content.length>10000)return fail('INVALID_INPUT','content exceeds 10000 chars');content=redactText(b.content,'content');contentProvided=true;}\n  if(typeof b.knowledge_status==='string'){const ks=b.knowledge_status.trim().toLowerCase();if(!ALL_KS.includes(ks))return fail('INVALID_INPUT','invalid knowledge_status');if(!CLIENT_KS.includes(ks))return fail('FORBIDDEN','knowledge_status='+ks+' cannot be set via this workflow',403);knowledgeStatus=ks;knowledgeStatusProvided=true;}\n  if(b.source_reference===null)return fail('INVALID_INPUT','source_reference cannot be null');\n  if(b.source_reference!==undefined){const sr=redactValue(b.source_reference);const sz=checkSourceRefSize(sr);if(!sz.ok)return fail('INVALID_INPUT',sz.error);sourceRef=sr;sourceRefProvided=true;}\n  if(typeof b.category==='string'){category=redactText(b.category.trim().slice(0,100),'category');categoryProvided=true;}\n  if(b.tags!==undefined){const tv=validateTags(b.tags);if(!tv.ok)return fail('INVALID_INPUT','Invalid tags: '+tv.error);tags=tv.value;tagsProvided=true;}\n  if(b.confidence!==undefined){if(typeof b.confidence!=='number'||b.confidence<0||b.confidence>1)return fail('INVALID_INPUT','confidence must be number in [0,1]');confidence=b.confidence;confidenceProvided=true;}\n  if(!contentProvided&&!knowledgeStatusProvided&&!sourceRefProvided&&!categoryProvided&&!tagsProvided&&!confidenceProvided)return fail('INVALID_INPUT','No update fields provided');\n} else if(operation==='SEARCH_MEMORY'){\n  if(typeof b.query!=='string'||!b.query.trim())return fail('INVALID_INPUT','query required');\n  const escaped=b.query.trim().slice(0,500).replace(/[%_\\\\]/g,'\\\\$&');\n  query=redactText(escaped,'query');\n  if(typeof b.limit==='number'&&b.limit>0)limit=Math.min(Math.floor(b.limit),100);\n  if(!scope||!validScopes.includes(scope))return fail('INVALID_INPUT','scope required');\n  if(scope==='conversation'&&!conversationId)return fail('INVALID_INPUT','conversation_id required');\n  if(scope==='project'&&!projectId)return fail('INVALID_INPUT','project_id required');\n  if(scope==='workflow'&&!workflowId)return fail('INVALID_INPUT','workflow_id required');\n  if(scope==='skill'&&!skillId)return fail('INVALID_INPUT','skill_id required');\n  if(scope==='workspace'&&!workspaceId)return fail('INVALID_INPUT','workspace_id required');\n} else if(operation==='MARK_SUPERSEDED'){\n  if(typeof b.memory_id!=='string'||!b.memory_id.trim())return fail('INVALID_INPUT','memory_id required');\n  if(typeof b.superseded_by!=='string'||!b.superseded_by.trim())return fail('INVALID_INPUT','superseded_by required');\n  memoryId=b.memory_id.trim();supersededBy=b.superseded_by.trim();\n  if(!isUuid(memoryId))return fail('INVALID_INPUT','memory_id must be valid UUID');\n  if(!isUuid(supersededBy))return fail('INVALID_INPUT','superseded_by must be valid UUID');\n  if(memoryId===supersededBy)return fail('INVALID_INPUT','memory_id and superseded_by must differ');\n  if(!scope||!validScopes.includes(scope))return fail('INVALID_INPUT','scope required for MARK_SUPERSEDED');\n  if(scope==='conversation'&&!conversationId)return fail('INVALID_INPUT','conversation_id required');\n  if(scope==='project'&&!projectId)return fail('INVALID_INPUT','project_id required');\n  if(scope==='workflow'&&!workflowId)return fail('INVALID_INPUT','workflow_id required');\n  if(scope==='skill'&&!skillId)return fail('INVALID_INPUT','skill_id required');\n  if(scope==='workspace'&&!workspaceId)return fail('INVALID_INPUT','workspace_id required');\n}\nreturn [{json:{ok:true,request_id:requestId,operation,scope,user_id:userId,workspace_id:workspaceId,project_id:projectId,conversation_id:conversationId,workflow_id:workflowId,skill_id:skillId,task_id:taskId,content,category,key,knowledge_status:knowledgeStatus,source_reference:sourceRef,source_reference_provided:sourceRefProvided,confidence,tags,memory_id:memoryId,superseded_by:supersededBy,query,limit,content_provided:contentProvided,category_provided:categoryProvided,tags_provided:tagsProvided,knowledge_status_provided:knowledgeStatusProvided,confidence_provided:confidenceProvided,include_superseded:includeSuperseded,idempotency_key:idempotencyKey,duplicate_policy:duplicatePolicy,redacted_fields:redactedFields,token_check_status:tokenCheckStatus}}];"
+      },
+      "id": "f48fa729-40f4-4897-bb39-e3045f02439c",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        1216
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "34530a48-c9a5-47ae-a645-5077a0a29354",
+      "name": "Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        1216
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$input.first()?.json??{};const rid=a.request_id??null;const memId='MEMOP-'+(rid||'rejected')+'-'+Date.now();const VALID_CATEGORIES=['INVALID_INPUT','INVALID_JSON','UNAUTHORIZED','FORBIDDEN','NOT_FOUND','MODEL_ERROR','PROVIDER_RATE_LIMIT','PROVIDER_TIMEOUT','VALIDATION_FAILED','TEST_FAILED','APPROVAL_REQUIRED','VERSION_CONFLICT','INTEGRATION_UNAVAILABLE','INTERNAL_ERROR'];const rawCat=a.category||'INVALID_INPUT';const cat=VALID_CATEGORIES.includes(rawCat)?rawCat:'INVALID_INPUT';const msg=a.message||'Invalid request';const httpMap={INVALID_INPUT:400,INVALID_JSON:400,UNAUTHORIZED:401,FORBIDDEN:403,NOT_FOUND:404,APPROVAL_REQUIRED:409,VERSION_CONFLICT:409,VALIDATION_FAILED:422,TEST_FAILED:422,PROVIDER_RATE_LIMIT:429,PROVIDER_TIMEOUT:504,MODEL_ERROR:502,INTEGRATION_UNAVAILABLE:503,INTERNAL_ERROR:500};const httpStatus=(typeof a.http_status==='number')?a.http_status:(httpMap[cat]||400);return [{json:{request_id:rid,task_id:a.task_id||null,status:'failed',_http_status:httpStatus,result:{operation_id:memId,operation:null,memory_items:[],memory_item:null,count:0,superseded_count:0,duplicate_detected:false,limitations:['No memory operation performed due to input validation failure.'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:cat,message:msg}],warnings:[],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{claimed_user_id:a.user_id||null,project_id:a.project_id||null,user_id:null,workspace_id:a.workspace_id||null,conversation_id:a.conversation_id||null,resource_type:'memory_operation_rejected',resource_id:memId,event_type:'memory_operation_rejected',note:'Rejected request: user identity not verified by trusted backend.'}}}];"
+      },
+      "id": "3c2808dc-64d0-431f-bfb4-2bb19ded6ae1",
+      "name": "Format Request Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1552
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r0",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "READ_MEMORY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "READ_MEMORY"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "WRITE_MEMORY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "WRITE_MEMORY"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "UPDATE_MEMORY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "UPDATE_MEMORY"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "SEARCH_MEMORY",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SEARCH_MEMORY"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "MARK_SUPERSEDED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "MARK_SUPERSEDED"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "dca396d3-627c-4832-a3e7-039f4aaba8db",
+      "name": "Operation Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        736,
+        848
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 5000,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "scope",
+              "condition": "eq",
+              "keyValue": "={{ $json.scope }}"
+            },
+            {
+              "keyName": "knowledge_status",
+              "condition": "neq",
+              "keyValue": "={{ $json.include_superseded ? '__include_all__' : 'superseded' }}"
+            }
+          ]
+        }
+      },
+      "id": "886b780c-2c5a-4b48-a64e-b062ccea2588",
+      "name": "Read Memory",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        720
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 200,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "scope",
+              "condition": "eq",
+              "keyValue": "={{ $json.scope }}"
+            },
+            {
+              "keyName": "key",
+              "condition": "eq",
+              "keyValue": "={{ $json.key || '__no_key__' }}"
+            }
+          ]
+        }
+      },
+      "id": "3e5f6ebc-dc26-4822-a18e-aee14c63cbdf",
+      "name": "Write Memory DupCheck",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        304
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "rejectCondition",
+              "leftValue": "={{ (() => { try { const pol=$('Validate Request').first().json.duplicate_policy; if(pol!=='reject') return false; const meta=$('Validate Request').first().json; const rows=$('Write Memory DupCheck').all().map(i=>i.json).filter(r=>r&&r.id); return rows.some(r => { if(meta.idempotency_key && r.idempotency_key === meta.idempotency_key) return true; if(!meta.key) return false; if(r.key !== meta.key) return false; if(r.scope !== meta.scope) return false; if(meta.scope === 'project' && r.project_id !== meta.project_id) return false; if(meta.scope === 'workspace' && r.workspace_id !== meta.workspace_id) return false; if(meta.scope === 'workflow' && r.workflow_id !== meta.workflow_id) return false; if(meta.scope === 'skill' && r.skill_id !== meta.skill_id) return false; if(meta.scope === 'conversation') { const ref = r.source_reference || {}; if(ref.conversation_id !== meta.conversation_id) return false; } return true; }); } catch(e) { return false; } })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e836c718-314a-4381-85f3-5adf761c9ea4",
+      "name": "Check Duplicate Policy",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        304
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;\nlet dupRows=[];\ntry{dupRows=$('Write Memory DupCheck').all().map(i=>i.json).filter(r=>r&&r.id);}catch(e){dupRows=[];}\nconst refined=dupRows.filter(r=>{\n    if(meta.idempotency_key && r.idempotency_key === meta.idempotency_key) return true;\n    if(!meta.key)return false;\n    if(r.key!==meta.key)return false;\n    if(r.scope!==meta.scope)return false;\n    if(meta.scope==='project'&&r.project_id!==meta.project_id)return false;\n    if(meta.scope==='workspace'&&r.workspace_id!==meta.workspace_id)return false;\n    if(meta.scope==='workflow'&&r.workflow_id!==meta.workflow_id)return false;\n    if(meta.scope==='skill'&&r.skill_id!==meta.skill_id)return false;\n    if(meta.scope==='conversation'){const ref=r.source_reference||{};if(ref.conversation_id!==meta.conversation_id)return false;}\n    return true;\n});\nreturn [{json:{_duplicate_rejected:true,request_id:meta.request_id,duplicate_count:refined.length,existing_ids:refined.slice(0,10).map(r=>r.id),policy:'reject',message:'Insert skipped due to duplicate_policy=reject'}}];"
+      },
+      "id": "b91cf113-ba16-47c1-9937-50d166e1dd4b",
+      "name": "Format Duplicate Rejection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        256
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "memory_items",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "owner_id",
+              "fieldValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $('Validate Request').first().json.workspace_id || null }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $('Validate Request').first().json.project_id || null }}"
+            },
+            {
+              "fieldId": "skill_id",
+              "fieldValue": "={{ $('Validate Request').first().json.skill_id || null }}"
+            },
+            {
+              "fieldId": "workflow_id",
+              "fieldValue": "={{ $('Validate Request').first().json.workflow_id || null }}"
+            },
+            {
+              "fieldId": "scope",
+              "fieldValue": "={{ $('Validate Request').first().json.scope }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $('Validate Request').first().json.category }}"
+            },
+            {
+              "fieldId": "knowledge_status",
+              "fieldValue": "={{ $('Validate Request').first().json.knowledge_status }}"
+            },
+            {
+              "fieldId": "key",
+              "fieldValue": "={{ $('Validate Request').first().json.key || null }}"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Validate Request').first().json.content }}"
+            },
+            {
+              "fieldId": "source_reference",
+              "fieldValue": "={{ $('Validate Request').first().json.source_reference || null }}"
+            },
+            {
+              "fieldId": "confidence",
+              "fieldValue": "={{ $('Validate Request').first().json.confidence !== null && $('Validate Request').first().json.confidence !== undefined ? $('Validate Request').first().json.confidence : null }}"
+            },
+            {
+              "fieldId": "tags",
+              "fieldValue": "={{ $('Validate Request').first().json.tags || null }}"
+            },
+            {
+              "fieldId": "idempotency_key",
+              "fieldValue": "={{ $('Validate Request').first().json.idempotency_key || null }}"
+            }
+          ]
+        }
+      },
+      "id": "97095b90-b89f-4ee6-8f6c-303f3990f579",
+      "name": "Write Memory Insert",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        448
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.memory_id }}"
+            },
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        }
+      },
+      "id": "a7b4099b-7b7b-4e04-aeee-d308e422f971",
+      "name": "Fetch Update Target",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        656
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "targetFound",
+              "leftValue": "={{ (() => { try { const t=$json; const m=$('Validate Request').first().json; if(!t||t.id!==m.memory_id) return false; if(t.knowledge_status==='superseded') return false; if(m.project_id&&t.project_id&&t.project_id!==m.project_id) return false; if(m.workspace_id&&t.workspace_id&&t.workspace_id!==m.workspace_id) return false; if(m.conversation_id){ const r=(t.source_reference&&typeof t.source_reference==='object')?t.source_reference:{}; if(r.conversation_id!==m.conversation_id) return false; } return true; } catch(e) { return false; } })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d7f1bd77-8545-4028-8891-2c67f46efd82",
+      "name": "Check Update Target",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        656
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "memory_items",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.memory_id }}"
+            },
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "keyName": "knowledge_status",
+              "condition": "neq",
+              "keyValue": "superseded"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Validate Request').first().json.content_provided ? $('Validate Request').first().json.content : undefined }}"
+            },
+            {
+              "fieldId": "knowledge_status",
+              "fieldValue": "={{ $('Validate Request').first().json.knowledge_status_provided ? $('Validate Request').first().json.knowledge_status : undefined }}"
+            },
+            {
+              "fieldId": "source_reference",
+              "fieldValue": "={{ $('Validate Request').first().json.source_reference_provided ? $('Validate Request').first().json.source_reference : undefined }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $('Validate Request').first().json.category_provided ? $('Validate Request').first().json.category : undefined }}"
+            },
+            {
+              "fieldId": "tags",
+              "fieldValue": "={{ $('Validate Request').first().json.tags_provided ? $('Validate Request').first().json.tags : undefined }}"
+            },
+            {
+              "fieldId": "confidence",
+              "fieldValue": "={{ $('Validate Request').first().json.confidence_provided ? $('Validate Request').first().json.confidence : undefined }}"
+            }
+          ]
+        }
+      },
+      "id": "3b59f8c5-9aa8-4cef-8888-ee8cd648aa2b",
+      "name": "Update Memory",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        640
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 5000,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "keyName": "scope",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.scope }}"
+            },
+            {
+              "keyName": "content",
+              "condition": "ilike",
+              "keyValue": "={{ '%' + $('Validate Request').first().json.query + '%' }}"
+            },
+            {
+              "keyName": "knowledge_status",
+              "condition": "neq",
+              "keyValue": "={{ $('Validate Request').first().json.include_superseded ? '__include_all__' : 'superseded' }}"
+            }
+          ]
+        }
+      },
+      "id": "f27e4268-27de-44df-af0a-1e9879ad54f0",
+      "name": "Search Memory Content",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        960,
+        880
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 5000,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "keyName": "scope",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.scope }}"
+            },
+            {
+              "keyName": "key",
+              "condition": "ilike",
+              "keyValue": "={{ '%' + $('Validate Request').first().json.query + '%' }}"
+            },
+            {
+              "keyName": "knowledge_status",
+              "condition": "neq",
+              "keyValue": "={{ $('Validate Request').first().json.include_superseded ? '__include_all__' : 'superseded' }}"
+            }
+          ]
+        }
+      },
+      "id": "7a1d8ac7-2da7-48df-b928-b72131b5d416",
+      "name": "Search Memory Key",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        960,
+        1072
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "f4fbc9df-8dcd-45a2-bf34-269d05ae6687",
+      "name": "Merge Search Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1184,
+        944
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.memory_id }}"
+            },
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            }
+          ]
+        }
+      },
+      "id": "3a042e74-5d61-4b1f-881f-5614bc620f09",
+      "name": "Fetch Memory Target",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        960,
+        1264
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.superseded_by }}"
+            },
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            }
+          ]
+        }
+      },
+      "id": "a27713f6-c425-4f0f-8e00-c76d97cb0d44",
+      "name": "Fetch Supersede Target",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        1264
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "supTargetOk",
+              "leftValue": "={{ (() => { try { const a=$('Fetch Memory Target').first().json; const b=$json; const m=$('Validate Request').first().json; if(!a||!a.id||a.id!==m.memory_id) return false; if(!b||!b.id||b.id!==m.superseded_by) return false; if(a.knowledge_status==='superseded') return false; if(b.knowledge_status==='superseded') return false; if(b.superseded_by) return false; if(m.scope&&a.scope&&a.scope!==m.scope) return false; if(m.scope&&b.scope&&b.scope!==m.scope) return false; if(m.scope==='project'&&m.project_id){ if(a.project_id&&a.project_id!==m.project_id) return false; if(b.project_id&&b.project_id!==m.project_id) return false; } if(m.scope==='workspace'&&m.workspace_id){ if(a.workspace_id&&a.workspace_id!==m.workspace_id) return false; if(b.workspace_id&&b.workspace_id!==m.workspace_id) return false; } if(m.scope==='conversation'&&m.conversation_id){ const rA=a.source_reference||{}; const rB=b.source_reference||{}; if(rA.conversation_id&&rA.conversation_id!==m.conversation_id) return false; if(rB.conversation_id&&rB.conversation_id!==m.conversation_id) return false; } if(m.scope==='workflow'&&m.workflow_id){ if(a.workflow_id&&a.workflow_id!==m.workflow_id) return false; if(b.workflow_id&&b.workflow_id!==m.workflow_id) return false; } if(m.scope==='skill'&&m.skill_id){ if(a.skill_id&&a.skill_id!==m.skill_id) return false; if(b.skill_id&&b.skill_id!==m.skill_id) return false; } return true; } catch(e) { return false; } })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "151437c9-99f1-404e-82cf-443251c2597a",
+      "name": "Check Supersede Target",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1408,
+        1264
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "memory_items",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.memory_id }}"
+            },
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "keyName": "scope",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.scope }}"
+            },
+            {
+              "keyName": "knowledge_status",
+              "condition": "neq",
+              "keyValue": "superseded"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "superseded_by",
+              "fieldValue": "={{ $('Validate Request').first().json.superseded_by }}"
+            },
+            {
+              "fieldId": "knowledge_status",
+              "fieldValue": "superseded"
+            },
+            {
+              "fieldId": "superseded_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "a6872baf-d572-412a-ab69-b638259c4e04",
+      "name": "Mark Superseded",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1632,
+        1392
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;\nconst op=meta.operation;\nconst taskId=meta.task_id||null;\nconst errors=[],warnings=[],limitations=[];\nfunction normalizeErr(r){if(!r||typeof r!=='object')return null;if(r.error&&typeof r.error==='object'&&r.error.message){const m=String(r.error.message);const code=String(r.error.code||'');const isUnique=/duplicate key|unique constraint|already exists/i.test(m)||code==='23505';return{message:m,code:isUnique?'VERSION_CONFLICT':(r.error.code||null)};}if(r.error&&typeof r.error==='string'){const m=String(r.error);const isUnique=/duplicate key|unique constraint|already exists/i.test(m);return{message:m,code:isUnique?'VERSION_CONFLICT':(r.code||null)};}if(typeof r.statusCode==='number'&&r.statusCode>=400)return{message:'HTTP '+r.statusCode,code:r.statusCode};if(r.code&&r.message&&!r.id){const isUnique=/duplicate key|unique constraint/i.test(String(r.message));return{message:String(r.message),code:isUnique?'VERSION_CONFLICT':String(r.code)};}return null;}\nconst allInput=$input.all();\nconst rawRows=[];const dbErrors=[];\nfor(const item of allInput){const r=item?.json;if(!r||typeof r!=='object')continue;if(r._duplicate_rejected)continue;const err=normalizeErr(r);if(err){dbErrors.push(err);continue;}if(r.id===undefined&&r.content===undefined&&r.scope===undefined)continue;rawRows.push(r);}\nconst seen=new Set();const rows=[];for(const r of rawRows){if(r.id){if(seen.has(r.id))continue;seen.add(r.id);}rows.push(r);}\nconst matchScope=(item)=>{if(meta.scope==='user_global')return true;if(meta.scope==='project')return item.project_id===meta.project_id;if(meta.scope==='workflow')return item.workflow_id===meta.workflow_id;if(meta.scope==='skill')return item.skill_id===meta.skill_id;if(meta.scope==='workspace')return item.workspace_id===meta.workspace_id;if(meta.scope==='conversation'){const ref=item.source_reference&&typeof item.source_reference==='object'?item.source_reference:{};return ref.conversation_id===meta.conversation_id;}return false;};\nconst opId='MEMOP-'+meta.request_id+'-'+Date.now();\nlet memoryItems=[],memoryItem=null,count=0,supersededCount=0,duplicateDetected=false,duplicateCount=0;\nlet topStatus='completed';let verificationStatus='not_verifiable';const verificationEvidence=[];let httpStatus=200;\nlimitations.push('Memory is not model training (blueprint Part 7).');\nlimitations.push('Access control: only owner_id matching user_id is visible (body user_id is not cryptographically trusted at this layer; backend must sanitize).');\nlimitations.push('Cross-project isolation enforced by owner_id + scope + gates before write.');\nlimitations.push('Read/Search: DB limit 5000 rows requested per query (Supabase max_rows may cap this lower, default 1000); deeper pagination not supported in v2.5.');\nlimitations.push('Webhook authentication is Header Auth. Service token enforced only when WF07_SERVICE_TOKEN env is set and readable.');\nlimitations.push('Set WF07_REQUIRE_TOKEN=true env to enforce fail-closed behavior when service token cannot be verified.');\nlimitations.push('Conversation-scope matching relies on source_reference.conversation_id JSONB field.');\nlimitations.push('Client cannot set knowledge_status=verified or approved via this workflow.');\nlimitations.push('SEARCH wildcard escape via backslash \u2014 depends on Supabase ilike semantics (UNVERIFIED).');\nif(dbErrors.length>0){for(const e of dbErrors){const cat=(e.code==='VERSION_CONFLICT')?'VERSION_CONFLICT':'INTERNAL_ERROR';errors.push({category:cat,message:'Database node error: '+e.message});if(cat==='VERSION_CONFLICT')httpStatus=409;else if(httpStatus===200)httpStatus=500;}topStatus='failed';}\nif(meta.token_check_status!=='enforced'){warnings.push({message:'Service token check disabled ('+meta.token_check_status+'): WF07_SERVICE_TOKEN unset, empty or env access blocked.'});}\nif(op==='READ_MEMORY'){\n  if(topStatus==='failed'){count=0;}else{\n  const filtered=rows.filter(matchScope).slice(0,meta.limit||50);\n  memoryItems=filtered;count=filtered.length;topStatus='completed';\n  verificationStatus='not_verifiable';verificationEvidence.push('Read query executed for owner_id='+meta.user_id+' scope='+meta.scope);verificationEvidence.push('Content verification requires independent source (not provided by this workflow).');\n  if(count===0){warnings.push({message:'No memory items found for the requested scope.'});}\n  }\n} else if(op==='WRITE_MEMORY'){\n  if(topStatus==='failed'){count=0;}\n  else{\n    let dupReject=null;try{dupReject=$('Format Duplicate Rejection').first()?.json;}catch(e){dupReject=null;}\n    if(dupReject&&dupReject._duplicate_rejected===true){\n      topStatus='failed';httpStatus=409;duplicateDetected=true;duplicateCount=dupReject.duplicate_count||0;count=0;\n      errors.push({category:'VERSION_CONFLICT',message:'Duplicate policy=reject: '+duplicateCount+' existing record(s) matched. Insert skipped.'});\n      verificationStatus='not_verified';\n    } else {\n    let dupRows=[];try{dupRows=$('Write Memory DupCheck').all().map(i=>i.json).filter(r=>r&&r.id);}catch(e){dupRows=[];}\n    const refinedDups=dupRows.filter(r=>{if(!meta.key)return false;if(r.key!==meta.key)return false;if(r.scope!==meta.scope)return false;if(meta.scope==='project'&&meta.project_id&&r.project_id!==meta.project_id)return false;if(meta.scope==='workflow'&&meta.workflow_id&&r.workflow_id!==meta.workflow_id)return false;if(meta.scope==='skill'&&meta.skill_id&&r.skill_id!==meta.skill_id)return false;if(meta.scope==='workspace'&&meta.workspace_id&&r.workspace_id!==meta.workspace_id)return false;return true;});\n    duplicateCount=refinedDups.length;duplicateDetected=duplicateCount>0;\n    const inserted=rows[rows.length-1]||null;\n    memoryItem=inserted;count=inserted?1:0;\n    if(!inserted){topStatus='failed';httpStatus=500;errors.push({category:'INTERNAL_ERROR',message:'Write returned no record; insertion failed.'});verificationStatus='not_verified';}\n    else{topStatus='completed';verificationStatus='persisted';verificationEvidence.push('Database write acknowledged for memory_item id='+inserted.id);verificationEvidence.push('Owner='+meta.user_id+' scope='+meta.scope);\n      if(duplicateDetected){warnings.push({message:'Duplicate: '+duplicateCount+' existing record(s) matched key+scope+context (policy=allow, insert proceeded).'});}}\n    }\n  }\n} else if(op==='UPDATE_MEMORY'){\n  if(topStatus==='failed'){count=0;}else{\n  let fetchTarget=null;try{fetchTarget=$('Fetch Update Target').first()?.json;}catch(e){fetchTarget=null;}\n  const targetFound=fetchTarget&&fetchTarget.id===meta.memory_id;\n  const tRef=(targetFound&&fetchTarget.source_reference&&typeof fetchTarget.source_reference==='object')?fetchTarget.source_reference:{};\n  if(!targetFound){topStatus='failed';httpStatus=404;errors.push({category:'NOT_FOUND',message:'Update target not found or not owned by caller.'});verificationStatus='not_verified';count=0;}\n  else if(fetchTarget.knowledge_status==='superseded'){topStatus='failed';httpStatus=409;errors.push({category:'VALIDATION_FAILED',message:'Cannot update a superseded memory record.'});verificationStatus='not_verified';count=0;}\n  else if(meta.project_id && fetchTarget.project_id && fetchTarget.project_id!==meta.project_id){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'Cross-project UPDATE denied (target project mismatch).'});verificationStatus='not_verified';count=0;}\n  else if(meta.workspace_id && fetchTarget.workspace_id && fetchTarget.workspace_id!==meta.workspace_id){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'Cross-workspace UPDATE denied (target workspace mismatch).'});verificationStatus='not_verified';count=0;}\n  else if(meta.conversation_id && tRef.conversation_id!==meta.conversation_id){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'Conversation context mismatch.'});verificationStatus='not_verified';count=0;}\n  else{\n    const updated=rows[rows.length-1]||null;memoryItem=updated;count=updated?1:0;\n    if(!updated){topStatus='failed';httpStatus=500;errors.push({category:'INTERNAL_ERROR',message:'Update affected no record.'});verificationStatus='not_verified';}\n    else{topStatus='completed';verificationStatus='persisted';verificationEvidence.push('Database update acknowledged for memory_item id='+updated.id);}\n  }\n  }\n} else if(op==='SEARCH_MEMORY'){\n  if(topStatus==='failed'){count=0;}else{\n  const q=String(meta.query||'').toLowerCase().replace(/\\\\(.)/g,'$1');\n  const scopeFiltered=rows.filter(matchScope);\n  const matched=scopeFiltered.filter(r=>{const c=String(r.content||'').toLowerCase();const k=String(r.key||'').toLowerCase();return c.includes(q)||k.includes(q);}).slice(0,meta.limit||20);\n  memoryItems=matched;count=matched.length;topStatus='completed';\n  verificationStatus='not_verifiable';verificationEvidence.push('Search executed for scope='+meta.scope+' query_len='+q.length);verificationEvidence.push('Matches: '+count+' (content verification not performed).');\n  if(count===0){warnings.push({message:'Zero matching records. Search executed successfully.'});}\n  }\n} else if(op==='MARK_SUPERSEDED'){\n  if(topStatus==='failed'){count=0;}else{\n  let targetA=null,targetB=null;\n  try{targetA=$('Fetch Memory Target').first()?.json;}catch(e){targetA=null;}\n  try{targetB=$('Fetch Supersede Target').first()?.json;}catch(e){targetB=null;}\n  const aOk=targetA&&targetA.id&&targetA.id===meta.memory_id;\n  const bOk=targetB&&targetB.id&&targetB.id===meta.superseded_by;\n  if(!aOk){topStatus='failed';httpStatus=404;errors.push({category:'NOT_FOUND',message:'memory_id target not found or not owned by caller.'});verificationStatus='not_verified';}\n  else if(!bOk){topStatus='failed';httpStatus=404;errors.push({category:'NOT_FOUND',message:'superseded_by target not found or not owned by caller.'});verificationStatus='not_verified';}\n  else if(targetA.knowledge_status==='superseded'){topStatus='failed';httpStatus=409;errors.push({category:'VALIDATION_FAILED',message:'memory_id is already superseded.'});verificationStatus='not_verified';}\n  else if(targetB.knowledge_status==='superseded'){topStatus='failed';httpStatus=409;errors.push({category:'VALIDATION_FAILED',message:'Replacement target is already superseded (cycle risk).'});verificationStatus='not_verified';}\n  else if(targetB.superseded_by){topStatus='failed';httpStatus=409;errors.push({category:'VALIDATION_FAILED',message:'Replacement target is part of an existing supersede chain.'});verificationStatus='not_verified';}\n  else if(meta.scope && targetA.scope && targetA.scope!==meta.scope){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'memory_id scope mismatch: original='+meta.scope+' target='+targetA.scope});verificationStatus='not_verified';}\n  else if(meta.scope && targetB.scope && targetB.scope!==meta.scope){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'Replacement scope mismatch: original='+meta.scope+' target='+targetB.scope});verificationStatus='not_verified';}\n  else if(meta.scope==='project'&&meta.project_id&&targetA.project_id&&targetA.project_id!==meta.project_id){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'memory_id project mismatch (cross-project supersede denied).'});verificationStatus='not_verified';}\n  else if(meta.scope==='project'&&meta.project_id&&targetB.project_id&&targetB.project_id!==meta.project_id){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'Replacement project mismatch (cross-project supersede denied).'});verificationStatus='not_verified';}\n  else if(meta.scope==='workspace'&&meta.workspace_id&&targetA.workspace_id&&targetA.workspace_id!==meta.workspace_id){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'memory_id workspace mismatch.'});verificationStatus='not_verified';}\n  else if(meta.scope==='workspace'&&meta.workspace_id&&targetB.workspace_id&&targetB.workspace_id!==meta.workspace_id){topStatus='failed';httpStatus=422;errors.push({category:'VALIDATION_FAILED',message:'Replacement workspace mismatch.'});verificationStatus='not_verified';}\n  else{\n    const updated=rows[rows.length-1]||null;memoryItem=updated;supersededCount=updated?1:0;\n    if(!updated){topStatus='failed';httpStatus=500;errors.push({category:'INTERNAL_ERROR',message:'Supersede update affected no record.'});verificationStatus='not_verified';}\n    else{topStatus='completed';verificationStatus='persisted';verificationEvidence.push('Database supersede acknowledged for memory_item id='+updated.id+' by id='+meta.superseded_by);}\n  }\n  }\n}\nconst redactText = (s) => String(s).replace(/gsk_[A-Za-z0-9]{20,}/g,'[REDACTED]').replace(/sk-[A-Za-z0-9]{20,}/g,'[REDACTED]');\nconst safeItem=(m)=>({id:m.id,scope:m.scope,category:m.category,knowledge_status:m.knowledge_status,key:m.key,content:m.content?redactText(String(m.content).slice(0,500)):null,confidence:m.confidence,superseded_by:m.superseded_by||null,superseded_at:m.superseded_at||null,project_id:m.project_id||null,workspace_id:m.workspace_id||null,workflow_id:m.workflow_id||null,skill_id:m.skill_id||null,source_reference:m.source_reference?JSON.parse(redactText(JSON.stringify(m.source_reference))):null,created_at:m.created_at||null,updated_at:m.updated_at||null});\nconst result={operation_id:opId,operation:op,memory_items:memoryItems.slice(0,50).map(safeItem),memory_item:memoryItem?safeItem(memoryItem):null,count,superseded_count:supersededCount,duplicate_detected:duplicateDetected,duplicate_count:duplicateCount,limitations,verification_summary:{status:verificationStatus,evidence:verificationEvidence,source:'database_memory_items',ai_used:false}};\nif(meta.redacted_fields&&meta.redacted_fields.length>0)warnings.push({message:meta.redacted_fields.length+' field(s) redacted from input.'});\nreturn [{json:{request_id:meta.request_id,task_id:taskId,status:topStatus,_http_status:httpStatus,result,errors,warnings,verification:result.verification_summary,_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'memory_operation',resource_id:opId,event_type:'memory_operation',note:'user_id in this row is claimed-by-caller; backend must ensure authenticity.'}}}];"
+      },
+      "id": "613090ff-8562-4f77-9adc-908661d1f319",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1856,
+        656
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "audit_events",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json._persist.project_id || undefined }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._persist.user_id || undefined }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json._persist.workspace_id || undefined }}"
+            },
+            {
+              "fieldId": "event_type",
+              "fieldValue": "={{ $json._persist.event_type || 'memory_operation' }}"
+            },
+            {
+              "fieldId": "resource_type",
+              "fieldValue": "={{ $json._persist.resource_type || 'memory_operation' }}"
+            },
+            {
+              "fieldId": "resource_id",
+              "fieldValue": "={{ $json._persist.resource_id }}"
+            },
+            {
+              "fieldId": "action",
+              "fieldValue": "n8n_memory_manager"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "details",
+              "fieldValue": "={{ { request_id: $json.request_id, task_id: $json.task_id, operation_id: $json.result.operation_id, operation: $json.result.operation, status: $json.status, count: $json.result.count, superseded_count: $json.result.superseded_count, duplicate_detected: $json.result.duplicate_detected, verification_status: $json.verification.status, claimed_user_id: $json._persist.claimed_user_id, note: $json._persist.note } }}"
+            }
+          ]
+        }
+      },
+      "id": "0073192c-ae47-4f82-a83f-f1d4f3d4bfc5",
+      "name": "Persist Audit",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2080,
+        1104
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}catch(e){}\nif(!src){try{const b=$('Format Request Error').first()?.json;if(b&&b.result)src=b;}catch(e){}}\nif(!src){src={request_id:null,task_id:null,status:'failed',_http_status:500,result:{operation_id:null},errors:[],warnings:[],verification:{status:'not_verified',evidence:[]},_persist:{}};}\nconst row=$input.first()?.json??{};const id=row.id??row.audit_id??null;\nconst idOk=typeof id==='string'?id.trim().length>0:(typeof id==='number'&&isFinite(id));\nconst checks=[];\nif(!idOk)checks.push('missing audit record id');\nif(row.event_type!==undefined&&row.event_type!==(src._persist?.event_type||row.event_type))checks.push('event_type mismatch');\nif(row.resource_id!==undefined&&row.resource_id!==null&&src.result?.operation_id&&row.resource_id!==src.result.operation_id)checks.push('resource_id mismatch');\nif(row.status!==undefined&&row.status!==null&&row.status!==src.status)checks.push('status mismatch');\nconst ok=idOk&&checks.length===0;\nconst verification={...(src.verification||{}),persisted:ok,persist_record_id:idOk?id:null,persist_checks:checks};\nconst result={...(src.result||{}),verification_summary:verification};\nconst status=ok?src.status:'failed';\nconst httpStatus=ok?(src._http_status||200):500;\nconst errors=ok?(src.errors||[]):[...(src.errors||[]),{category:'INTERNAL_ERROR',message:'Audit persistence unconfirmed: '+checks.join('; ')}];\nreturn [{json:{...src,status,_http_status:httpStatus,result,verification,errors,audit_status:ok?'saved':'failed'}}];"
+      },
+      "id": "1c31aa6a-86ba-4a52-b854-be6deaf155d6",
+      "name": "Verify Audit Saved",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        1008
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}catch(e){}\nif(!src){try{const b=$('Format Request Error').first()?.json;if(b&&b.result)src=b;}catch(e){}}\nif(!src){src={request_id:null,task_id:null,status:'failed',_http_status:500,result:{operation_id:null},errors:[],warnings:[],verification:{status:'not_verified',evidence:[]},_persist:{}};}\nconst verification={...(src.verification||{}),persisted:false,persist_record_id:null,persist_checks:['audit save failed']};\nconst result={...(src.result||{}),verification_summary:verification};\nconst status=src.status==='failed'?'failed':'partial';\nconst httpStatus=500;\nreturn [{json:{...src,status,_http_status:httpStatus,result,verification,errors:[...(src.errors||[]),{category:'INTERNAL_ERROR',message:'Audit persistence failed; operation result returned but not saved.'}],audit_status:'failed'}}];"
+      },
+      "id": "ce3fbc2c-8c7a-47b2-8a51-51e86d96a63d",
+      "name": "Audit Save Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2304,
+        1200
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { request_id: $json.request_id || $('Validate Request').first()?.json?.request_id || 'fallback-id', task_id: $json.task_id, status: $json.status, audit_status: $json.audit_status || 'unknown', result: $json.result, errors: $json.errors, warnings: $json.warnings, verification: $json.verification } }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "50d809d6-4eda-4b6a-b76b-eb4f2e5d632f",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2528,
+        1104
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Operation Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Operation Router": {
+      "main": [
+        [
+          {
+            "node": "Read Memory",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Memory DupCheck",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Update Target",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search Memory Content",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Search Memory Key",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Memory Target",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Memory": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Memory DupCheck": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate Policy": {
+      "main": [
+        [
+          {
+            "node": "Format Duplicate Rejection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Memory Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Duplicate Rejection": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Memory Insert": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Update Target": {
+      "main": [
+        [
+          {
+            "node": "Check Update Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Update Target": {
+      "main": [
+        [
+          {
+            "node": "Update Memory",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Memory": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Memory Content": {
+      "main": [
+        [
+          {
+            "node": "Merge Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Memory Key": {
+      "main": [
+        [
+          {
+            "node": "Merge Search Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Search Results": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Memory Target": {
+      "main": [
+        [
+          {
+            "node": "Fetch Supersede Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Supersede Target": {
+      "main": [
+        [
+          {
+            "node": "Check Supersede Target",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Supersede Target": {
+      "main": [
+        [
+          {
+            "node": "Mark Superseded",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Superseded": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Request Error": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Audit": {
+      "main": [
+        [
+          {
+            "node": "Verify Audit Saved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audit Save Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Audit Saved": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Save Failed": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "NbOPXGwd3Vz1SPLR",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-25T19:44:43.608Z",
+      "updatedAt": "2026-10-25T19:44:43.608Z"
+    }
+  ],
+  "activeVersion": null
+}

@@ -1,0 +1,2107 @@
+{
+  "id": "S71rbJqn85GNVIVo",
+  "name": "storywf02",
+  "description": "WF-02 Story Generator: Generates episode script, scene plan, and routing flags.",
+  "active": true,
+  "activeVersionId": "837c8bc1-496e-4c90-8bb4-a8c0e33a4b8a",
+  "createdAt": "2026-10-26T06:36:09.770Z",
+  "updatedAt": "2026-10-29T22:43:45.383Z",
+  "isArchived": false,
+  "versionId": "837c8bc1-496e-4c90-8bb4-a8c0e33a4b8a",
+  "versionCounter": 8,
+  "sourceWorkflowId": null,
+  "triggerCount": 0,
+  "nodes": [
+    {
+      "id": "db620580-dcb8-429d-8b8e-c293322c23a9",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        80
+      ],
+      "parameters": {
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "project_id": "={{ $json.project_id }}",
+            "episode_number": "={{ $json.episode_number }}",
+            "season_number": "={{ $json.season_number }}",
+            "user_prompt": "={{ $json.user_prompt }}",
+            "user_infrastructure": "={{ $json.user_infrastructure }}",
+            "project_style": "={{ $json.project_style }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "3476f324-83ae-42fb-8990-03c64395f558",
+      "name": "Normalize Input & Lock SAVE Mode",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json || {};\nfunction findDeep(obj, key, depth = 0) {\n  if (depth > 5 || !obj || typeof obj !== 'object') return null;\n  if (obj[key] !== undefined && obj[key] !== null) return obj[key];\n  for (const k of Object.keys(obj)) {\n    const f = findDeep(obj[k], key, depth + 1);\n    if (f !== null && f !== undefined) return f;\n  }\n  return null;\n}\nconst project_id = findDeep(raw, 'project_id');\nif (!project_id) throw new Error('WF-02 Error: project_id missing.');\nconst ep = Number(findDeep(raw, 'episode_number') || findDeep(raw, 'episode_no') || 1);\nconst user_prompt = (findDeep(raw, 'user_prompt') || findDeep(raw, 'userPrompt') || findDeep(raw, 'prompt') || findDeep(raw, 'rawText') || `Generate story for Ep ${ep}`).toString().trim();\nreturn { json: { ...raw, project_id, episode_number: ep, episode_no: ep, mode: 'SAVE', user_prompt, sessionId: findDeep(raw, 'sessionId') || `sess_${$execution.id}`, user_infrastructure: findDeep(raw, 'user_infrastructure') || {}, project_style: findDeep(raw, 'project_style') || {} } };"
+      }
+    },
+    {
+      "id": "c38fb099-65c1-4811-b8cd-1eefd2c876b7",
+      "name": "Supabase: Fetch Project & Bible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        448,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season&id=eq.{{ $json.project_id }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "ac62911d-7621-41df-9eed-982144265aa6",
+      "name": "Supabase: Fetch Canon Facts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        672,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?select=fact_key,fact_type,fact_value,canon_status&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2d9175c6-cc10-4782-9007-fdf657452f70",
+      "name": "Supabase: Fetch Latest Story Snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        896,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_state_snapshots?select=snapshot_data,episode_id&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&episode_id=lt.{{ $('Normalize Input & Lock SAVE Mode').item.json.episode_no }}&order=episode_id.desc&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7fc154c7-8cea-4f95-8f80-1a3b9a72294e",
+      "name": "Supabase: Fetch Characters & Voice Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1120,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "72e6dec5-2e9f-4f6d-8e5d-f3e6ae269018",
+      "name": "Supabase: Fetch Mystery Tracker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1344,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/mystery_tracker?select=mystery_id,description,status,clues&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&status=in.(OPEN,PARTIAL,ACTIVE)",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c25cf5eb-f5ad-4c93-9001-fc7aebadd924",
+      "name": "Supabase: Fetch Story Timeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1568,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_timeline?select=episode_no,event_code,event_description,location,characters_involved&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&order=episode_no.desc,created_at.desc&limit=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c7c97793-bd48-429e-968f-9bce00938a2b",
+      "name": "Supabase: Fetch Scene Library",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        1792,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&limit=50",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "97d175c3-ffc0-4253-ac9d-4c7f4b2a82dc",
+      "name": "Supabase: Fetch Motion Library",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        2016,
+        80
+      ],
+      "parameters": {
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&limit=50",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "854f715b-9e4d-44b2-8c98-e91e4896986a",
+      "name": "Context Assembly & Prompt Constructor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base = $('Normalize Input & Lock SAVE Mode').item.json;\n\nfunction extractRows(nodeName, requiredKey) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const out = [];\n    for (const item of rawItems) {\n      if (Array.isArray(item)) {\n        for (const row of item) {\n          if (row && (requiredKey ? row[requiredKey] !== undefined : Object.keys(row).length > 0)) out.push(row);\n        }\n      } else if (item && (requiredKey ? item[requiredKey] !== undefined : Object.keys(item).length > 0)) {\n        out.push(item);\n      }\n    }\n    return out;\n  } catch (e) { return []; }\n}\n\nconst projectRows = extractRows('Supabase: Fetch Project & Bible', 'id');\nconst projectRec = projectRows[0] || {};\nconst storyBible = projectRec.story_bible || {};\nconst resolvedSeason = Number(projectRec.current_season || base.season_no || 1);\n\nconst canonFacts = extractRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst snapshots = extractRows('Supabase: Fetch Latest Story Snapshot', 'snapshot_data');\nconst latestSnapshot = snapshots[0] ? snapshots[0].snapshot_data : null;\nconst characters = extractRows('Supabase: Fetch Characters & Voice Config', 'character_code');\nconst mysteries = extractRows('Supabase: Fetch Mystery Tracker', 'description');\nconst timelineEvents = extractRows('Supabase: Fetch Story Timeline', 'event_description');\nconst sceneLibrary = extractRows('Supabase: Fetch Scene Library', 'reuse_key');\nconst motionLibrary = extractRows('Supabase: Fetch Motion Library', 'motion_key');\n\nconst characterVoiceMap = {};\nfor (const ch of characters) {\n  const code = (ch.character_code || '').toString().toUpperCase().trim();\n  if (!code) continue;\n  const vc = (ch.voice_config && typeof ch.voice_config === 'object') ? ch.voice_config : {};\n  characterVoiceMap[code] = {\n    character_code: code, name: ch.name || code, visual_dna: ch.visual_dna || {},\n    voice_id: vc.voice_id || 'svara_hi_male_hero_01', voice_provider: vc.voice_provider || 'Svara TTS',\n    voice_model: vc.voice_model || 'svara-v2-hi', language: vc.language || 'hi', gender: vc.gender || 'male',\n    pitch: Number(vc.pitch ?? 1.0), speed: Number(vc.speed ?? 1.0),\n    emotion_profile: vc.emotion_profile || { neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 }, joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 } }\n  };\n}\n\ncharacterVoiceMap['NARRATOR'] = {\n  character_code: 'NARRATOR', name: 'Narrator', visual_dna: {},\n  voice_id: 'svara_hi_narrator_epic_01', voice_provider: 'Svara TTS', voice_model: 'svara-v2-hi',\n  language: 'hi', gender: 'male', pitch: 0.98, speed: 1.0,\n  emotion_profile: { neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 }, joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 } }\n};\n\nconst continuityPromptContext = [\n  `=== PROJECT & SEASON CONTEXT ===`,\n  `Project: ${projectRec.name || base.project_name} | Season: ${resolvedSeason} | Target Episode: ${base.episode_no}`,\n  `=== 1. MASTER STORY BIBLE & SEASON ARC ===`,\n  JSON.stringify(storyBible),\n  `=== 2. APPROVED CANON FACTS ===`,\n  canonFacts.length > 0 ? canonFacts.map(f => `[${f.canon_status}] (${f.fact_type}) ${f.fact_key}: ${JSON.stringify(f.fact_value)}`).join('\\n') : 'No explicit canon_facts rows yet.',\n  `=== 3. LATEST COMMITTED STORY STATE SNAPSHOT ===`,\n  latestSnapshot ? JSON.stringify(latestSnapshot) : 'Episode 1 / Initial State \u2014 No prior episode snapshot.',\n  `=== 4. REGISTERED CHARACTERS & VOICE CONFIGS (Rule 39) ===`,\n  characters.length > 0 ? characters.map(c => `- ${c.character_code} (${c.name}): voice_id=${c.voice_config?.voice_id || 'default'} | visual_dna=${JSON.stringify(c.visual_dna || {})}`).join('\\n') : '- CHAR_001 (Protagonist) | NARRATOR',\n  `=== 5. OPEN & PARTIAL MYSTERIES ===`,\n  mysteries.length > 0 ? mysteries.map(m => `- [${m.status}] ${m.mystery_id || ''}: ${m.description} (Clues: ${JSON.stringify(m.clues || [])})`).join('\\n') : 'None',\n  `=== 6. RECENT STORY TIMELINE ===`,\n  timelineEvents.length > 0 ? timelineEvents.map(t => `- Ep ${t.episode_no} (${t.event_code || ''}): ${t.event_description} @ ${t.location || 'UNKNOWN'} \u2014 Participants: ${JSON.stringify(t.characters_involved || [])}`).join('\\n') : 'None',\n  `=== 7. REUSABLE SCENE & MOTION LIBRARY KEYS ===`,\n  `Scene Keys: ${sceneLibrary.map(s => s.reuse_key).join(', ') || 'None'}`,\n  `Motion Keys: ${motionLibrary.map(m => m.motion_key).join(', ') || 'None'}`\n].join('\\n\\n');\n\nreturn { json: { ...base, season_no: resolvedSeason, season_number: resolvedSeason, character_voice_map: characterVoiceMap, scene_library_keys: sceneLibrary.map(s => s.reuse_key), motion_library_keys: motionLibrary.map(m => m.motion_key), continuity_prompt_context: continuityPromptContext } };"
+      }
+    },
+    {
+      "id": "671e7e5a-a8e1-4774-af73-6d75470d08b8",
+      "name": "Stage 1A: Groq Outline & Script Writer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        2464,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.35, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Stage-1 Lead Anime Screenwriter (WF-02). Using the hydrated continuity context, generate a high-stakes Hindi/Hinglish anime episode outline and 30 to 50 granular script beats. Output STRICT JSON: {\"title\": \"string\", \"logline\": \"string\", \"objective\": \"string\", \"opening_hook\": \"string\", \"climax\": \"string\", \"cliffhanger\": \"string\", \"full_script_text\": \"Complete formatted screenplay\", \"beats\": [{\"beat_order\": 1, \"location_code\": \"LOC_001\", \"visual_description\": \"Detailed anime visual prompt\", \"action_description\": \"Physical subject movement\", \"dialogue_speaker_id\": \"CHAR_001\", \"dialogue_text\": \"Hindi dialogue\", \"mouth_visible\": true, \"emotion\": \"neutral|anger|joy|sadness|fear\", \"is_climax_beat\": false}]}.' }, { role: 'user', content: $json.continuity_prompt_context + '\\n\\nUser Directive: ' + $json.user_prompt } ] }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      }
+    },
+    {
+      "id": "9b254b1e-f0de-464f-8711-1b34a2d50777",
+      "name": "If Stage 1 Groq Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        80
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "94a4b3f3-2bea-4323-a733-bd0a72bebef4",
+      "name": "Stage 1B: Gemini Fallback Script Writer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        2912,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.35, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Stage-1 Lead Anime Screenwriter (WF-02). Generate a high-stakes Hindi/Hinglish anime episode outline and 30 to 50 granular script beats. Output STRICT JSON: {\"title\": \"string\", \"logline\": \"string\", \"objective\": \"string\", \"opening_hook\": \"string\", \"climax\": \"string\", \"cliffhanger\": \"string\", \"full_script_text\": \"Complete formatted screenplay\", \"beats\": [{\"beat_order\": 1, \"location_code\": \"LOC_001\", \"visual_description\": \"Detailed anime visual prompt\", \"action_description\": \"Physical subject movement\", \"dialogue_speaker_id\": \"CHAR_001\", \"dialogue_text\": \"Hindi dialogue\", \"mouth_visible\": true, \"emotion\": \"neutral|anger|joy|sadness|fear\", \"is_climax_beat\": false}]}.' }, { role: 'user', content: $('Context Assembly & Prompt Constructor').item.json.continuity_prompt_context + '\\n\\nUser Directive: ' + $('Context Assembly & Prompt Constructor').item.json.user_prompt } ] }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      }
+    },
+    {
+      "id": "b7eedd08-b9cd-46ff-8d5c-e62efb3c5796",
+      "name": "Stage 1 Parser & Stage 2 Prompt Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Context Assembly & Prompt Constructor').item.json;\nconst llmRaw = $input.item.json;\n\nlet stage1 = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) {\n    const clean = rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    stage1 = JSON.parse(clean);\n  }\n} catch (e) { stage1 = null; }\n\nconst registeredCharCodes = Object.keys(ctx.character_voice_map).filter(k => k !== 'NARRATOR');\nconst primaryChar = registeredCharCodes[0] || 'CHAR_001';\n\nif (!stage1 || !Array.isArray(stage1.beats) || stage1.beats.length === 0) {\n  stage1 = {\n    title: `Episode ${ctx.episode_no}: Shadows of Canon`, logline: `Protagonist ${primaryChar} uncovers a critical truth.`,\n    objective: `Advance main season arc.`, opening_hook: `A tense confrontation.`, climax: `Unleashing a forbidden technique.`, cliffhanger: `An artifact resonates with an unknown signal.`,\n    full_script_text: `[EPISODE ${ctx.episode_no} SCRIPT]\\nScene 1: Opening.\\nScene 2: Climax.`,\n    beats: [\n      { beat_order: 1, location_code: 'LOC_001', visual_description: 'Wide cinematic anime shot of courtyard.', action_description: 'Camera pans slowly.', dialogue_speaker_id: 'NARRATOR', dialogue_text: 'Us raat, aasmaan bhi khoon ke aansu ro raha tha.', mouth_visible: false, emotion: 'sadness', is_climax_beat: false },\n      { beat_order: 2, location_code: 'LOC_001', visual_description: `Close-up of ${primaryChar}.`, action_description: `${primaryChar} speaks directly.`, dialogue_speaker_id: primaryChar, dialogue_text: 'Main peeche nahi hatunga!', mouth_visible: true, emotion: 'anger', is_climax_beat: false },\n      { beat_order: 3, location_code: 'LOC_001', visual_description: 'Dynamic action shot.', action_description: 'High-speed sword slash.', dialogue_speaker_id: primaryChar, dialogue_text: 'Ab faisla hoga!', mouth_visible: true, emotion: 'anger', is_climax_beat: true }\n    ]\n  };\n}\n\nreturn { json: { ...ctx, stage1_script: stage1 } };"
+      }
+    },
+    {
+      "id": "20b47280-5b8d-4854-baf9-26961116f103",
+      "name": "Stage 2A: Groq Section 14A Scene Router",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        3360,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Stage-2 Section 14A Scene Analyzer (WF-02). Convert script beats into production scenes: {\"scenes\": [...]}. Include real JSON booleans: scene_order, beat_order, location_code, visual_prompt, action_summary, dialogue_speaker_id, voice_text, emotion, duration_sec, needs_image, needs_voice, needs_lipsync, needs_motion, needs_expression, needs_camera_motion, needs_subtitles, needs_bgm, needs_sfx, mouth_visible, camera_motion_type, routing_type, gpu_priority, routing_reason, bgm_hint, sfx_hint. Rule 37: camera motion MUST set needs_motion=false. Rule 36/38: P0=Static, P1=Camera, P2=LipSync, P3=Expression, P4=Motion, P5=Combined.' }, { role: 'user', content: 'Convert these Stage-1 script beats into Section 14A scenes:\\n' + JSON.stringify($json.stage1_script.beats) } ] }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      }
+    },
+    {
+      "id": "fa9c17c2-fd65-4903-b8fa-46985c954041",
+      "name": "If Stage 2 Groq Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3584,
+        80
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "86a8d633-7304-40a5-9ea3-cf058dd5f523",
+      "name": "Stage 2B: Gemini Fallback Scene Router",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "continueOnFail": true,
+      "position": [
+        3808,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Stage-2 Scene Analyzer. Output {\"scenes\": [...]} with real JSON booleans: scene_order, beat_order, location_code, visual_prompt, action_summary, dialogue_speaker_id, voice_text, emotion, duration_sec, needs_image, needs_voice, needs_lipsync, needs_motion, needs_expression, needs_camera_motion, needs_subtitles, needs_bgm, needs_sfx, mouth_visible, camera_motion_type, routing_type, gpu_priority, routing_reason, bgm_hint, sfx_hint. Enforce Rule 37: camera motion never triggers needs_motion=true.' }, { role: 'user', content: 'Convert these Stage-1 script beats into scenes:\\n' + JSON.stringify($('Stage 1 Parser & Stage 2 Prompt Builder').item.json.stage1_script.beats) } ] }) }}",
+        "options": {
+          "timeout": 45000
+        }
+      }
+    },
+    {
+      "id": "503b36b7-ae36-4510-996c-d9d03aa393fc",
+      "name": "Output Validator, Rule 37 & JSON Sanitizer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const ctx = $('Stage 1 Parser & Stage 2 Prompt Builder').item.json;\nconst stage1 = ctx.stage1_script;\nconst voiceMap = ctx.character_voice_map || {};\nconst llmRaw = $input.item.json;\n\nconst ALLOWED_EMOTIONS = new Set(['neutral', 'anger', 'joy', 'sadness', 'fear']);\nconst ALLOWED_CAMERA = new Set(['NONE', 'PAN', 'ZOOM', 'KEN_BURNS']);\n\nfunction toStrictBool(val, defaultVal = false) {\n  if (typeof val === 'boolean') return val;\n  if (typeof val === 'string') {\n    const lower = val.trim().toLowerCase();\n    if (lower === 'true' || lower === '1' || lower === 'yes') return true;\n    if (lower === 'false' || lower === '0' || lower === 'no') return false;\n  }\n  if (typeof val === 'number') return val !== 0;\n  return Boolean(defaultVal);\n}\n\nlet rawScenes = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) {\n    const clean = content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    const parsed = JSON.parse(clean);\n    if (parsed && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) rawScenes = parsed.scenes;\n  }\n} catch (e) { rawScenes = null; }\n\nif (!rawScenes) {\n  rawScenes = (stage1.beats || []).map((b, idx) => ({\n    scene_order: idx + 1, beat_order: b.beat_order || (idx + 1), location_code: b.location_code || 'LOC_001',\n    visual_prompt: b.visual_description || 'Cinematic anime frame', action_summary: b.action_description || 'Camera movement',\n    dialogue_speaker_id: b.dialogue_speaker_id || null, voice_text: b.dialogue_text || null, emotion: b.emotion || 'neutral',\n    duration_sec: 5, needs_image: true, needs_voice: Boolean(b.dialogue_text), mouth_visible: toStrictBool(b.mouth_visible, false),\n    needs_lipsync: Boolean(b.dialogue_text) && toStrictBool(b.mouth_visible, false), needs_motion: toStrictBool(b.is_climax_beat, false),\n    needs_expression: false, needs_camera_motion: !toStrictBool(b.is_climax_beat, false), needs_subtitles: Boolean(b.dialogue_text),\n    needs_bgm: true, needs_sfx: true, camera_motion_type: toStrictBool(b.is_climax_beat, false) ? 'NONE' : 'KEN_BURNS',\n    bgm_hint: { category: b.is_climax_beat ? 'battle_orchestral' : 'ambient_tension', mood: b.emotion || 'neutral' },\n    sfx_hint: b.is_climax_beat ? ['sword_clash', 'wind_whoosh'] : ['rain_ambience']\n  }));\n}\n\nconst validationWarnings = [];\nconst sanitizedScenes = [];\nconst scenesDbBatch = [];\nconst clipsDbBatch = [];\n\nfor (let i = 0; i < rawScenes.length; i++) {\n  const s = rawScenes[i] || {};\n  const sceneOrder = Number(s.scene_order || (i + 1));\n\n  const rawEmotion = (s.emotion || 'neutral').toString().toLowerCase().trim();\n  let emotion = rawEmotion;\n  if (!ALLOWED_EMOTIONS.has(emotion)) {\n    validationWarnings.push(`Scene ${sceneOrder}: Unknown emotion \"${s.emotion}\" overridden to \"neutral\".`);\n    emotion = 'neutral';\n  }\n\n  const voiceText = s.voice_text ? s.voice_text.toString().trim() : null;\n  const hasDialogue = Boolean(voiceText && voiceText.length > 0);\n  const rawSpeaker = s.dialogue_speaker_id ? s.dialogue_speaker_id.toString().toUpperCase().trim() : (hasDialogue ? 'NARRATOR' : null);\n  const speakerProfile = (rawSpeaker && voiceMap[rawSpeaker]) ? voiceMap[rawSpeaker] : (hasDialogue ? voiceMap['NARRATOR'] : null);\n\n  const resolvedVoiceId = speakerProfile ? speakerProfile.voice_id : null;\n  const emotionMod = speakerProfile?.emotion_profile?.[emotion] || { pitch: 1.00, rate: 1.00 };\n  const voiceModifiers = speakerProfile ? {\n    voice_id: resolvedVoiceId, voice_provider: speakerProfile.voice_provider, voice_model: speakerProfile.voice_model,\n    language: speakerProfile.language, emotion, pitch: Number((speakerProfile.pitch * (emotionMod.pitch || 1.0)).toFixed(2)),\n    rate: Number((speakerProfile.speed * (emotionMod.rate || 1.0)).toFixed(2))\n  } : null;\n\n  const needs_image = toStrictBool(s.needs_image, true);\n  const needs_voice = hasDialogue ? toStrictBool(s.needs_voice, true) : false;\n  const mouth_visible = hasDialogue && rawSpeaker !== 'NARRATOR' ? toStrictBool(s.mouth_visible, false) : false;\n  let needs_lipsync = needs_voice && mouth_visible ? toStrictBool(s.needs_lipsync, true) : false;\n  let needs_motion = toStrictBool(s.needs_motion, false);\n  let needs_expression = toStrictBool(s.needs_expression, false);\n  let needs_camera_motion = toStrictBool(s.needs_camera_motion, true);\n  const needs_subtitles = needs_voice ? toStrictBool(s.needs_subtitles, true) : false;\n  const needs_bgm = toStrictBool(s.needs_bgm, true);\n  const needs_sfx = toStrictBool(s.needs_sfx, false);\n\n  let camera_motion_type = (s.camera_motion_type || 'KEN_BURNS').toString().toUpperCase().trim();\n  if (!ALLOWED_CAMERA.has(camera_motion_type)) camera_motion_type = needs_camera_motion ? 'KEN_BURNS' : 'NONE';\n\n  const actionText = `${s.action_summary || ''} ${s.visual_prompt || ''}`.toLowerCase();\n  const hasEssentialPhysicalAction = /\\b(fight|slash|attack|run|leap|jump|dodge|explosion|transform|chase|strike|punch|kick|sprint|clash)\\b/i.test(actionText);\n\n  if (['PAN', 'ZOOM', 'KEN_BURNS'].includes(camera_motion_type) && needs_motion && !hasEssentialPhysicalAction) {\n    needs_motion = false;\n    needs_camera_motion = true;\n    validationWarnings.push(`Scene ${sceneOrder}: Rule 37 enforced \u2014 camera motion (${camera_motion_type}) demoted to CPU.`);\n  }\n\n  if (!mouth_visible && needs_lipsync) {\n    needs_lipsync = false;\n    validationWarnings.push(`Scene ${sceneOrder}: mouth_visible=false enforced needs_lipsync=false.`);\n  }\n\n  if (camera_motion_type === 'NONE') needs_camera_motion = false; else needs_camera_motion = true;\n\n  const activeGpuCount = [needs_lipsync, needs_motion, needs_expression].filter(Boolean).length;\n  let routing_type = 'STATIC'; let gpu_priority = 'P0'; let defaultReason = 'Rule 37: Static frame on CPU.';\n\n  if (activeGpuCount > 1) {\n    routing_type = 'COMBINED'; gpu_priority = 'P5'; defaultReason = `Rule 38 P5 Combined GPU.`;\n  } else if (needs_motion) {\n    routing_type = 'MOTION'; gpu_priority = 'P4'; defaultReason = 'Rule 38 P4 AnimateDiff GPU.';\n  } else if (needs_expression) {\n    routing_type = 'EXPRESSION'; gpu_priority = 'P3'; defaultReason = 'Rule 38 P3 LivePortrait GPU.';\n  } else if (needs_lipsync && mouth_visible) {\n    routing_type = 'LIPSYNC'; gpu_priority = 'P2'; defaultReason = `Rule 38 P2 MuseTalk GPU: (${rawSpeaker}).`;\n  } else if (needs_camera_motion && camera_motion_type !== 'NONE') {\n    routing_type = camera_motion_type; gpu_priority = 'P1'; defaultReason = `Rule 37 & 38 P1 FFmpeg CPU: (${camera_motion_type}).`;\n  } else {\n    routing_type = 'STATIC'; gpu_priority = 'P0'; defaultReason = 'Rule 37 & 38 P0 FFmpeg CPU: Static.';\n  }\n\n  const routing_reason = (s.routing_reason && s.routing_reason.toString().trim().length > 5) ? `${s.routing_reason.toString().trim()} [${gpu_priority}/${routing_type}]` : defaultReason;\n  const bgm_hint = (s.bgm_hint && typeof s.bgm_hint === 'object') ? { category: (s.bgm_hint.category || 'cinematic_anime').toString(), mood: (s.bgm_hint.mood || emotion).toString() } : { category: 'cinematic_anime', mood: emotion };\n  const sfx_hints = Array.isArray(s.sfx_hint) ? s.sfx_hint.map(x => x.toString()) : (Array.isArray(s.sfx_hints) ? s.sfx_hints.map(x => x.toString()) : (s.sfx_hint ? [s.sfx_hint.toString()] : []));\n\n  const cleanScene = {\n    project_id: ctx.project_id, episode_no: ctx.episode_no, scene_order: sceneOrder, beat_order: Number(s.beat_order || sceneOrder),\n    location_code: (s.location_code || 'LOC_001').toString(), visual_prompt: (s.visual_prompt || 'Anime cinematic frame').toString(),\n    action_summary: (s.action_summary || '').toString(), dialogue_speaker_id: rawSpeaker, voice_id: resolvedVoiceId, voice_text: voiceText,\n    emotion, voice_modifiers: voiceModifiers, duration_sec: Number(s.duration_sec || 5),\n    needs_image, needs_voice, needs_lipsync, needs_motion, needs_expression, needs_camera_motion, needs_subtitles, needs_bgm, needs_sfx, mouth_visible,\n    camera_motion_type, routing_type, gpu_priority, routing_reason, bgm_hint, sfx_hint: sfx_hints\n  };\n\n  sanitizedScenes.push(cleanScene);\n\n  // STRICT SCHEMA FIX: Only push columns that EXIST in scenes table\n  scenesDbBatch.push({\n    project_id: ctx.project_id,\n    episode_no: ctx.episode_no, // Requires ALTER TABLE scenes ADD COLUMN episode_no\n    scene_order: sceneOrder,\n    description: cleanScene.visual_prompt, // visual_prompt -> description\n    dialogue_speaker_id: cleanScene.dialogue_speaker_id,\n    needs_image: cleanScene.needs_image,\n    needs_voice: cleanScene.needs_voice,\n    needs_lipsync: cleanScene.needs_lipsync,\n    needs_motion: cleanScene.needs_motion,\n    needs_expression: cleanScene.needs_expression,\n    needs_camera_motion: cleanScene.needs_camera_motion,\n    needs_subtitles: cleanScene.needs_subtitles,\n    needs_bgm: cleanScene.needs_bgm,\n    needs_sfx: cleanScene.needs_sfx,\n    mouth_visible: cleanScene.mouth_visible,\n    camera_motion_type: cleanScene.camera_motion_type,\n    routing: cleanScene.routing_type, // routing_type -> routing\n    gpu_priority: cleanScene.gpu_priority,\n    gpu_required: ['P2','P3','P4','P5'].includes(cleanScene.gpu_priority),\n    routing_reason: cleanScene.routing_reason\n  });\n\n  // STRICT SCHEMA FIX: Only push columns that EXIST in clips table\n  clipsDbBatch.push({\n    project_id: ctx.project_id,\n    episode_no: ctx.episode_no,\n    scene_order: sceneOrder,\n    voice_text: cleanScene.voice_text,\n    voice_id: cleanScene.voice_id,\n    emotion: cleanScene.emotion,\n    bgm_hint: cleanScene.bgm_hint,\n    sfx_hints: cleanScene.sfx_hint,\n    voice_modifiers: cleanScene.voice_modifiers,\n    character_code: cleanScene.dialogue_speaker_id,\n    needs_image: cleanScene.needs_image,\n    needs_voice: cleanScene.needs_voice,\n    needs_lipsync: cleanScene.needs_lipsync,\n    needs_motion: cleanScene.needs_motion,\n    needs_expression: cleanScene.needs_expression,\n    needs_camera_motion: cleanScene.needs_camera_motion,\n    needs_subtitles: cleanScene.needs_subtitles,\n    needs_bgm: cleanScene.needs_bgm,\n    needs_sfx: cleanScene.needs_sfx,\n    mouth_visible: cleanScene.mouth_visible,\n    camera_motion_type: cleanScene.camera_motion_type,\n    routing: cleanScene.routing_type,\n    routing_hint: cleanScene.routing_type,\n    gpu_priority: cleanScene.gpu_priority,\n    gpu_required: ['P2','P3','P4','P5'].includes(cleanScene.gpu_priority),\n    routing_reason: cleanScene.routing_reason,\n    status: 'PENDING'\n  });\n}\n\nconst scriptJsonPayload = {\n  episode_no: ctx.episode_no, season_no: ctx.season_no, title: stage1.title || `Episode ${ctx.episode_no}`,\n  logline: stage1.logline || '', objective: stage1.objective || '', opening_hook: stage1.opening_hook || '',\n  climax: stage1.climax || '', cliffhanger: stage1.cliffhanger || '', total_scenes: sanitizedScenes.length,\n  validation_warnings: validationWarnings, scenes: sanitizedScenes\n};\n\nconst episodeDbRecord = {\n  project_id: ctx.project_id, episode_no: ctx.episode_no, title: scriptJsonPayload.title,\n  script: stage1.full_script_text || sanitizedScenes.map(sc => `[Scene ${sc.scene_order}] (${sc.location_code}) ${sc.visual_prompt} | ${sc.dialogue_speaker_id || 'SILENT'}: ${sc.voice_text || ''}`).join('\\n'),\n  current_state: 'SCENE_PLAN_READY', script_json: scriptJsonPayload\n};\n\nconst episodeStateDbRecord = { project_id: ctx.project_id, episode_no: ctx.episode_no, current_state: 'SCENE_PLAN_READY' };\n\nreturn { json: { ...ctx, episode_db_record: episodeDbRecord, scenes_db_batch: scenesDbBatch, clips_db_batch: clipsDbBatch, episode_state_db_record: episodeStateDbRecord, script_json: scriptJsonPayload, validation_warnings: validationWarnings } };"
+      }
+    },
+    {
+      "id": "61d54dc0-29a2-4472-b9f7-dd2ad4980428",
+      "name": "Supabase: Upsert Episode",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4256,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?on_conflict=project_id,episode_no",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.episode_db_record) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "fdcccffa-8f6c-4655-91dc-cea9da383958",
+      "name": "Supabase: Insert/Upsert Scenes Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4480,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?on_conflict=project_id,episode_no,scene_order",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.scenes_db_batch) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "5598da78-b5c9-412a-9a3e-3888b610c8dd",
+      "name": "Supabase: Insert/Upsert Clips Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4704,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?on_conflict=project_id,episode_no,scene_order",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.clips_db_batch) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "daf41b69-48f2-45d4-a836-1f3e2128e5e6",
+      "name": "Supabase: Update Episode State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        4928,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?on_conflict=project_id,episode_no",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.episode_state_db_record) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "1f4f8368-e8e5-4f26-b352-37e501d3eed0",
+      "name": "Supabase: Insert Audit Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "alwaysOutputData": true,
+      "continueOnFail": true,
+      "position": [
+        5152,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Output Validator, Rule 37 & JSON Sanitizer').item.json.project_id, workflow_name: 'WF-02', action: 'SCENE_PLAN_GENERATED', execution_id: $execution.id }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "635c7b5d-bf30-4c20-a3a1-b78f7aadc8d1",
+      "name": "WF-03 Dispatch & Output Formatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5376,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const state = $('Output Validator, Rule 37 & JSON Sanitizer').item.json;\nconst sj = state.script_json;\nconst scenes = sj.scenes || [];\nconst priorityCounts = { P0: 0, P1: 0, P2: 0, P3: 0, P4: 0, P5: 0 };\nconst emotionCounts = { neutral: 0, anger: 0, joy: 0, sadness: 0, fear: 0 };\nfor (const sc of scenes) {\n  if (priorityCounts[sc.gpu_priority] !== undefined) priorityCounts[sc.gpu_priority]++;\n  if (emotionCounts[sc.emotion] !== undefined) emotionCounts[sc.emotion]++;\n}\nconst cpuSceneCount = priorityCounts.P0 + priorityCounts.P1;\nconst gpuSceneCount = priorityCounts.P2 + priorityCounts.P3 + priorityCounts.P4 + priorityCounts.P5;\nconst summaryMessage = [\n  `\ud83c\udfac **WF-02: Episode ${state.episode_no} Story & Scene Plan Ready!**`,\n  `\ud83d\udccc **Title:** ${sj.title}`,\n  `\ud83d\udcdd **Logline:** ${sj.logline}`,\n  `\ud83d\udd12 **Mode:** ${state.mode} | **State:** \\`SCENE_PLAN_READY\\``,\n  `\ud83d\udcca **Routing Breakdown (${scenes.length} Scenes):** CPU: ${cpuSceneCount} | GPU: ${gpuSceneCount}`,\n  state.validation_warnings.length > 0 ? `\\n\u26a0\ufe0f **Governance Auto-Corrections (${state.validation_warnings.length}):**\\n` + state.validation_warnings.slice(0, 5).map(w => `\u2022 ${w}`).join('\\n') : ''\n].filter(Boolean).join('\\n');\nreturn { json: { ok: true, status: 'SCENE_PLAN_READY', workflow_name: 'WF-02', execution_id: $execution.id, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, season_no: state.season_no, mode: state.mode, current_state: 'SCENE_PLAN_READY', next_workflow_id: $env.WF_03_PROD_ID || null, wf03_dispatch_payload: { user_infrastructure: $('When Executed by Another Workflow').first().json.user_infrastructure, project_style: $('When Executed by Another Workflow').first().json.project_style, project_id: state.project_id, episode_no: state.episode_no, season_no: state.season_no, mode: 'SAVE', current_state: 'SCENE_PLAN_READY', total_scenes: scenes.length, cpu_scenes: cpuSceneCount, gpu_scenes: gpuSceneCount, priority_breakdown: priorityCounts, scenes: scenes }, output: summaryMessage, text: summaryMessage } };"
+      }
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input & Lock SAVE Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input & Lock SAVE Mode": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Project & Bible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Project & Bible": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Canon Facts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Canon Facts": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Latest Story Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Latest Story Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Characters & Voice Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Characters & Voice Config": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Mystery Tracker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Mystery Tracker": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Story Timeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Story Timeline": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Scene Library",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Scene Library": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Fetch Motion Library",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Fetch Motion Library": {
+      "main": [
+        [
+          {
+            "node": "Context Assembly & Prompt Constructor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context Assembly & Prompt Constructor": {
+      "main": [
+        [
+          {
+            "node": "Stage 1A: Groq Outline & Script Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage 1A: Groq Outline & Script Writer": {
+      "main": [
+        [
+          {
+            "node": "If Stage 1 Groq Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Stage 1 Groq Failed": {
+      "main": [
+        [
+          {
+            "node": "Stage 1B: Gemini Fallback Script Writer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stage 1 Parser & Stage 2 Prompt Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage 1B: Gemini Fallback Script Writer": {
+      "main": [
+        [
+          {
+            "node": "Stage 1 Parser & Stage 2 Prompt Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage 1 Parser & Stage 2 Prompt Builder": {
+      "main": [
+        [
+          {
+            "node": "Stage 2A: Groq Section 14A Scene Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage 2A: Groq Section 14A Scene Router": {
+      "main": [
+        [
+          {
+            "node": "If Stage 2 Groq Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Stage 2 Groq Failed": {
+      "main": [
+        [
+          {
+            "node": "Stage 2B: Gemini Fallback Scene Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Output Validator, Rule 37 & JSON Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage 2B: Gemini Fallback Scene Router": {
+      "main": [
+        [
+          {
+            "node": "Output Validator, Rule 37 & JSON Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Output Validator, Rule 37 & JSON Sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Upsert Episode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Upsert Episode": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert/Upsert Scenes Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert/Upsert Scenes Batch": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert/Upsert Clips Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert/Upsert Clips Batch": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Update Episode State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Update Episode State": {
+      "main": [
+        [
+          {
+            "node": "Supabase: Insert Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase: Insert Audit Log": {
+      "main": [
+        [
+          {
+            "node": "WF-03 Dispatch & Output Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": null,
+  "tags": [
+    {
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "updatedAt": "2026-10-26T06:14:16.780Z"
+    }
+  ],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "S71rbJqn85GNVIVo",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "updatedAt": "2026-10-17T06:52:24.955Z"
+      },
+      "createdAt": "2026-10-26T06:36:09.777Z",
+      "updatedAt": "2026-10-26T06:36:09.777Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "837c8bc1-496e-4c90-8bb4-a8c0e33a4b8a",
+    "workflowId": "S71rbJqn85GNVIVo",
+    "nodes": [
+      {
+        "id": "db620580-dcb8-429d-8b8e-c293322c23a9",
+        "name": "When Executed by Another Workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          80
+        ],
+        "parameters": {
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "project_id": "={{ $json.project_id }}",
+              "episode_number": "={{ $json.episode_number }}",
+              "season_number": "={{ $json.season_number }}",
+              "user_prompt": "={{ $json.user_prompt }}",
+              "user_infrastructure": "={{ $json.user_infrastructure }}",
+              "project_style": "={{ $json.project_style }}"
+            }
+          }
+        }
+      },
+      {
+        "id": "3476f324-83ae-42fb-8990-03c64395f558",
+        "name": "Normalize Input & Lock SAVE Mode",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const raw = $input.item.json || {};\nfunction findDeep(obj, key, depth = 0) {\n  if (depth > 5 || !obj || typeof obj !== 'object') return null;\n  if (obj[key] !== undefined && obj[key] !== null) return obj[key];\n  for (const k of Object.keys(obj)) {\n    const f = findDeep(obj[k], key, depth + 1);\n    if (f !== null && f !== undefined) return f;\n  }\n  return null;\n}\nconst project_id = findDeep(raw, 'project_id');\nif (!project_id) throw new Error('WF-02 Error: project_id missing.');\nconst ep = Number(findDeep(raw, 'episode_number') || findDeep(raw, 'episode_no') || 1);\nconst user_prompt = (findDeep(raw, 'user_prompt') || findDeep(raw, 'userPrompt') || findDeep(raw, 'prompt') || findDeep(raw, 'rawText') || `Generate story for Ep ${ep}`).toString().trim();\nreturn { json: { ...raw, project_id, episode_number: ep, episode_no: ep, mode: 'SAVE', user_prompt, sessionId: findDeep(raw, 'sessionId') || `sess_${$execution.id}`, user_infrastructure: findDeep(raw, 'user_infrastructure') || {}, project_style: findDeep(raw, 'project_style') || {} } };"
+        }
+      },
+      {
+        "id": "c38fb099-65c1-4811-b8cd-1eefd2c876b7",
+        "name": "Supabase: Fetch Project & Bible",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          448,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season&id=eq.{{ $json.project_id }}&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "ac62911d-7621-41df-9eed-982144265aa6",
+        "name": "Supabase: Fetch Canon Facts",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          672,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?select=fact_key,fact_type,fact_value,canon_status&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "2d9175c6-cc10-4782-9007-fdf657452f70",
+        "name": "Supabase: Fetch Latest Story Snapshot",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          896,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_state_snapshots?select=snapshot_data,episode_id&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&episode_id=lt.{{ $('Normalize Input & Lock SAVE Mode').item.json.episode_no }}&order=episode_id.desc&limit=1",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "7fc154c7-8cea-4f95-8f80-1a3b9a72294e",
+        "name": "Supabase: Fetch Characters & Voice Config",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1120,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "72e6dec5-2e9f-4f6d-8e5d-f3e6ae269018",
+        "name": "Supabase: Fetch Mystery Tracker",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1344,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/mystery_tracker?select=mystery_id,description,status,clues&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&status=in.(OPEN,PARTIAL,ACTIVE)",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "c25cf5eb-f5ad-4c93-9001-fc7aebadd924",
+        "name": "Supabase: Fetch Story Timeline",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1568,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_timeline?select=episode_no,event_code,event_description,location,characters_involved&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&order=episode_no.desc,created_at.desc&limit=20",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "c7c97793-bd48-429e-968f-9bce00938a2b",
+        "name": "Supabase: Fetch Scene Library",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          1792,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&limit=50",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "97d175c3-ffc0-4253-ac9d-4c7f4b2a82dc",
+        "name": "Supabase: Fetch Motion Library",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          2016,
+          80
+        ],
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Lock SAVE Mode').item.json.project_id }}&limit=50",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Accept",
+                "value": "application/json"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "854f715b-9e4d-44b2-8c98-e91e4896986a",
+        "name": "Context Assembly & Prompt Constructor",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const base = $('Normalize Input & Lock SAVE Mode').item.json;\n\nfunction extractRows(nodeName, requiredKey) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const out = [];\n    for (const item of rawItems) {\n      if (Array.isArray(item)) {\n        for (const row of item) {\n          if (row && (requiredKey ? row[requiredKey] !== undefined : Object.keys(row).length > 0)) out.push(row);\n        }\n      } else if (item && (requiredKey ? item[requiredKey] !== undefined : Object.keys(item).length > 0)) {\n        out.push(item);\n      }\n    }\n    return out;\n  } catch (e) { return []; }\n}\n\nconst projectRows = extractRows('Supabase: Fetch Project & Bible', 'id');\nconst projectRec = projectRows[0] || {};\nconst storyBible = projectRec.story_bible || {};\nconst resolvedSeason = Number(projectRec.current_season || base.season_no || 1);\n\nconst canonFacts = extractRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst snapshots = extractRows('Supabase: Fetch Latest Story Snapshot', 'snapshot_data');\nconst latestSnapshot = snapshots[0] ? snapshots[0].snapshot_data : null;\nconst characters = extractRows('Supabase: Fetch Characters & Voice Config', 'character_code');\nconst mysteries = extractRows('Supabase: Fetch Mystery Tracker', 'description');\nconst timelineEvents = extractRows('Supabase: Fetch Story Timeline', 'event_description');\nconst sceneLibrary = extractRows('Supabase: Fetch Scene Library', 'reuse_key');\nconst motionLibrary = extractRows('Supabase: Fetch Motion Library', 'motion_key');\n\nconst characterVoiceMap = {};\nfor (const ch of characters) {\n  const code = (ch.character_code || '').toString().toUpperCase().trim();\n  if (!code) continue;\n  const vc = (ch.voice_config && typeof ch.voice_config === 'object') ? ch.voice_config : {};\n  characterVoiceMap[code] = {\n    character_code: code, name: ch.name || code, visual_dna: ch.visual_dna || {},\n    voice_id: vc.voice_id || 'svara_hi_male_hero_01', voice_provider: vc.voice_provider || 'Svara TTS',\n    voice_model: vc.voice_model || 'svara-v2-hi', language: vc.language || 'hi', gender: vc.gender || 'male',\n    pitch: Number(vc.pitch ?? 1.0), speed: Number(vc.speed ?? 1.0),\n    emotion_profile: vc.emotion_profile || { neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 }, joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 } }\n  };\n}\n\ncharacterVoiceMap['NARRATOR'] = {\n  character_code: 'NARRATOR', name: 'Narrator', visual_dna: {},\n  voice_id: 'svara_hi_narrator_epic_01', voice_provider: 'Svara TTS', voice_model: 'svara-v2-hi',\n  language: 'hi', gender: 'male', pitch: 0.98, speed: 1.0,\n  emotion_profile: { neutral: { pitch: 1.00, rate: 1.00 }, anger: { pitch: 0.95, rate: 1.10 }, joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.90, rate: 0.90 }, fear: { pitch: 1.02, rate: 1.08 } }\n};\n\nconst continuityPromptContext = [\n  `=== PROJECT & SEASON CONTEXT ===`,\n  `Project: ${projectRec.name || base.project_name} | Season: ${resolvedSeason} | Target Episode: ${base.episode_no}`,\n  `=== 1. MASTER STORY BIBLE & SEASON ARC ===`,\n  JSON.stringify(storyBible),\n  `=== 2. APPROVED CANON FACTS ===`,\n  canonFacts.length > 0 ? canonFacts.map(f => `[${f.canon_status}] (${f.fact_type}) ${f.fact_key}: ${JSON.stringify(f.fact_value)}`).join('\\n') : 'No explicit canon_facts rows yet.',\n  `=== 3. LATEST COMMITTED STORY STATE SNAPSHOT ===`,\n  latestSnapshot ? JSON.stringify(latestSnapshot) : 'Episode 1 / Initial State \u2014 No prior episode snapshot.',\n  `=== 4. REGISTERED CHARACTERS & VOICE CONFIGS (Rule 39) ===`,\n  characters.length > 0 ? characters.map(c => `- ${c.character_code} (${c.name}): voice_id=${c.voice_config?.voice_id || 'default'} | visual_dna=${JSON.stringify(c.visual_dna || {})}`).join('\\n') : '- CHAR_001 (Protagonist) | NARRATOR',\n  `=== 5. OPEN & PARTIAL MYSTERIES ===`,\n  mysteries.length > 0 ? mysteries.map(m => `- [${m.status}] ${m.mystery_id || ''}: ${m.description} (Clues: ${JSON.stringify(m.clues || [])})`).join('\\n') : 'None',\n  `=== 6. RECENT STORY TIMELINE ===`,\n  timelineEvents.length > 0 ? timelineEvents.map(t => `- Ep ${t.episode_no} (${t.event_code || ''}): ${t.event_description} @ ${t.location || 'UNKNOWN'} \u2014 Participants: ${JSON.stringify(t.characters_involved || [])}`).join('\\n') : 'None',\n  `=== 7. REUSABLE SCENE & MOTION LIBRARY KEYS ===`,\n  `Scene Keys: ${sceneLibrary.map(s => s.reuse_key).join(', ') || 'None'}`,\n  `Motion Keys: ${motionLibrary.map(m => m.motion_key).join(', ') || 'None'}`\n].join('\\n\\n');\n\nreturn { json: { ...base, season_no: resolvedSeason, season_number: resolvedSeason, character_voice_map: characterVoiceMap, scene_library_keys: sceneLibrary.map(s => s.reuse_key), motion_library_keys: motionLibrary.map(m => m.motion_key), continuity_prompt_context: continuityPromptContext } };"
+        }
+      },
+      {
+        "id": "671e7e5a-a8e1-4774-af73-6d75470d08b8",
+        "name": "Stage 1A: Groq Outline & Script Writer",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          2464,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.35, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Stage-1 Lead Anime Screenwriter (WF-02). Using the hydrated continuity context, generate a high-stakes Hindi/Hinglish anime episode outline and 30 to 50 granular script beats. Output STRICT JSON: {\"title\": \"string\", \"logline\": \"string\", \"objective\": \"string\", \"opening_hook\": \"string\", \"climax\": \"string\", \"cliffhanger\": \"string\", \"full_script_text\": \"Complete formatted screenplay\", \"beats\": [{\"beat_order\": 1, \"location_code\": \"LOC_001\", \"visual_description\": \"Detailed anime visual prompt\", \"action_description\": \"Physical subject movement\", \"dialogue_speaker_id\": \"CHAR_001\", \"dialogue_text\": \"Hindi dialogue\", \"mouth_visible\": true, \"emotion\": \"neutral|anger|joy|sadness|fear\", \"is_climax_beat\": false}]}.' }, { role: 'user', content: $json.continuity_prompt_context + '\\n\\nUser Directive: ' + $json.user_prompt } ] }) }}",
+          "options": {
+            "timeout": 45000
+          }
+        }
+      },
+      {
+        "id": "9b254b1e-f0de-464f-8711-1b34a2d50777",
+        "name": "If Stage 1 Groq Failed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          2688,
+          80
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "94a4b3f3-2bea-4323-a733-bd0a72bebef4",
+        "name": "Stage 1B: Gemini Fallback Script Writer",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          2912,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.35, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Stage-1 Lead Anime Screenwriter (WF-02). Generate a high-stakes Hindi/Hinglish anime episode outline and 30 to 50 granular script beats. Output STRICT JSON: {\"title\": \"string\", \"logline\": \"string\", \"objective\": \"string\", \"opening_hook\": \"string\", \"climax\": \"string\", \"cliffhanger\": \"string\", \"full_script_text\": \"Complete formatted screenplay\", \"beats\": [{\"beat_order\": 1, \"location_code\": \"LOC_001\", \"visual_description\": \"Detailed anime visual prompt\", \"action_description\": \"Physical subject movement\", \"dialogue_speaker_id\": \"CHAR_001\", \"dialogue_text\": \"Hindi dialogue\", \"mouth_visible\": true, \"emotion\": \"neutral|anger|joy|sadness|fear\", \"is_climax_beat\": false}]}.' }, { role: 'user', content: $('Context Assembly & Prompt Constructor').item.json.continuity_prompt_context + '\\n\\nUser Directive: ' + $('Context Assembly & Prompt Constructor').item.json.user_prompt } ] }) }}",
+          "options": {
+            "timeout": 45000
+          }
+        }
+      },
+      {
+        "id": "b7eedd08-b9cd-46ff-8d5c-e62efb3c5796",
+        "name": "Stage 1 Parser & Stage 2 Prompt Builder",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3136,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $('Context Assembly & Prompt Constructor').item.json;\nconst llmRaw = $input.item.json;\n\nlet stage1 = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) {\n    const clean = rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    stage1 = JSON.parse(clean);\n  }\n} catch (e) { stage1 = null; }\n\nconst registeredCharCodes = Object.keys(ctx.character_voice_map).filter(k => k !== 'NARRATOR');\nconst primaryChar = registeredCharCodes[0] || 'CHAR_001';\n\nif (!stage1 || !Array.isArray(stage1.beats) || stage1.beats.length === 0) {\n  stage1 = {\n    title: `Episode ${ctx.episode_no}: Shadows of Canon`, logline: `Protagonist ${primaryChar} uncovers a critical truth.`,\n    objective: `Advance main season arc.`, opening_hook: `A tense confrontation.`, climax: `Unleashing a forbidden technique.`, cliffhanger: `An artifact resonates with an unknown signal.`,\n    full_script_text: `[EPISODE ${ctx.episode_no} SCRIPT]\\nScene 1: Opening.\\nScene 2: Climax.`,\n    beats: [\n      { beat_order: 1, location_code: 'LOC_001', visual_description: 'Wide cinematic anime shot of courtyard.', action_description: 'Camera pans slowly.', dialogue_speaker_id: 'NARRATOR', dialogue_text: 'Us raat, aasmaan bhi khoon ke aansu ro raha tha.', mouth_visible: false, emotion: 'sadness', is_climax_beat: false },\n      { beat_order: 2, location_code: 'LOC_001', visual_description: `Close-up of ${primaryChar}.`, action_description: `${primaryChar} speaks directly.`, dialogue_speaker_id: primaryChar, dialogue_text: 'Main peeche nahi hatunga!', mouth_visible: true, emotion: 'anger', is_climax_beat: false },\n      { beat_order: 3, location_code: 'LOC_001', visual_description: 'Dynamic action shot.', action_description: 'High-speed sword slash.', dialogue_speaker_id: primaryChar, dialogue_text: 'Ab faisla hoga!', mouth_visible: true, emotion: 'anger', is_climax_beat: true }\n    ]\n  };\n}\n\nreturn { json: { ...ctx, stage1_script: stage1 } };"
+        }
+      },
+      {
+        "id": "20b47280-5b8d-4854-baf9-26961116f103",
+        "name": "Stage 2A: Groq Section 14A Scene Router",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          3360,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Stage-2 Section 14A Scene Analyzer (WF-02). Convert script beats into production scenes: {\"scenes\": [...]}. Include real JSON booleans: scene_order, beat_order, location_code, visual_prompt, action_summary, dialogue_speaker_id, voice_text, emotion, duration_sec, needs_image, needs_voice, needs_lipsync, needs_motion, needs_expression, needs_camera_motion, needs_subtitles, needs_bgm, needs_sfx, mouth_visible, camera_motion_type, routing_type, gpu_priority, routing_reason, bgm_hint, sfx_hint. Rule 37: camera motion MUST set needs_motion=false. Rule 36/38: P0=Static, P1=Camera, P2=LipSync, P3=Expression, P4=Motion, P5=Combined.' }, { role: 'user', content: 'Convert these Stage-1 script beats into Section 14A scenes:\\n' + JSON.stringify($json.stage1_script.beats) } ] }) }}",
+          "options": {
+            "timeout": 45000
+          }
+        }
+      },
+      {
+        "id": "fa9c17c2-fd65-4903-b8fa-46985c954041",
+        "name": "If Stage 2 Groq Failed",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [
+          3584,
+          80
+        ],
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "86a8d633-7304-40a5-9ea3-cf058dd5f523",
+        "name": "Stage 2B: Gemini Fallback Scene Router",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "continueOnFail": true,
+        "position": [
+          3808,
+          0
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Stage-2 Scene Analyzer. Output {\"scenes\": [...]} with real JSON booleans: scene_order, beat_order, location_code, visual_prompt, action_summary, dialogue_speaker_id, voice_text, emotion, duration_sec, needs_image, needs_voice, needs_lipsync, needs_motion, needs_expression, needs_camera_motion, needs_subtitles, needs_bgm, needs_sfx, mouth_visible, camera_motion_type, routing_type, gpu_priority, routing_reason, bgm_hint, sfx_hint. Enforce Rule 37: camera motion never triggers needs_motion=true.' }, { role: 'user', content: 'Convert these Stage-1 script beats into scenes:\\n' + JSON.stringify($('Stage 1 Parser & Stage 2 Prompt Builder').item.json.stage1_script.beats) } ] }) }}",
+          "options": {
+            "timeout": 45000
+          }
+        }
+      },
+      {
+        "id": "503b36b7-ae36-4510-996c-d9d03aa393fc",
+        "name": "Output Validator, Rule 37 & JSON Sanitizer",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4032,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const ctx = $('Stage 1 Parser & Stage 2 Prompt Builder').item.json;\nconst stage1 = ctx.stage1_script;\nconst voiceMap = ctx.character_voice_map || {};\nconst llmRaw = $input.item.json;\n\nconst ALLOWED_EMOTIONS = new Set(['neutral', 'anger', 'joy', 'sadness', 'fear']);\nconst ALLOWED_CAMERA = new Set(['NONE', 'PAN', 'ZOOM', 'KEN_BURNS']);\n\nfunction toStrictBool(val, defaultVal = false) {\n  if (typeof val === 'boolean') return val;\n  if (typeof val === 'string') {\n    const lower = val.trim().toLowerCase();\n    if (lower === 'true' || lower === '1' || lower === 'yes') return true;\n    if (lower === 'false' || lower === '0' || lower === 'no') return false;\n  }\n  if (typeof val === 'number') return val !== 0;\n  return Boolean(defaultVal);\n}\n\nlet rawScenes = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) {\n    const clean = content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    const parsed = JSON.parse(clean);\n    if (parsed && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) rawScenes = parsed.scenes;\n  }\n} catch (e) { rawScenes = null; }\n\nif (!rawScenes) {\n  rawScenes = (stage1.beats || []).map((b, idx) => ({\n    scene_order: idx + 1, beat_order: b.beat_order || (idx + 1), location_code: b.location_code || 'LOC_001',\n    visual_prompt: b.visual_description || 'Cinematic anime frame', action_summary: b.action_description || 'Camera movement',\n    dialogue_speaker_id: b.dialogue_speaker_id || null, voice_text: b.dialogue_text || null, emotion: b.emotion || 'neutral',\n    duration_sec: 5, needs_image: true, needs_voice: Boolean(b.dialogue_text), mouth_visible: toStrictBool(b.mouth_visible, false),\n    needs_lipsync: Boolean(b.dialogue_text) && toStrictBool(b.mouth_visible, false), needs_motion: toStrictBool(b.is_climax_beat, false),\n    needs_expression: false, needs_camera_motion: !toStrictBool(b.is_climax_beat, false), needs_subtitles: Boolean(b.dialogue_text),\n    needs_bgm: true, needs_sfx: true, camera_motion_type: toStrictBool(b.is_climax_beat, false) ? 'NONE' : 'KEN_BURNS',\n    bgm_hint: { category: b.is_climax_beat ? 'battle_orchestral' : 'ambient_tension', mood: b.emotion || 'neutral' },\n    sfx_hint: b.is_climax_beat ? ['sword_clash', 'wind_whoosh'] : ['rain_ambience']\n  }));\n}\n\nconst validationWarnings = [];\nconst sanitizedScenes = [];\nconst scenesDbBatch = [];\nconst clipsDbBatch = [];\n\nfor (let i = 0; i < rawScenes.length; i++) {\n  const s = rawScenes[i] || {};\n  const sceneOrder = Number(s.scene_order || (i + 1));\n\n  const rawEmotion = (s.emotion || 'neutral').toString().toLowerCase().trim();\n  let emotion = rawEmotion;\n  if (!ALLOWED_EMOTIONS.has(emotion)) {\n    validationWarnings.push(`Scene ${sceneOrder}: Unknown emotion \"${s.emotion}\" overridden to \"neutral\".`);\n    emotion = 'neutral';\n  }\n\n  const voiceText = s.voice_text ? s.voice_text.toString().trim() : null;\n  const hasDialogue = Boolean(voiceText && voiceText.length > 0);\n  const rawSpeaker = s.dialogue_speaker_id ? s.dialogue_speaker_id.toString().toUpperCase().trim() : (hasDialogue ? 'NARRATOR' : null);\n  const speakerProfile = (rawSpeaker && voiceMap[rawSpeaker]) ? voiceMap[rawSpeaker] : (hasDialogue ? voiceMap['NARRATOR'] : null);\n\n  const resolvedVoiceId = speakerProfile ? speakerProfile.voice_id : null;\n  const emotionMod = speakerProfile?.emotion_profile?.[emotion] || { pitch: 1.00, rate: 1.00 };\n  const voiceModifiers = speakerProfile ? {\n    voice_id: resolvedVoiceId, voice_provider: speakerProfile.voice_provider, voice_model: speakerProfile.voice_model,\n    language: speakerProfile.language, emotion, pitch: Number((speakerProfile.pitch * (emotionMod.pitch || 1.0)).toFixed(2)),\n    rate: Number((speakerProfile.speed * (emotionMod.rate || 1.0)).toFixed(2))\n  } : null;\n\n  const needs_image = toStrictBool(s.needs_image, true);\n  const needs_voice = hasDialogue ? toStrictBool(s.needs_voice, true) : false;\n  const mouth_visible = hasDialogue && rawSpeaker !== 'NARRATOR' ? toStrictBool(s.mouth_visible, false) : false;\n  let needs_lipsync = needs_voice && mouth_visible ? toStrictBool(s.needs_lipsync, true) : false;\n  let needs_motion = toStrictBool(s.needs_motion, false);\n  let needs_expression = toStrictBool(s.needs_expression, false);\n  let needs_camera_motion = toStrictBool(s.needs_camera_motion, true);\n  const needs_subtitles = needs_voice ? toStrictBool(s.needs_subtitles, true) : false;\n  const needs_bgm = toStrictBool(s.needs_bgm, true);\n  const needs_sfx = toStrictBool(s.needs_sfx, false);\n\n  let camera_motion_type = (s.camera_motion_type || 'KEN_BURNS').toString().toUpperCase().trim();\n  if (!ALLOWED_CAMERA.has(camera_motion_type)) camera_motion_type = needs_camera_motion ? 'KEN_BURNS' : 'NONE';\n\n  const actionText = `${s.action_summary || ''} ${s.visual_prompt || ''}`.toLowerCase();\n  const hasEssentialPhysicalAction = /\\b(fight|slash|attack|run|leap|jump|dodge|explosion|transform|chase|strike|punch|kick|sprint|clash)\\b/i.test(actionText);\n\n  if (['PAN', 'ZOOM', 'KEN_BURNS'].includes(camera_motion_type) && needs_motion && !hasEssentialPhysicalAction) {\n    needs_motion = false;\n    needs_camera_motion = true;\n    validationWarnings.push(`Scene ${sceneOrder}: Rule 37 enforced \u2014 camera motion (${camera_motion_type}) demoted to CPU.`);\n  }\n\n  if (!mouth_visible && needs_lipsync) {\n    needs_lipsync = false;\n    validationWarnings.push(`Scene ${sceneOrder}: mouth_visible=false enforced needs_lipsync=false.`);\n  }\n\n  if (camera_motion_type === 'NONE') needs_camera_motion = false; else needs_camera_motion = true;\n\n  const activeGpuCount = [needs_lipsync, needs_motion, needs_expression].filter(Boolean).length;\n  let routing_type = 'STATIC'; let gpu_priority = 'P0'; let defaultReason = 'Rule 37: Static frame on CPU.';\n\n  if (activeGpuCount > 1) {\n    routing_type = 'COMBINED'; gpu_priority = 'P5'; defaultReason = `Rule 38 P5 Combined GPU.`;\n  } else if (needs_motion) {\n    routing_type = 'MOTION'; gpu_priority = 'P4'; defaultReason = 'Rule 38 P4 AnimateDiff GPU.';\n  } else if (needs_expression) {\n    routing_type = 'EXPRESSION'; gpu_priority = 'P3'; defaultReason = 'Rule 38 P3 LivePortrait GPU.';\n  } else if (needs_lipsync && mouth_visible) {\n    routing_type = 'LIPSYNC'; gpu_priority = 'P2'; defaultReason = `Rule 38 P2 MuseTalk GPU: (${rawSpeaker}).`;\n  } else if (needs_camera_motion && camera_motion_type !== 'NONE') {\n    routing_type = camera_motion_type; gpu_priority = 'P1'; defaultReason = `Rule 37 & 38 P1 FFmpeg CPU: (${camera_motion_type}).`;\n  } else {\n    routing_type = 'STATIC'; gpu_priority = 'P0'; defaultReason = 'Rule 37 & 38 P0 FFmpeg CPU: Static.';\n  }\n\n  const routing_reason = (s.routing_reason && s.routing_reason.toString().trim().length > 5) ? `${s.routing_reason.toString().trim()} [${gpu_priority}/${routing_type}]` : defaultReason;\n  const bgm_hint = (s.bgm_hint && typeof s.bgm_hint === 'object') ? { category: (s.bgm_hint.category || 'cinematic_anime').toString(), mood: (s.bgm_hint.mood || emotion).toString() } : { category: 'cinematic_anime', mood: emotion };\n  const sfx_hints = Array.isArray(s.sfx_hint) ? s.sfx_hint.map(x => x.toString()) : (Array.isArray(s.sfx_hints) ? s.sfx_hints.map(x => x.toString()) : (s.sfx_hint ? [s.sfx_hint.toString()] : []));\n\n  const cleanScene = {\n    project_id: ctx.project_id, episode_no: ctx.episode_no, scene_order: sceneOrder, beat_order: Number(s.beat_order || sceneOrder),\n    location_code: (s.location_code || 'LOC_001').toString(), visual_prompt: (s.visual_prompt || 'Anime cinematic frame').toString(),\n    action_summary: (s.action_summary || '').toString(), dialogue_speaker_id: rawSpeaker, voice_id: resolvedVoiceId, voice_text: voiceText,\n    emotion, voice_modifiers: voiceModifiers, duration_sec: Number(s.duration_sec || 5),\n    needs_image, needs_voice, needs_lipsync, needs_motion, needs_expression, needs_camera_motion, needs_subtitles, needs_bgm, needs_sfx, mouth_visible,\n    camera_motion_type, routing_type, gpu_priority, routing_reason, bgm_hint, sfx_hint: sfx_hints\n  };\n\n  sanitizedScenes.push(cleanScene);\n\n  // STRICT SCHEMA FIX: Only push columns that EXIST in scenes table\n  scenesDbBatch.push({\n    project_id: ctx.project_id,\n    episode_no: ctx.episode_no, // Requires ALTER TABLE scenes ADD COLUMN episode_no\n    scene_order: sceneOrder,\n    description: cleanScene.visual_prompt, // visual_prompt -> description\n    dialogue_speaker_id: cleanScene.dialogue_speaker_id,\n    needs_image: cleanScene.needs_image,\n    needs_voice: cleanScene.needs_voice,\n    needs_lipsync: cleanScene.needs_lipsync,\n    needs_motion: cleanScene.needs_motion,\n    needs_expression: cleanScene.needs_expression,\n    needs_camera_motion: cleanScene.needs_camera_motion,\n    needs_subtitles: cleanScene.needs_subtitles,\n    needs_bgm: cleanScene.needs_bgm,\n    needs_sfx: cleanScene.needs_sfx,\n    mouth_visible: cleanScene.mouth_visible,\n    camera_motion_type: cleanScene.camera_motion_type,\n    routing: cleanScene.routing_type, // routing_type -> routing\n    gpu_priority: cleanScene.gpu_priority,\n    gpu_required: ['P2','P3','P4','P5'].includes(cleanScene.gpu_priority),\n    routing_reason: cleanScene.routing_reason\n  });\n\n  // STRICT SCHEMA FIX: Only push columns that EXIST in clips table\n  clipsDbBatch.push({\n    project_id: ctx.project_id,\n    episode_no: ctx.episode_no,\n    scene_order: sceneOrder,\n    voice_text: cleanScene.voice_text,\n    voice_id: cleanScene.voice_id,\n    emotion: cleanScene.emotion,\n    bgm_hint: cleanScene.bgm_hint,\n    sfx_hints: cleanScene.sfx_hint,\n    voice_modifiers: cleanScene.voice_modifiers,\n    character_code: cleanScene.dialogue_speaker_id,\n    needs_image: cleanScene.needs_image,\n    needs_voice: cleanScene.needs_voice,\n    needs_lipsync: cleanScene.needs_lipsync,\n    needs_motion: cleanScene.needs_motion,\n    needs_expression: cleanScene.needs_expression,\n    needs_camera_motion: cleanScene.needs_camera_motion,\n    needs_subtitles: cleanScene.needs_subtitles,\n    needs_bgm: cleanScene.needs_bgm,\n    needs_sfx: cleanScene.needs_sfx,\n    mouth_visible: cleanScene.mouth_visible,\n    camera_motion_type: cleanScene.camera_motion_type,\n    routing: cleanScene.routing_type,\n    routing_hint: cleanScene.routing_type,\n    gpu_priority: cleanScene.gpu_priority,\n    gpu_required: ['P2','P3','P4','P5'].includes(cleanScene.gpu_priority),\n    routing_reason: cleanScene.routing_reason,\n    status: 'PENDING'\n  });\n}\n\nconst scriptJsonPayload = {\n  episode_no: ctx.episode_no, season_no: ctx.season_no, title: stage1.title || `Episode ${ctx.episode_no}`,\n  logline: stage1.logline || '', objective: stage1.objective || '', opening_hook: stage1.opening_hook || '',\n  climax: stage1.climax || '', cliffhanger: stage1.cliffhanger || '', total_scenes: sanitizedScenes.length,\n  validation_warnings: validationWarnings, scenes: sanitizedScenes\n};\n\nconst episodeDbRecord = {\n  project_id: ctx.project_id, episode_no: ctx.episode_no, title: scriptJsonPayload.title,\n  script: stage1.full_script_text || sanitizedScenes.map(sc => `[Scene ${sc.scene_order}] (${sc.location_code}) ${sc.visual_prompt} | ${sc.dialogue_speaker_id || 'SILENT'}: ${sc.voice_text || ''}`).join('\\n'),\n  current_state: 'SCENE_PLAN_READY', script_json: scriptJsonPayload\n};\n\nconst episodeStateDbRecord = { project_id: ctx.project_id, episode_no: ctx.episode_no, current_state: 'SCENE_PLAN_READY' };\n\nreturn { json: { ...ctx, episode_db_record: episodeDbRecord, scenes_db_batch: scenesDbBatch, clips_db_batch: clipsDbBatch, episode_state_db_record: episodeStateDbRecord, script_json: scriptJsonPayload, validation_warnings: validationWarnings } };"
+        }
+      },
+      {
+        "id": "61d54dc0-29a2-4472-b9f7-dd2ad4980428",
+        "name": "Supabase: Upsert Episode",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4256,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?on_conflict=project_id,episode_no",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.episode_db_record) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "fdcccffa-8f6c-4655-91dc-cea9da383958",
+        "name": "Supabase: Insert/Upsert Scenes Batch",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4480,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?on_conflict=project_id,episode_no,scene_order",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.scenes_db_batch) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "5598da78-b5c9-412a-9a3e-3888b610c8dd",
+        "name": "Supabase: Insert/Upsert Clips Batch",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4704,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?on_conflict=project_id,episode_no,scene_order",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.clips_db_batch) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "daf41b69-48f2-45d4-a836-1f3e2128e5e6",
+        "name": "Supabase: Update Episode State",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          4928,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?on_conflict=project_id,episode_no",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates,return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($('Output Validator, Rule 37 & JSON Sanitizer').item.json.episode_state_db_record) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "1f4f8368-e8e5-4f26-b352-37e501d3eed0",
+        "name": "Supabase: Insert Audit Log",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "alwaysOutputData": true,
+        "continueOnFail": true,
+        "position": [
+          5152,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "apikey",
+                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Authorization",
+                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Prefer",
+                "value": "return=minimal"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Output Validator, Rule 37 & JSON Sanitizer').item.json.project_id, workflow_name: 'WF-02', action: 'SCENE_PLAN_GENERATED', execution_id: $execution.id }) }}",
+          "options": {}
+        }
+      },
+      {
+        "id": "635c7b5d-bf30-4c20-a3a1-b78f7aadc8d1",
+        "name": "WF-03 Dispatch & Output Formatter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5376,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const state = $('Output Validator, Rule 37 & JSON Sanitizer').item.json;\nconst sj = state.script_json;\nconst scenes = sj.scenes || [];\nconst priorityCounts = { P0: 0, P1: 0, P2: 0, P3: 0, P4: 0, P5: 0 };\nconst emotionCounts = { neutral: 0, anger: 0, joy: 0, sadness: 0, fear: 0 };\nfor (const sc of scenes) {\n  if (priorityCounts[sc.gpu_priority] !== undefined) priorityCounts[sc.gpu_priority]++;\n  if (emotionCounts[sc.emotion] !== undefined) emotionCounts[sc.emotion]++;\n}\nconst cpuSceneCount = priorityCounts.P0 + priorityCounts.P1;\nconst gpuSceneCount = priorityCounts.P2 + priorityCounts.P3 + priorityCounts.P4 + priorityCounts.P5;\nconst summaryMessage = [\n  `\ud83c\udfac **WF-02: Episode ${state.episode_no} Story & Scene Plan Ready!**`,\n  `\ud83d\udccc **Title:** ${sj.title}`,\n  `\ud83d\udcdd **Logline:** ${sj.logline}`,\n  `\ud83d\udd12 **Mode:** ${state.mode} | **State:** \\`SCENE_PLAN_READY\\``,\n  `\ud83d\udcca **Routing Breakdown (${scenes.length} Scenes):** CPU: ${cpuSceneCount} | GPU: ${gpuSceneCount}`,\n  state.validation_warnings.length > 0 ? `\\n\u26a0\ufe0f **Governance Auto-Corrections (${state.validation_warnings.length}):**\\n` + state.validation_warnings.slice(0, 5).map(w => `\u2022 ${w}`).join('\\n') : ''\n].filter(Boolean).join('\\n');\nreturn { json: { ok: true, status: 'SCENE_PLAN_READY', workflow_name: 'WF-02', execution_id: $execution.id, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, season_no: state.season_no, mode: state.mode, current_state: 'SCENE_PLAN_READY', next_workflow_id: $env.WF_03_PROD_ID || null, wf03_dispatch_payload: { user_infrastructure: $('When Executed by Another Workflow').first().json.user_infrastructure, project_style: $('When Executed by Another Workflow').first().json.project_style, project_id: state.project_id, episode_no: state.episode_no, season_no: state.season_no, mode: 'SAVE', current_state: 'SCENE_PLAN_READY', total_scenes: scenes.length, cpu_scenes: cpuSceneCount, gpu_scenes: gpuSceneCount, priority_breakdown: priorityCounts, scenes: scenes }, output: summaryMessage, text: summaryMessage } };"
+        }
+      }
+    ],
+    "connections": {
+      "When Executed by Another Workflow": {
+        "main": [
+          [
+            {
+              "node": "Normalize Input & Lock SAVE Mode",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Input & Lock SAVE Mode": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Project & Bible",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Project & Bible": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Canon Facts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Canon Facts": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Latest Story Snapshot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Latest Story Snapshot": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Characters & Voice Config",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Characters & Voice Config": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Mystery Tracker",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Mystery Tracker": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Story Timeline",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Story Timeline": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Scene Library",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Scene Library": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Fetch Motion Library",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Fetch Motion Library": {
+        "main": [
+          [
+            {
+              "node": "Context Assembly & Prompt Constructor",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Context Assembly & Prompt Constructor": {
+        "main": [
+          [
+            {
+              "node": "Stage 1A: Groq Outline & Script Writer",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stage 1A: Groq Outline & Script Writer": {
+        "main": [
+          [
+            {
+              "node": "If Stage 1 Groq Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Stage 1 Groq Failed": {
+        "main": [
+          [
+            {
+              "node": "Stage 1B: Gemini Fallback Script Writer",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Stage 1 Parser & Stage 2 Prompt Builder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stage 1B: Gemini Fallback Script Writer": {
+        "main": [
+          [
+            {
+              "node": "Stage 1 Parser & Stage 2 Prompt Builder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stage 1 Parser & Stage 2 Prompt Builder": {
+        "main": [
+          [
+            {
+              "node": "Stage 2A: Groq Section 14A Scene Router",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stage 2A: Groq Section 14A Scene Router": {
+        "main": [
+          [
+            {
+              "node": "If Stage 2 Groq Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Stage 2 Groq Failed": {
+        "main": [
+          [
+            {
+              "node": "Stage 2B: Gemini Fallback Scene Router",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Output Validator, Rule 37 & JSON Sanitizer",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stage 2B: Gemini Fallback Scene Router": {
+        "main": [
+          [
+            {
+              "node": "Output Validator, Rule 37 & JSON Sanitizer",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Output Validator, Rule 37 & JSON Sanitizer": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Upsert Episode",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Upsert Episode": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert/Upsert Scenes Batch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert/Upsert Scenes Batch": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert/Upsert Clips Batch",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert/Upsert Clips Batch": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Update Episode State",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Update Episode State": {
+        "main": [
+          [
+            {
+              "node": "Supabase: Insert Audit Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Supabase: Insert Audit Log": {
+        "main": [
+          [
+            {
+              "node": "WF-03 Dispatch & Output Formatter",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Neeraj  Behra",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "createdAt": "2026-10-29T22:43:45.386Z",
+    "updatedAt": "2026-10-29T22:43:45.386Z",
+    "workflowPublishHistory": [
+      {
+        "id": 198,
+        "workflowId": "S71rbJqn85GNVIVo",
+        "versionId": "837c8bc1-496e-4c90-8bb4-a8c0e33a4b8a",
+        "event": "activated",
+        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
+        "createdAt": "2026-10-29T22:43:45.550Z"
+      }
+    ]
+  }
+}
