@@ -10,34 +10,19 @@ import { startBrainWorker } from './intelligence/brain.worker';
 import { startIncidentWorker } from './intelligence/incident.worker';
 import { registerAnimeMediaRoutes } from './media/media.routes';
 import { animeRequestIdHook } from './middleware/request-id';
-import { registerAnimeInfrastructureRoutes } from './infrastructure/infrastructure.routes';
-import { startRole } from './process-role';
+import { outboxDispatcher } from './outbox/outbox.dispatcher';
 import { registerAnimeAnalyticsRoutes } from './reads/analytics.routes';
 import { registerAnimeCreativeRoutes } from './reads/creative.routes';
 import { registerAnimeReadsRoutes } from './reads/reads.routes';
 import { registerAnimeHealthRoutes } from './routes/health.routes';
+import { supervisorWorker } from './supervisor/supervisor.worker';
 import { registerAnimeDevicesRoutes } from './system/devices.routes';
 
 export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', animeRequestIdHook);
-
-  // --- NEW AUTH HOOK (Anime Engine Only) ---
-  app.addHook('onRequest', async (request, reply) => {
-    const url = request.url || '';
-    if (url.startsWith('/v1/anime/health')) return;
-    if (url.startsWith('/v1/anime/callbacks')) return;
-
-    const authFn = (app as any).authenticate;
-    if (typeof authFn !== 'function') {
-      throw new Error('anime/auth: fastify.authenticate decorator missing');
-    }
-    await authFn(request, reply);
-  });
-  // --- END NEW AUTH HOOK ---
   app.setErrorHandler(animeErrorHandler);
   await app.register(registerAnimeHealthRoutes);
   await app.register(registerAnimeDevicesRoutes);
-  await app.register(registerAnimeInfrastructureRoutes);
   await app.register(registerAnimeCommandsRoutes);
   await app.register(registerAnimeCallbacksRoutes);
   await app.register(registerAnimeReadsRoutes);
@@ -48,7 +33,13 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimeAdminWorkersRoutes);
   await app.register(registerAnimeAdminLedgerRoutes);
   await app.register(registerAnimeAdminSystemRoutes);
+  try {
+    const infraRoutesMod: any = await import('./infrastructure/infrastructure.routes');
+    const regFn = infraRoutesMod.registerAnimeInfrastructureRoutes || infraRoutesMod.registerInfrastructureRoutes || infraRoutesMod.default;
+    if (typeof regFn === 'function') await app.register(regFn);
+  } catch (_e) {}
+  outboxDispatcher.start(2000);
+  supervisorWorker.start(3000, 60000);
   startBrainWorker();
   startIncidentWorker();
-  startRole();
 }
