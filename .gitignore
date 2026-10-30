@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Assistant
+src/modules/ai/
+src/modules/tasks/
+src/modules/memory/
+src/modules/user/
+src/modules/owner/
+src/modules/skills/
+src/modules/config/
+src/modules/copilot/
+src/modules/trusted-controller/
+src/modules/notifications/
+src/modules/files/
+src/modules/cinematic/
+src/modules/incidents/
+src/modules/system/
+src/modules/capabilities/
+src/modules/approvals/src/modules/approvals/
+.backup_*
+.env.bak*

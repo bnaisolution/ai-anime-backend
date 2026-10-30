@@ -1,0 +1,5 @@
+import { animeSupabase } from '../db/anime.supabase';
+async function notify(row: any): Promise<boolean> { const token = process.env.TELEGRAM_BOT_TOKEN; const chat = process.env.TELEGRAM_CHAT_ID; if (!token || !chat) return false; try { const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: chat, text: `🚨 [Dead Letter]\nID: ${row.id}\nProject: ${row.payload?.project_id}\nError: ${row.last_error}` }) }); return res.ok; } catch { return false; } }
+async function scan() { const { data } = await animeSupabase.from('outbox_events').select('*').eq('status', 'dead_letter').eq('notified', false).limit(20); if (!data) return; for (const row of data) { const ok = await notify(row); if (ok || !process.env.TELEGRAM_BOT_TOKEN) await animeSupabase.from('outbox_events').update({ notified: true }).eq('id', row.id); } }
+let timer: any = null;
+export function startIncidentWorker(ms = 30000) { if (timer) return; timer = setInterval(() => void scan(), ms); void scan(); }

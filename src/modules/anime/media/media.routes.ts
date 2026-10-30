@@ -1,0 +1,12 @@
+import { Type } from '@sinclair/typebox';
+import type { FastifyInstance } from 'fastify';
+import { requireProjectRole } from '../auth/project-guard';
+import { createUploadSession, quickGenerate, visionAnalyze } from './media.service';
+const P = Type.Object({ id: Type.String({ format: 'uuid' }) });
+function getKey(req: any, fallback: string) { const raw = req.headers['idempotency-key']; return Array.isArray(raw) ? raw[0] : (raw || fallback); }
+export async function registerAnimeMediaRoutes(app: FastifyInstance): Promise<void> {
+  app.post('/v1/anime/projects/:id/quick/image', { schema: { params: P, body: Type.Object({ prompt: Type.String(), style_preset: Type.Optional(Type.String()), aspect_ratio: Type.Optional(Type.String()) }) }, preHandler: [requireProjectRole(['owner', 'admin', 'editor'])] }, async (req: any) => { return { data: await quickGenerate('IMAGE', req.body.prompt, { ...req.body, project_id: req.params.id, user_id: req.anime?.user_id, idempotency_key: getKey(req, req.anime?.request_id), request_id: req.anime?.request_id }) }; });
+  app.post('/v1/anime/projects/:id/quick/video', { schema: { params: P, body: Type.Object({ prompt: Type.String(), style_preset: Type.Optional(Type.String()), aspect_ratio: Type.Optional(Type.String()), duration_sec: Type.Optional(Type.Number()) }) }, preHandler: [requireProjectRole(['owner', 'admin', 'editor'])] }, async (req: any) => { return { data: await quickGenerate('VIDEO', req.body.prompt, { ...req.body, project_id: req.params.id, user_id: req.anime?.user_id, idempotency_key: getKey(req, req.anime?.request_id), request_id: req.anime?.request_id }) }; });
+  app.post('/v1/anime/projects/:id/vision/analyze', { schema: { params: P, body: Type.Object({ media_url: Type.String(), analysis_type: Type.Optional(Type.String()), prompt: Type.Optional(Type.String()) }) }, preHandler: [requireProjectRole(['owner', 'admin', 'editor'])] }, async (req: any) => { return { data: await visionAnalyze(req.body.media_url, { ...req.body, project_id: req.params.id, user_id: req.anime?.user_id, idempotency_key: getKey(req, req.anime?.request_id), request_id: req.anime?.request_id }) }; });
+  app.post('/v1/anime/projects/:id/assets/upload-sessions', { schema: { params: P, body: Type.Object({ file_name: Type.String(), content_type: Type.Optional(Type.String()) }) }, preHandler: [requireProjectRole(['owner', 'admin', 'editor'])] }, async (req: any) => { return { data: await createUploadSession(req.params.id, { ...req.body, user_id: req.anime?.user_id, request_id: req.anime?.request_id }) }; });
+}

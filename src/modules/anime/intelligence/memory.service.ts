@@ -1,0 +1,4 @@
+import { animeSupabase } from '../db/anime.supabase';
+function genEmb1536(): number[] { return Array.from({ length: 1536 }, () => Number((Math.random() * 2 - 1).toFixed(6))); }
+export async function writeMemory(projectId: string, type: string, content: string, metadata: any = {}): Promise<any> { const { data, error } = await animeSupabase.from('memory_knowledge').insert({ project_id: projectId, memory_type: type, content, embedding: `[${genEmb1536().join(',')}]`, metadata }).select().single(); if (error) throw error; return data; }
+export async function retrieveContext(projectId: string, queryString: string): Promise<any[]> { const emb = `[${genEmb1536().join(',')}]`; const { data: rpc } = await animeSupabase.rpc('match_memory_knowledge', { p_project_id: projectId, p_query_embedding: emb, p_match_count: 3 }); if (rpc) return rpc; const { data: fb } = await animeSupabase.from('memory_knowledge').select('*').eq('project_id', projectId).limit(3); return fb ?? []; }

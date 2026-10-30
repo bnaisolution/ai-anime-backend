@@ -1,0 +1,5 @@
+import { animeSupabase } from '../db/anime.supabase';
+async function ping(url: string, headers?: any): Promise<string> { try { const res = await fetch(url, { method: 'GET', headers, signal: AbortSignal.timeout(5000) }); return res.status < 500 ? 'VERIFIED' : 'DEGRADED'; } catch { return 'DEGRADED'; } }
+async function runCheck() { const targets = [ { name: 'n8n', url: process.env.N8N_BASE_URL || 'http://127.0.0.1:5678/healthz' }, { name: 'Groq', url: 'https://api.groq.com/openai/v1/models', headers: process.env.GROQ_API_KEY ? { Authorization: `Bearer ${process.env.GROQ_API_KEY}` } : undefined }, { name: 'Gemini', url: 'https://generativelanguage.googleapis.com/v1beta/models' } ]; for (const t of targets) { const status = await ping(t.url, t.headers); await animeSupabase.from('capability_registry').upsert({ service_name: t.name, status, last_checked: new Date().toISOString() }, { onConflict: 'service_name' }); } }
+let timer: any = null;
+export function startBrainWorker(ms = 60000) { if (timer) return; timer = setInterval(() => void runCheck(), ms); void runCheck(); }
