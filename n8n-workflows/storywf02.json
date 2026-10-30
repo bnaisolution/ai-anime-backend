@@ -1,15 +1,12 @@
 {
   "id": "S71rbJqn85GNVIVo",
   "name": "storywf02",
-  "description": "WF-02 Story Generator: Generates episode script, scene plan, and routing flags.",
   "active": true,
   "activeVersionId": "837c8bc1-496e-4c90-8bb4-a8c0e33a4b8a",
   "createdAt": "2026-10-26T06:36:09.770Z",
   "updatedAt": "2026-10-29T22:43:45.383Z",
   "isArchived": false,
   "versionId": "837c8bc1-496e-4c90-8bb4-a8c0e33a4b8a",
-  "versionCounter": 8,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -1050,17 +1047,6 @@
       "role": "workflow:owner",
       "workflowId": "S71rbJqn85GNVIVo",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T06:36:09.777Z",
       "updatedAt": "2026-10-26T06:36:09.777Z"
     }
@@ -2092,16 +2078,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T22:43:45.386Z",
-    "updatedAt": "2026-10-29T22:43:45.386Z",
-    "workflowPublishHistory": [
-      {
-        "id": 198,
-        "workflowId": "S71rbJqn85GNVIVo",
-        "versionId": "837c8bc1-496e-4c90-8bb4-a8c0e33a4b8a",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T22:43:45.550Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T22:43:45.386Z"
   }
 }

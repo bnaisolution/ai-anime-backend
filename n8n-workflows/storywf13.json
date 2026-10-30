@@ -1,15 +1,12 @@
 {
   "id": "jI39p4vr4CnWhpgw",
   "name": "storywf13",
-  "description": "WF-13 Retry Manager: Scans for failed jobs and retries them with exponential backoff.",
   "active": true,
   "activeVersionId": "2a4f4570-0643-45b6-805b-9e23be95c1b3",
   "createdAt": "2026-10-26T10:13:35.403Z",
   "updatedAt": "2026-10-26T10:14:20.031Z",
   "isArchived": false,
   "versionId": "2a4f4570-0643-45b6-805b-9e23be95c1b3",
-  "versionCounter": 2,
-  "sourceWorkflowId": null,
   "triggerCount": 1,
   "nodes": [
     {
@@ -481,17 +478,6 @@
       "role": "workflow:owner",
       "workflowId": "jI39p4vr4CnWhpgw",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T10:13:35.405Z",
       "updatedAt": "2026-10-26T10:13:35.405Z"
     }
@@ -945,16 +931,6 @@
     "description": "",
     "autosaved": true,
     "createdAt": "2026-10-26T10:13:49.631Z",
-    "updatedAt": "2026-10-26T10:14:25.000Z",
-    "workflowPublishHistory": [
-      {
-        "id": 130,
-        "workflowId": "jI39p4vr4CnWhpgw",
-        "versionId": "2a4f4570-0643-45b6-805b-9e23be95c1b3",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-26T10:14:25.448Z"
-      }
-    ]
+    "updatedAt": "2026-10-26T10:14:25.000Z"
   }
 }

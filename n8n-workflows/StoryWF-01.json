@@ -1,15 +1,12 @@
 {
   "id": "BwP2L3HccmQ7dwmJ",
   "name": "StoryWF-01",
-  "description": "WF-01 Bible Architect: Creates Story Bible, characters, visual DNA, and assigns voices.",
   "active": true,
   "activeVersionId": "cde23840-dbe2-42ac-9e1a-cdc191ebb824",
   "createdAt": "2026-10-26T06:21:50.078Z",
   "updatedAt": "2026-10-29T21:21:30.859Z",
   "isArchived": false,
   "versionId": "cde23840-dbe2-42ac-9e1a-cdc191ebb824",
-  "versionCounter": 3,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -1475,17 +1472,6 @@
       "role": "workflow:owner",
       "workflowId": "BwP2L3HccmQ7dwmJ",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T06:21:50.081Z",
       "updatedAt": "2026-10-26T06:21:50.081Z"
     }
@@ -2942,16 +2928,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T21:21:30.860Z",
-    "updatedAt": "2026-10-29T21:21:30.860Z",
-    "workflowPublishHistory": [
-      {
-        "id": 158,
-        "workflowId": "BwP2L3HccmQ7dwmJ",
-        "versionId": "cde23840-dbe2-42ac-9e1a-cdc191ebb824",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T21:21:31.362Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T21:21:30.860Z"
   }
 }

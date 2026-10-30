@@ -1,15 +1,12 @@
 {
   "id": "WAB7tCTJSUilOp07",
   "name": "storywf06",
-  "description": "WF-06 Continuity Engine: Checks story timeline, dead character guard, and location jumps.",
   "active": true,
   "activeVersionId": "d70e7565-0083-4e17-b9aa-30247071b2e2",
   "createdAt": "2026-10-26T09:49:01.907Z",
   "updatedAt": "2026-10-29T22:43:45.007Z",
   "isArchived": false,
   "versionId": "d70e7565-0083-4e17-b9aa-30247071b2e2",
-  "versionCounter": 4,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -659,17 +656,6 @@
       "role": "workflow:owner",
       "workflowId": "WAB7tCTJSUilOp07",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T09:49:01.918Z",
       "updatedAt": "2026-10-26T09:49:01.918Z"
     }
@@ -1310,16 +1296,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T22:43:45.016Z",
-    "updatedAt": "2026-10-29T22:43:45.016Z",
-    "workflowPublishHistory": [
-      {
-        "id": 196,
-        "workflowId": "WAB7tCTJSUilOp07",
-        "versionId": "d70e7565-0083-4e17-b9aa-30247071b2e2",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T22:43:45.212Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T22:43:45.016Z"
   }
 }

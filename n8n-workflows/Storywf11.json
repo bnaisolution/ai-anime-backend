@@ -1,15 +1,12 @@
 {
   "id": "PFXwsrQDk9nSIkRY",
   "name": "Storywf11",
-  "description": "WF-11 QC Gate: Validates audio, video, and script quality before approval.",
   "active": true,
   "activeVersionId": "1f221f3c-b600-443a-8130-9eb6fc5386b7",
   "createdAt": "2026-10-26T10:07:34.388Z",
   "updatedAt": "2026-10-26T10:08:28.672Z",
   "isArchived": false,
   "versionId": "1f221f3c-b600-443a-8130-9eb6fc5386b7",
-  "versionCounter": 2,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -710,17 +707,6 @@
       "role": "workflow:owner",
       "workflowId": "PFXwsrQDk9nSIkRY",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T10:07:34.391Z",
       "updatedAt": "2026-10-26T10:07:34.391Z"
     }
@@ -1412,16 +1398,6 @@
     "description": "",
     "autosaved": true,
     "createdAt": "2026-10-26T10:07:54.925Z",
-    "updatedAt": "2026-10-26T10:08:00.000Z",
-    "workflowPublishHistory": [
-      {
-        "id": 129,
-        "workflowId": "PFXwsrQDk9nSIkRY",
-        "versionId": "1f221f3c-b600-443a-8130-9eb6fc5386b7",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-26T10:08:00.809Z"
-      }
-    ]
+    "updatedAt": "2026-10-26T10:08:00.000Z"
   }
 }

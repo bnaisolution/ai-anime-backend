@@ -1,15 +1,12 @@
 {
   "id": "MrWrz58aRUVTzpLr",
   "name": "Storywf08",
-  "description": "WF-08 Analytics: Fetches views/likes and generates AI feedback for future episodes.",
   "active": true,
   "activeVersionId": "a5977563-84c8-463c-b438-7393f9e27b70",
   "createdAt": "2026-10-26T09:55:21.702Z",
   "updatedAt": "2026-10-29T21:21:32.590Z",
   "isArchived": false,
   "versionId": "a5977563-84c8-463c-b438-7393f9e27b70",
-  "versionCounter": 4,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -845,17 +842,6 @@
       "role": "workflow:owner",
       "workflowId": "MrWrz58aRUVTzpLr",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T09:55:21.706Z",
       "updatedAt": "2026-10-26T09:55:21.706Z"
     }
@@ -1682,16 +1668,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T21:21:32.595Z",
-    "updatedAt": "2026-10-29T21:21:32.595Z",
-    "workflowPublishHistory": [
-      {
-        "id": 166,
-        "workflowId": "MrWrz58aRUVTzpLr",
-        "versionId": "a5977563-84c8-463c-b438-7393f9e27b70",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T21:21:32.767Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T21:21:32.595Z"
   }
 }

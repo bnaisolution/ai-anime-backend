@@ -1,15 +1,12 @@
 {
   "id": "IfZyvmWlEijJ6Ccj",
   "name": "storywf03",
-  "description": "WF-03 Production Pipeline: Handles image generation, TTS, motion, and CPU FFmpeg mixing.",
   "active": true,
   "activeVersionId": "d9ca6d40-8791-4efb-8f4d-2a61f06720d4",
   "createdAt": "2026-10-26T07:42:34.214Z",
   "updatedAt": "2026-10-29T21:00:24.583Z",
   "isArchived": false,
   "versionId": "d9ca6d40-8791-4efb-8f4d-2a61f06720d4",
-  "versionCounter": 3,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -1476,17 +1473,6 @@
       "role": "workflow:owner",
       "workflowId": "IfZyvmWlEijJ6Ccj",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T07:42:34.218Z",
       "updatedAt": "2026-10-26T07:42:34.218Z"
     }
@@ -2944,16 +2930,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T21:00:24.596Z",
-    "updatedAt": "2026-10-29T21:00:24.596Z",
-    "workflowPublishHistory": [
-      {
-        "id": 142,
-        "workflowId": "IfZyvmWlEijJ6Ccj",
-        "versionId": "d9ca6d40-8791-4efb-8f4d-2a61f06720d4",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T21:00:24.779Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T21:00:24.596Z"
   }
 }

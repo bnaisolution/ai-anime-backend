@@ -1,15 +1,12 @@
 {
   "id": "y5DW83fQjvyrzE98",
   "name": "StoryWf12",
-  "description": "WF-12 Quota Governor: Tracks API/GPU usage and blocks requests if limits are exceeded.",
   "active": true,
   "activeVersionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
   "createdAt": "2026-10-26T10:10:44.896Z",
   "updatedAt": "2026-10-26T10:11:29.447Z",
   "isArchived": false,
   "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
-  "versionCounter": 2,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -308,17 +305,6 @@
       "role": "workflow:owner",
       "workflowId": "y5DW83fQjvyrzE98",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T10:10:44.899Z",
       "updatedAt": "2026-10-26T10:10:44.899Z"
     }
@@ -608,32 +594,6 @@
     "description": null,
     "autosaved": true,
     "createdAt": "2026-10-26T10:10:52.595Z",
-    "updatedAt": "2026-10-26T10:14:50.000Z",
-    "workflowPublishHistory": [
-      {
-        "id": 131,
-        "workflowId": "y5DW83fQjvyrzE98",
-        "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-26T10:14:43.351Z"
-      },
-      {
-        "id": 132,
-        "workflowId": "y5DW83fQjvyrzE98",
-        "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
-        "event": "deactivated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-26T10:14:50.940Z"
-      },
-      {
-        "id": 133,
-        "workflowId": "y5DW83fQjvyrzE98",
-        "versionId": "2ebc0a69-bdae-47b0-a0dd-9971fbcf65d7",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-26T10:14:50.941Z"
-      }
-    ]
+    "updatedAt": "2026-10-26T10:14:50.000Z"
   }
 }

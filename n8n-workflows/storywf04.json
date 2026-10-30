@@ -1,15 +1,12 @@
 {
   "id": "8q9tF3VE0mLUZQfa",
   "name": "storywf04",
-  "description": "WF-04 Admin & Governance: Handles manual reviews, voice changes, and system status.",
   "active": true,
   "activeVersionId": "dbecaad7-6444-4e0c-ac50-33ad54637bcd",
   "createdAt": "2026-10-26T07:50:44.585Z",
   "updatedAt": "2026-10-29T21:00:24.964Z",
   "isArchived": false,
   "versionId": "dbecaad7-6444-4e0c-ac50-33ad54637bcd",
-  "versionCounter": 3,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -1509,17 +1506,6 @@
       "role": "workflow:owner",
       "workflowId": "8q9tF3VE0mLUZQfa",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T07:50:44.588Z",
       "updatedAt": "2026-10-26T07:50:44.588Z"
     }
@@ -3010,16 +2996,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T21:00:24.978Z",
-    "updatedAt": "2026-10-29T21:00:24.978Z",
-    "workflowPublishHistory": [
-      {
-        "id": 144,
-        "workflowId": "8q9tF3VE0mLUZQfa",
-        "versionId": "dbecaad7-6444-4e0c-ac50-33ad54637bcd",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T21:00:25.177Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T21:00:24.978Z"
   }
 }

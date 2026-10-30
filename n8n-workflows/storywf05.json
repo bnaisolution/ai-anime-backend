@@ -1,15 +1,12 @@
 {
   "id": "k7HsOfo7Veyt8Huk",
   "name": "storywf05",
-  "description": "WF-05 Vision Pipeline: Extracts Visual DNA from image, audio, or YouTube links.",
   "active": true,
   "activeVersionId": "24e90c57-9b29-4a42-ab48-f99928939cfc",
   "createdAt": "2026-10-26T09:41:02.086Z",
   "updatedAt": "2026-10-29T21:00:25.337Z",
   "isArchived": false,
   "versionId": "24e90c57-9b29-4a42-ab48-f99928939cfc",
-  "versionCounter": 3,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -623,17 +620,6 @@
       "role": "workflow:owner",
       "workflowId": "k7HsOfo7Veyt8Huk",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T09:41:02.111Z",
       "updatedAt": "2026-10-26T09:41:02.111Z"
     }
@@ -1238,16 +1224,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T21:00:25.342Z",
-    "updatedAt": "2026-10-29T21:00:25.342Z",
-    "workflowPublishHistory": [
-      {
-        "id": 146,
-        "workflowId": "k7HsOfo7Veyt8Huk",
-        "versionId": "24e90c57-9b29-4a42-ab48-f99928939cfc",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T21:00:25.538Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T21:00:25.342Z"
   }
 }

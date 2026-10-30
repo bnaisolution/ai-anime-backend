@@ -1,15 +1,12 @@
 {
   "id": "zvw63UrbObZhFUiW",
   "name": "Storywf07",
-  "description": "WF-07 Publisher: Uploads and publishes final video to YouTube, IG, and Telegram.",
   "active": true,
   "activeVersionId": "1ecaafa8-8252-4560-bbad-d391047c7484",
   "createdAt": "2026-10-26T09:50:49.973Z",
   "updatedAt": "2026-10-29T21:21:32.230Z",
   "isArchived": false,
   "versionId": "1ecaafa8-8252-4560-bbad-d391047c7484",
-  "versionCounter": 5,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -1067,17 +1064,6 @@
       "role": "workflow:owner",
       "workflowId": "zvw63UrbObZhFUiW",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T09:50:49.976Z",
       "updatedAt": "2026-10-26T09:50:49.976Z"
     }
@@ -2126,16 +2112,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T21:21:32.240Z",
-    "updatedAt": "2026-10-29T21:21:32.240Z",
-    "workflowPublishHistory": [
-      {
-        "id": 164,
-        "workflowId": "zvw63UrbObZhFUiW",
-        "versionId": "1ecaafa8-8252-4560-bbad-d391047c7484",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T21:21:32.430Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T21:21:32.240Z"
   }
 }

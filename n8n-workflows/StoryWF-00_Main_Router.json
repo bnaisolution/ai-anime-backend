@@ -1,15 +1,12 @@
 {
   "id": "U4pLz7pXmG2OqXlt",
   "name": "StoryWF-00: Main Router",
-  "description": "Main Router: Classifies user commands and dispatches to correct sub-workflows.",
   "active": true,
   "activeVersionId": "da735947-c87d-4d82-bc8d-32d8617a684e",
   "createdAt": "2026-10-26T06:11:10.044Z",
   "updatedAt": "2026-10-29T22:43:44.232Z",
   "isArchived": false,
   "versionId": "da735947-c87d-4d82-bc8d-32d8617a684e",
-  "versionCounter": 12,
-  "sourceWorkflowId": null,
   "triggerCount": 2,
   "nodes": [
     {
@@ -1258,17 +1255,6 @@
       "role": "workflow:owner",
       "workflowId": "U4pLz7pXmG2OqXlt",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T06:11:10.048Z",
       "updatedAt": "2026-10-26T06:11:10.048Z"
     }
@@ -2508,16 +2494,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T22:43:44.236Z",
-    "updatedAt": "2026-10-29T22:43:44.236Z",
-    "workflowPublishHistory": [
-      {
-        "id": 194,
-        "workflowId": "U4pLz7pXmG2OqXlt",
-        "versionId": "da735947-c87d-4d82-bc8d-32d8617a684e",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T22:43:44.822Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T22:43:44.236Z"
   }
 }

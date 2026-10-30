@@ -1,15 +1,12 @@
 {
   "id": "gT1c0Hpvrwyf9YS6",
   "name": "storywf09",
-  "description": "WF-09 Canon Engine: Enforces locked facts and checks character knowledge graphs.",
   "active": true,
   "activeVersionId": "7957838a-7ce7-4a9f-b61e-65d45eefde1c",
   "createdAt": "2026-10-26T09:59:41.873Z",
   "updatedAt": "2026-10-29T21:21:32.930Z",
   "isArchived": false,
   "versionId": "7957838a-7ce7-4a9f-b61e-65d45eefde1c",
-  "versionCounter": 4,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -556,17 +553,6 @@
       "role": "workflow:owner",
       "workflowId": "gT1c0Hpvrwyf9YS6",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T09:59:41.877Z",
       "updatedAt": "2026-10-26T09:59:41.877Z"
     }
@@ -1104,16 +1090,6 @@
     "description": null,
     "autosaved": false,
     "createdAt": "2026-10-29T21:21:32.937Z",
-    "updatedAt": "2026-10-29T21:21:32.937Z",
-    "workflowPublishHistory": [
-      {
-        "id": 168,
-        "workflowId": "gT1c0Hpvrwyf9YS6",
-        "versionId": "7957838a-7ce7-4a9f-b61e-65d45eefde1c",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-29T21:21:33.084Z"
-      }
-    ]
+    "updatedAt": "2026-10-29T21:21:32.937Z"
   }
 }

@@ -1,15 +1,12 @@
 {
   "id": "swOEbQV3iNUNmMwu",
   "name": "StoryWf10",
-  "description": "WF-10 State Machine: Manages episode state transitions (e.g., DRAFT to MIXED).",
   "active": true,
   "activeVersionId": "dbe30d8b-e07e-4741-8f4f-dfd65b970b54",
   "createdAt": "2026-10-26T10:05:11.836Z",
   "updatedAt": "2026-10-26T10:05:58.512Z",
   "isArchived": false,
   "versionId": "dbe30d8b-e07e-4741-8f4f-dfd65b970b54",
-  "versionCounter": 1,
-  "sourceWorkflowId": null,
   "triggerCount": 0,
   "nodes": [
     {
@@ -609,17 +606,6 @@
       "role": "workflow:owner",
       "workflowId": "swOEbQV3iNUNmMwu",
       "projectId": "DHmXIxR6TKeJcd0d",
-      "project": {
-        "id": "DHmXIxR6TKeJcd0d",
-        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
-        "type": "personal",
-        "icon": null,
-        "description": null,
-        "customTelemetryTags": [],
-        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-17T06:30:12.506Z",
-        "updatedAt": "2026-10-17T06:52:24.955Z"
-      },
       "createdAt": "2026-10-26T10:05:11.838Z",
       "updatedAt": "2026-10-26T10:05:11.838Z"
     }
@@ -1210,16 +1196,6 @@
     "description": "",
     "autosaved": true,
     "createdAt": "2026-10-26T10:05:11.840Z",
-    "updatedAt": "2026-10-26T10:06:03.000Z",
-    "workflowPublishHistory": [
-      {
-        "id": 128,
-        "workflowId": "swOEbQV3iNUNmMwu",
-        "versionId": "dbe30d8b-e07e-4741-8f4f-dfd65b970b54",
-        "event": "activated",
-        "userId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f",
-        "createdAt": "2026-10-26T10:06:03.589Z"
-      }
-    ]
+    "updatedAt": "2026-10-26T10:06:03.000Z"
   }
 }
