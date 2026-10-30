@@ -18,7 +18,9 @@
         0,
         432
       ],
-      "parameters": {}
+      "parameters": {
+        "inputSource": "passthrough"
+      }
     },
     {
       "id": "6599afb4-e2c0-4efc-998e-faa92417756c",
@@ -31,7 +33,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = $input.item.json || {};\nconst dispatch = raw.wf03_dispatch_payload || raw;\n\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst mode = 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || 0);\n\nif (!project_id) {\n  throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn {\n  json: { project_id, episode_no, season_no, mode, scene_count, execution_id: $execution.id }\n};"
+        "jsCode": "const raw = $input.item.json || {};\nconst dispatch = raw.wf03_dispatch_payload || raw.payload || raw;\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst intent = (dispatch.intent || raw.intent || 'SAVE_TO_PROJECT').toString().toUpperCase().trim();\nconst isQuickAdHoc = ['QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO'].includes(intent) && raw.mode !== 'SAVE';\nconst mode = isQuickAdHoc ? 'QUICK' : 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || (isQuickAdHoc ? 1 : 0));\nconst user_infrastructure = dispatch.user_infrastructure || raw.user_infrastructure || {};\nconst project_style = dispatch.project_style || raw.project_style || { visual_style: 'ANIME' };\nconst visual_style = (project_style.visual_style || dispatch.visual_style || 'ANIME').toString().toUpperCase().trim();\nconst style_prefix = visual_style === 'REALISTIC'\n  ? 'Photorealistic cinematic film still, 8k RAW live-action photography, ARRI Alexa 65, hyper-detailed realistic skin texture, natural volumetric lighting'\n  : 'Masterpiece cel-shaded anime key visual, ufotable and Makoto Shinkai anime aesthetic, crisp anime lineart, vibrant dynamic anime lighting';\nconst negative_prompt = visual_style === 'REALISTIC'\n  ? 'anime, cartoon, cel-shaded, 2d illustration, drawing, sketch, lowres, bad anatomy, deformed'\n  : 'photorealistic, 3d render, live action, real photo, blurry, lowres, bad anatomy, extra fingers';\n\nif (!project_id) throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n\nreturn {\n  json: {\n    ...raw, project_id, episode_no, episode_number: episode_no, season_no, intent, mode, scene_count,\n    prompt: dispatch.prompt || raw.user_prompt || raw.userPrompt || raw.rawText || '',\n    media_type: dispatch.media_type || (intent === 'QUICK_GENERATE_VIDEO' ? 'VIDEO' : 'IMAGE'),\n    user_infrastructure, project_style: { ...project_style, visual_style }, visual_style, style_prefix, negative_prompt, execution_id: $execution.id\n  }\n};\n"
       }
     },
     {
@@ -79,7 +81,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.episode_no }}&order=scene_order.asc",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -112,7 +114,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.episode_no }}&order=scene_order.asc",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -145,7 +147,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -178,7 +180,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -211,7 +213,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -357,7 +359,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.COLAB_WORKER_URL) }}/v1/generate-image",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/generate-image",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -386,7 +388,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const sceneCtx = $('If Image Generation Needed').item.json;\nconst workerResp = $input.item.json || {};\nlet resolvedImageUrl = sceneCtx.image_url;\nlet fileSizeBytes = Number(workerResp.file_size_bytes || workerResp.size || 0);\n\nif (sceneCtx.run_image_worker) {\n  resolvedImageUrl = workerResp.image_url || workerResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_img.png`;\n  if (!fileSizeBytes || fileSizeBytes <= 0) { fileSizeBytes = 1048576; }\n}\n\nif (!resolvedImageUrl || fileSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} image_url missing or zero file size.`);\n}\n\nconst nextCheckpoint = ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'IMAGE_READY';\n\nreturn { json: { ...sceneCtx, image_url: resolvedImageUrl, image_file_size_bytes: fileSizeBytes, image_ready_at: $now.toISOString(), checkpoint_stage: nextCheckpoint } };"
+        "jsCode": "const sceneCtx = $('If Image Generation Needed').first().json;\nconst workerResp = $input.item.json || {};\nlet resolvedImageUrl = sceneCtx.image_url;\nlet fileSizeBytes = Number(workerResp.file_size_bytes || workerResp.size || 0);\n\nif (sceneCtx.run_image_worker) {\n  resolvedImageUrl = workerResp.image_url || workerResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_img.png`;\n  if (!fileSizeBytes || fileSizeBytes <= 0) { fileSizeBytes = 1048576; }\n}\n\nif (!resolvedImageUrl || fileSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} image_url missing or zero file size.`);\n}\n\nconst nextCheckpoint = ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'IMAGE_READY';\n\nreturn { json: { ...sceneCtx, image_url: resolvedImageUrl, image_file_size_bytes: fileSizeBytes, image_ready_at: $now.toISOString(), checkpoint_stage: nextCheckpoint } };"
       }
     },
     {
@@ -441,7 +443,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const imgCtx = $('Validate Image Integrity & Checkpoint').item.json;\nreturn { json: imgCtx };"
+        "jsCode": "const imgCtx = $('Validate Image Integrity & Checkpoint').first().json;\nreturn { json: imgCtx };"
       }
     },
     {
@@ -476,7 +478,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.COLAB_WORKER_URL)) }}/v1/tts/svara",
+        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL))) }}/v1/tts/svara",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -525,7 +527,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_FALLBACK_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/tts/supertonic",
+        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_FALLBACK_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/tts/supertonic",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -537,7 +539,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Scene Context After Image').item.json.project_id, episode_no: $('Restore Scene Context After Image').item.json.episode_no, scene_order: $('Restore Scene Context After Image').item.json.scene_order, provider: 'Supertonic TTS', voice_text: $('Restore Scene Context After Image').item.json.voice_text, voice_id: $('Restore Scene Context After Image').item.json.voice_id, emotion: $('Restore Scene Context After Image').item.json.emotion, pitch_multiplier: $('Restore Scene Context After Image').item.json.pitch_multiplier, rate_multiplier: $('Restore Scene Context After Image').item.json.rate_multiplier }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Scene Context After Image').first().json.project_id, episode_no: $('Restore Scene Context After Image').first().json.episode_no, scene_order: $('Restore Scene Context After Image').first().json.scene_order, provider: 'Supertonic TTS', voice_text: $('Restore Scene Context After Image').first().json.voice_text, voice_id: $('Restore Scene Context After Image').first().json.voice_id, emotion: $('Restore Scene Context After Image').first().json.emotion, pitch_multiplier: $('Restore Scene Context After Image').first().json.pitch_multiplier, rate_multiplier: $('Restore Scene Context After Image').first().json.rate_multiplier }) }}",
         "options": {
           "timeout": 30000
         }
@@ -554,7 +556,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const sceneCtx = $('Restore Scene Context After Image').item.json;\nconst ttsResp = $input.item.json || {};\nlet resolvedAudioUrl = sceneCtx.audio_url;\nlet audioSizeBytes = Number(ttsResp.file_size_bytes || ttsResp.size || 0);\n\nif (sceneCtx.run_tts_worker) {\n  resolvedAudioUrl = ttsResp.audio_url || ttsResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_voice.wav`;\n  if (!audioSizeBytes || audioSizeBytes <= 0) { audioSizeBytes = 524288; }\n}\n\nif (sceneCtx.needs_voice && (!resolvedAudioUrl || audioSizeBytes <= 0)) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} audio_url missing or zero bytes.`);\n}\n\nconst nextCheckpoint = ['VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'AUDIO_READY';\n\nreturn { json: { ...sceneCtx, audio_url: resolvedAudioUrl, audio_file_size_bytes: audioSizeBytes, checkpoint_stage: nextCheckpoint } };"
+        "jsCode": "const sceneCtx = $('Restore Scene Context After Image').first().json;\nconst ttsResp = $input.item.json || {};\nlet resolvedAudioUrl = sceneCtx.audio_url;\nlet audioSizeBytes = Number(ttsResp.file_size_bytes || ttsResp.size || 0);\n\nif (sceneCtx.run_tts_worker) {\n  resolvedAudioUrl = ttsResp.audio_url || ttsResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_voice.wav`;\n  if (!audioSizeBytes || audioSizeBytes <= 0) { audioSizeBytes = 524288; }\n}\n\nif (sceneCtx.needs_voice && (!resolvedAudioUrl || audioSizeBytes <= 0)) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} audio_url missing or zero bytes.`);\n}\n\nconst nextCheckpoint = ['VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'AUDIO_READY';\n\nreturn { json: { ...sceneCtx, audio_url: resolvedAudioUrl, audio_file_size_bytes: audioSizeBytes, checkpoint_stage: nextCheckpoint } };"
       }
     },
     {
@@ -609,7 +611,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const audioCtx = $('Validate Audio Integrity & Checkpoint').item.json;\nreturn { json: audioCtx };"
+        "jsCode": "const audioCtx = $('Validate Audio Integrity & Checkpoint').first().json;\nreturn { json: audioCtx };"
       }
     },
     {
@@ -644,7 +646,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/gpu/video-assembly-line",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/gpu/video-assembly-line",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -673,7 +675,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const sceneCtx = $('Restore Scene Context After Audio').item.json;\nconst gpuResp = $input.item.json || {};\nconst needsGpuPass = Boolean(sceneCtx.run_animatediff || sceneCtx.run_musetalk || sceneCtx.run_liveportrait);\nlet resolvedVideoUrl = sceneCtx.video_url;\nlet videoSizeBytes = Number(gpuResp.file_size_bytes || gpuResp.size || 0);\n\nif (needsGpuPass) {\n  resolvedVideoUrl = gpuResp.video_url || gpuResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_gpu.mp4`;\n  if (!videoSizeBytes || videoSizeBytes <= 0) { videoSizeBytes = 4194304; }\n} else if (!resolvedVideoUrl) {\n  resolvedVideoUrl = sceneCtx.image_url;\n  videoSizeBytes = Number(sceneCtx.image_file_size_bytes || 1048576);\n}\n\nif (!resolvedVideoUrl || videoSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} video_url missing or zero bytes.`);\n}\n\nreturn { json: { ...sceneCtx, video_url: resolvedVideoUrl, video_file_size_bytes: videoSizeBytes, video_ready_at: $now.toISOString(), checkpoint_stage: sceneCtx.checkpoint_stage === 'MIXED' ? 'MIXED' : 'VIDEO_READY' } };"
+        "jsCode": "const sceneCtx = $('Restore Scene Context After Audio').first().json;\nconst gpuResp = $input.item.json || {};\nconst needsGpuPass = Boolean(sceneCtx.run_animatediff || sceneCtx.run_musetalk || sceneCtx.run_liveportrait);\nlet resolvedVideoUrl = sceneCtx.video_url;\nlet videoSizeBytes = Number(gpuResp.file_size_bytes || gpuResp.size || 0);\n\nif (needsGpuPass) {\n  resolvedVideoUrl = gpuResp.video_url || gpuResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_gpu.mp4`;\n  if (!videoSizeBytes || videoSizeBytes <= 0) { videoSizeBytes = 4194304; }\n} else if (!resolvedVideoUrl) {\n  resolvedVideoUrl = sceneCtx.image_url;\n  videoSizeBytes = Number(sceneCtx.image_file_size_bytes || 1048576);\n}\n\nif (!resolvedVideoUrl || videoSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} video_url missing or zero bytes.`);\n}\n\nreturn { json: { ...sceneCtx, video_url: resolvedVideoUrl, video_file_size_bytes: videoSizeBytes, video_ready_at: $now.toISOString(), checkpoint_stage: sceneCtx.checkpoint_stage === 'MIXED' ? 'MIXED' : 'VIDEO_READY' } };"
       }
     },
     {
@@ -728,7 +730,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const vidCtx = $('Validate Video Integrity & Checkpoint').item.json;\nreturn { json: vidCtx };"
+        "jsCode": "const vidCtx = $('Validate Video Integrity & Checkpoint').first().json;\nreturn { json: vidCtx };"
       }
     },
     {
@@ -797,7 +799,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.ffmpeg.worker_url || $env.FFMPEG_WORKER_URL) }}/v1/ffmpeg/render-episode",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.ffmpeg?.worker_url || $env.FFMPEG_WORKER_URL) }}/v1/ffmpeg/render-episode",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -809,7 +811,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').item.json.ffmpeg_cpu_payload) }}",
+        "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload) }}",
         "options": {
           "timeout": 180000
         }
@@ -826,7 +828,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const mergeCtx = $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').item.json;\nconst ffmpegResp = $input.item.json || {};\nconst finalVideoUrl = ffmpegResp.final_video_url || ffmpegResp.output_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${mergeCtx.project_id}/season_${mergeCtx.season_no}_ep_${mergeCtx.episode_no}_master.mp4`;\nconst finalFileSize = Number(ffmpegResp.file_size_bytes || 52428800);\n\nif (!finalVideoUrl || finalFileSize <= 0) {\n  throw new Error('Rule 7/29 Final Episode Verification Failed: Output video URL missing or zero file size.');\n}\n\nconst outputMediaObject = { master_video_url: finalVideoUrl, file_size_bytes: finalFileSize, loudness_lufs: -14.0, bgm_ducking_db: -8.0, crossfade_ms: 500, subtitles_burned: true, rendered_at: $now.toISOString() };\nreturn { json: { ...mergeCtx, final_video_url: finalVideoUrl, output_media: outputMediaObject } };"
+        "jsCode": "const mergeCtx = $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json;\nconst ffmpegResp = $input.item.json || {};\nconst finalVideoUrl = ffmpegResp.final_video_url || ffmpegResp.output_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${mergeCtx.project_id}/season_${mergeCtx.season_no}_ep_${mergeCtx.episode_no}_master.mp4`;\nconst finalFileSize = Number(ffmpegResp.file_size_bytes || 52428800);\n\nif (!finalVideoUrl || finalFileSize <= 0) {\n  throw new Error('Rule 7/29 Final Episode Verification Failed: Output video URL missing or zero file size.');\n}\n\nconst outputMediaObject = { master_video_url: finalVideoUrl, file_size_bytes: finalFileSize, loudness_lufs: -14.0, bgm_ducking_db: -8.0, crossfade_ms: 500, subtitles_burned: true, rendered_at: $now.toISOString() };\nreturn { json: { ...mergeCtx, final_video_url: finalVideoUrl, output_media: outputMediaObject } };"
       }
     },
     {
@@ -883,7 +885,7 @@
       ],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.episode_no }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -907,7 +909,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ output_media: $('Verify Final Master Video & Prepare DB Finalization').item.json.output_media, current_state: 'MIXED', qc_status: 'PENDING' }) }}",
+        "jsonBody": "={{ JSON.stringify({ output_media: $('Verify Final Master Video & Prepare DB Finalization').first().json.output_media, current_state: 'MIXED', qc_status: 'PENDING' }) }}",
         "options": {}
       }
     },
@@ -924,7 +926,7 @@
       ],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.episode_no }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -989,7 +991,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }) }}",
         "options": {}
       }
     },
@@ -1004,7 +1006,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const finalState = $('Verify Final Master Video & Prepare DB Finalization').item.json;\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `\ud83c\udfa5 **WF-03: Episode ${finalState.episode_no} Production & FFmpeg Mixing Complete!**`,\n  `\ud83d\udcc1 **Project ID:** \\`${finalState.project_id}\\` | **State:** \\`MIXED\\` | **QC Status:** \\`PENDING\\``,\n  `\ud83d\udcca **Production & Cache Metrics:**`,\n  `\u2022 **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `\u2022 **Reused Cache Assets (Rule 9):** ${totalReused} (\\`Scene Library: ${finalState.image_cache_hits}\\`, \\`Motion Library: ${finalState.motion_cache_hits}\\`)`,\n  `\u2022 **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `\ud83c\udfb5 **Part M 3-Tier Audio & Part N CPU FFmpeg Mastering:**`,\n  `\u2022 **BGM Tier 1 (Exact):** ${finalState.bgm_tier_summary.tier_1_exact} | **Tier 2 (Category):** ${finalState.bgm_tier_summary.tier_2_category} | **Tier 3 (CC0 Default):** ${finalState.bgm_tier_summary.tier_3_default_cc0}`,\n  `\u2022 **Total Fallback Tracks Used:** ${totalFallbacks}`,\n  `\u2022 **Audio Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `\ud83d\udd17 **Final Master Video URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
+        "jsCode": "const finalState = $('Verify Final Master Video & Prepare DB Finalization').first().json;\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `🎥 **WF-03: Episode ${finalState.episode_no} Production & FFmpeg Mixing Complete!**`,\n  `📁 **Project ID:** \\`${finalState.project_id}\\` | **State:** \\`MIXED\\` | **QC Status:** \\`PENDING\\``,\n  `📊 **Production & Cache Metrics:**`,\n  `• **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `• **Reused Cache Assets (Rule 9):** ${totalReused} (\\`Scene Library: ${finalState.image_cache_hits}\\`, \\`Motion Library: ${finalState.motion_cache_hits}\\`)`,\n  `• **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `🎵 **Part M 3-Tier Audio & Part N CPU FFmpeg Mastering:**`,\n  `• **BGM Tier 1 (Exact):** ${finalState.bgm_tier_summary.tier_1_exact} | **Tier 2 (Category):** ${finalState.bgm_tier_summary.tier_2_category} | **Tier 3 (CC0 Default):** ${finalState.bgm_tier_summary.tier_3_default_cc0}`,\n  `• **Total Fallback Tracks Used:** ${totalFallbacks}`,\n  `• **Audio Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `🔗 **Final Master Video URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
       }
     }
   ],
@@ -1490,7 +1492,9 @@
           0,
           432
         ],
-        "parameters": {}
+        "parameters": {
+          "inputSource": "passthrough"
+        }
       },
       {
         "id": "6599afb4-e2c0-4efc-998e-faa92417756c",
@@ -1503,7 +1507,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const raw = $input.item.json || {};\nconst dispatch = raw.wf03_dispatch_payload || raw;\n\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst mode = 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || 0);\n\nif (!project_id) {\n  throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn {\n  json: { project_id, episode_no, season_no, mode, scene_count, execution_id: $execution.id }\n};"
+          "jsCode": "const raw = $input.item.json || {};\nconst dispatch = raw.wf03_dispatch_payload || raw.payload || raw;\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst intent = (dispatch.intent || raw.intent || 'SAVE_TO_PROJECT').toString().toUpperCase().trim();\nconst isQuickAdHoc = ['QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO'].includes(intent) && raw.mode !== 'SAVE';\nconst mode = isQuickAdHoc ? 'QUICK' : 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || (isQuickAdHoc ? 1 : 0));\nconst user_infrastructure = dispatch.user_infrastructure || raw.user_infrastructure || {};\nconst project_style = dispatch.project_style || raw.project_style || { visual_style: 'ANIME' };\nconst visual_style = (project_style.visual_style || dispatch.visual_style || 'ANIME').toString().toUpperCase().trim();\nconst style_prefix = visual_style === 'REALISTIC'\n  ? 'Photorealistic cinematic film still, 8k RAW live-action photography, ARRI Alexa 65, hyper-detailed realistic skin texture, natural volumetric lighting'\n  : 'Masterpiece cel-shaded anime key visual, ufotable and Makoto Shinkai anime aesthetic, crisp anime lineart, vibrant dynamic anime lighting';\nconst negative_prompt = visual_style === 'REALISTIC'\n  ? 'anime, cartoon, cel-shaded, 2d illustration, drawing, sketch, lowres, bad anatomy, deformed'\n  : 'photorealistic, 3d render, live action, real photo, blurry, lowres, bad anatomy, extra fingers';\n\nif (!project_id) throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n\nreturn {\n  json: {\n    ...raw, project_id, episode_no, episode_number: episode_no, season_no, intent, mode, scene_count,\n    prompt: dispatch.prompt || raw.user_prompt || raw.userPrompt || raw.rawText || '',\n    media_type: dispatch.media_type || (intent === 'QUICK_GENERATE_VIDEO' ? 'VIDEO' : 'IMAGE'),\n    user_infrastructure, project_style: { ...project_style, visual_style }, visual_style, style_prefix, negative_prompt, execution_id: $execution.id\n  }\n};\n"
         }
       },
       {
@@ -1551,7 +1555,7 @@
           432
         ],
         "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.episode_no }}&order=scene_order.asc",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -1584,7 +1588,7 @@
           432
         ],
         "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.episode_no }}&order=scene_order.asc",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -1617,7 +1621,7 @@
           432
         ],
         "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -1650,7 +1654,7 @@
           432
         ],
         "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -1683,7 +1687,7 @@
           432
         ],
         "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -1829,7 +1833,7 @@
         ],
         "parameters": {
           "method": "POST",
-          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.COLAB_WORKER_URL) }}/v1/generate-image",
+          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/generate-image",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -1858,7 +1862,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const sceneCtx = $('If Image Generation Needed').item.json;\nconst workerResp = $input.item.json || {};\nlet resolvedImageUrl = sceneCtx.image_url;\nlet fileSizeBytes = Number(workerResp.file_size_bytes || workerResp.size || 0);\n\nif (sceneCtx.run_image_worker) {\n  resolvedImageUrl = workerResp.image_url || workerResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_img.png`;\n  if (!fileSizeBytes || fileSizeBytes <= 0) { fileSizeBytes = 1048576; }\n}\n\nif (!resolvedImageUrl || fileSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} image_url missing or zero file size.`);\n}\n\nconst nextCheckpoint = ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'IMAGE_READY';\n\nreturn { json: { ...sceneCtx, image_url: resolvedImageUrl, image_file_size_bytes: fileSizeBytes, image_ready_at: $now.toISOString(), checkpoint_stage: nextCheckpoint } };"
+          "jsCode": "const sceneCtx = $('If Image Generation Needed').first().json;\nconst workerResp = $input.item.json || {};\nlet resolvedImageUrl = sceneCtx.image_url;\nlet fileSizeBytes = Number(workerResp.file_size_bytes || workerResp.size || 0);\n\nif (sceneCtx.run_image_worker) {\n  resolvedImageUrl = workerResp.image_url || workerResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_img.png`;\n  if (!fileSizeBytes || fileSizeBytes <= 0) { fileSizeBytes = 1048576; }\n}\n\nif (!resolvedImageUrl || fileSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} image_url missing or zero file size.`);\n}\n\nconst nextCheckpoint = ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'IMAGE_READY';\n\nreturn { json: { ...sceneCtx, image_url: resolvedImageUrl, image_file_size_bytes: fileSizeBytes, image_ready_at: $now.toISOString(), checkpoint_stage: nextCheckpoint } };"
         }
       },
       {
@@ -1913,7 +1917,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const imgCtx = $('Validate Image Integrity & Checkpoint').item.json;\nreturn { json: imgCtx };"
+          "jsCode": "const imgCtx = $('Validate Image Integrity & Checkpoint').first().json;\nreturn { json: imgCtx };"
         }
       },
       {
@@ -1948,7 +1952,7 @@
         ],
         "parameters": {
           "method": "POST",
-          "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.COLAB_WORKER_URL)) }}/v1/tts/svara",
+          "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL))) }}/v1/tts/svara",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -1997,7 +2001,7 @@
         ],
         "parameters": {
           "method": "POST",
-          "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_FALLBACK_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/tts/supertonic",
+          "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_FALLBACK_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/tts/supertonic",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -2009,7 +2013,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Scene Context After Image').item.json.project_id, episode_no: $('Restore Scene Context After Image').item.json.episode_no, scene_order: $('Restore Scene Context After Image').item.json.scene_order, provider: 'Supertonic TTS', voice_text: $('Restore Scene Context After Image').item.json.voice_text, voice_id: $('Restore Scene Context After Image').item.json.voice_id, emotion: $('Restore Scene Context After Image').item.json.emotion, pitch_multiplier: $('Restore Scene Context After Image').item.json.pitch_multiplier, rate_multiplier: $('Restore Scene Context After Image').item.json.rate_multiplier }) }}",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Scene Context After Image').first().json.project_id, episode_no: $('Restore Scene Context After Image').first().json.episode_no, scene_order: $('Restore Scene Context After Image').first().json.scene_order, provider: 'Supertonic TTS', voice_text: $('Restore Scene Context After Image').first().json.voice_text, voice_id: $('Restore Scene Context After Image').first().json.voice_id, emotion: $('Restore Scene Context After Image').first().json.emotion, pitch_multiplier: $('Restore Scene Context After Image').first().json.pitch_multiplier, rate_multiplier: $('Restore Scene Context After Image').first().json.rate_multiplier }) }}",
           "options": {
             "timeout": 30000
           }
@@ -2026,7 +2030,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const sceneCtx = $('Restore Scene Context After Image').item.json;\nconst ttsResp = $input.item.json || {};\nlet resolvedAudioUrl = sceneCtx.audio_url;\nlet audioSizeBytes = Number(ttsResp.file_size_bytes || ttsResp.size || 0);\n\nif (sceneCtx.run_tts_worker) {\n  resolvedAudioUrl = ttsResp.audio_url || ttsResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_voice.wav`;\n  if (!audioSizeBytes || audioSizeBytes <= 0) { audioSizeBytes = 524288; }\n}\n\nif (sceneCtx.needs_voice && (!resolvedAudioUrl || audioSizeBytes <= 0)) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} audio_url missing or zero bytes.`);\n}\n\nconst nextCheckpoint = ['VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'AUDIO_READY';\n\nreturn { json: { ...sceneCtx, audio_url: resolvedAudioUrl, audio_file_size_bytes: audioSizeBytes, checkpoint_stage: nextCheckpoint } };"
+          "jsCode": "const sceneCtx = $('Restore Scene Context After Image').first().json;\nconst ttsResp = $input.item.json || {};\nlet resolvedAudioUrl = sceneCtx.audio_url;\nlet audioSizeBytes = Number(ttsResp.file_size_bytes || ttsResp.size || 0);\n\nif (sceneCtx.run_tts_worker) {\n  resolvedAudioUrl = ttsResp.audio_url || ttsResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_voice.wav`;\n  if (!audioSizeBytes || audioSizeBytes <= 0) { audioSizeBytes = 524288; }\n}\n\nif (sceneCtx.needs_voice && (!resolvedAudioUrl || audioSizeBytes <= 0)) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} audio_url missing or zero bytes.`);\n}\n\nconst nextCheckpoint = ['VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'AUDIO_READY';\n\nreturn { json: { ...sceneCtx, audio_url: resolvedAudioUrl, audio_file_size_bytes: audioSizeBytes, checkpoint_stage: nextCheckpoint } };"
         }
       },
       {
@@ -2081,7 +2085,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const audioCtx = $('Validate Audio Integrity & Checkpoint').item.json;\nreturn { json: audioCtx };"
+          "jsCode": "const audioCtx = $('Validate Audio Integrity & Checkpoint').first().json;\nreturn { json: audioCtx };"
         }
       },
       {
@@ -2116,7 +2120,7 @@
         ],
         "parameters": {
           "method": "POST",
-          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/gpu/video-assembly-line",
+          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/gpu/video-assembly-line",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -2145,7 +2149,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const sceneCtx = $('Restore Scene Context After Audio').item.json;\nconst gpuResp = $input.item.json || {};\nconst needsGpuPass = Boolean(sceneCtx.run_animatediff || sceneCtx.run_musetalk || sceneCtx.run_liveportrait);\nlet resolvedVideoUrl = sceneCtx.video_url;\nlet videoSizeBytes = Number(gpuResp.file_size_bytes || gpuResp.size || 0);\n\nif (needsGpuPass) {\n  resolvedVideoUrl = gpuResp.video_url || gpuResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_gpu.mp4`;\n  if (!videoSizeBytes || videoSizeBytes <= 0) { videoSizeBytes = 4194304; }\n} else if (!resolvedVideoUrl) {\n  resolvedVideoUrl = sceneCtx.image_url;\n  videoSizeBytes = Number(sceneCtx.image_file_size_bytes || 1048576);\n}\n\nif (!resolvedVideoUrl || videoSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} video_url missing or zero bytes.`);\n}\n\nreturn { json: { ...sceneCtx, video_url: resolvedVideoUrl, video_file_size_bytes: videoSizeBytes, video_ready_at: $now.toISOString(), checkpoint_stage: sceneCtx.checkpoint_stage === 'MIXED' ? 'MIXED' : 'VIDEO_READY' } };"
+          "jsCode": "const sceneCtx = $('Restore Scene Context After Audio').first().json;\nconst gpuResp = $input.item.json || {};\nconst needsGpuPass = Boolean(sceneCtx.run_animatediff || sceneCtx.run_musetalk || sceneCtx.run_liveportrait);\nlet resolvedVideoUrl = sceneCtx.video_url;\nlet videoSizeBytes = Number(gpuResp.file_size_bytes || gpuResp.size || 0);\n\nif (needsGpuPass) {\n  resolvedVideoUrl = gpuResp.video_url || gpuResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_gpu.mp4`;\n  if (!videoSizeBytes || videoSizeBytes <= 0) { videoSizeBytes = 4194304; }\n} else if (!resolvedVideoUrl) {\n  resolvedVideoUrl = sceneCtx.image_url;\n  videoSizeBytes = Number(sceneCtx.image_file_size_bytes || 1048576);\n}\n\nif (!resolvedVideoUrl || videoSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} video_url missing or zero bytes.`);\n}\n\nreturn { json: { ...sceneCtx, video_url: resolvedVideoUrl, video_file_size_bytes: videoSizeBytes, video_ready_at: $now.toISOString(), checkpoint_stage: sceneCtx.checkpoint_stage === 'MIXED' ? 'MIXED' : 'VIDEO_READY' } };"
         }
       },
       {
@@ -2200,7 +2204,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const vidCtx = $('Validate Video Integrity & Checkpoint').item.json;\nreturn { json: vidCtx };"
+          "jsCode": "const vidCtx = $('Validate Video Integrity & Checkpoint').first().json;\nreturn { json: vidCtx };"
         }
       },
       {
@@ -2269,7 +2273,7 @@
         ],
         "parameters": {
           "method": "POST",
-          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.ffmpeg.worker_url || $env.FFMPEG_WORKER_URL) }}/v1/ffmpeg/render-episode",
+          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.ffmpeg?.worker_url || $env.FFMPEG_WORKER_URL) }}/v1/ffmpeg/render-episode",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -2281,7 +2285,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').item.json.ffmpeg_cpu_payload) }}",
+          "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload) }}",
           "options": {
             "timeout": 180000
           }
@@ -2298,7 +2302,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const mergeCtx = $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').item.json;\nconst ffmpegResp = $input.item.json || {};\nconst finalVideoUrl = ffmpegResp.final_video_url || ffmpegResp.output_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${mergeCtx.project_id}/season_${mergeCtx.season_no}_ep_${mergeCtx.episode_no}_master.mp4`;\nconst finalFileSize = Number(ffmpegResp.file_size_bytes || 52428800);\n\nif (!finalVideoUrl || finalFileSize <= 0) {\n  throw new Error('Rule 7/29 Final Episode Verification Failed: Output video URL missing or zero file size.');\n}\n\nconst outputMediaObject = { master_video_url: finalVideoUrl, file_size_bytes: finalFileSize, loudness_lufs: -14.0, bgm_ducking_db: -8.0, crossfade_ms: 500, subtitles_burned: true, rendered_at: $now.toISOString() };\nreturn { json: { ...mergeCtx, final_video_url: finalVideoUrl, output_media: outputMediaObject } };"
+          "jsCode": "const mergeCtx = $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json;\nconst ffmpegResp = $input.item.json || {};\nconst finalVideoUrl = ffmpegResp.final_video_url || ffmpegResp.output_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${mergeCtx.project_id}/season_${mergeCtx.season_no}_ep_${mergeCtx.episode_no}_master.mp4`;\nconst finalFileSize = Number(ffmpegResp.file_size_bytes || 52428800);\n\nif (!finalVideoUrl || finalFileSize <= 0) {\n  throw new Error('Rule 7/29 Final Episode Verification Failed: Output video URL missing or zero file size.');\n}\n\nconst outputMediaObject = { master_video_url: finalVideoUrl, file_size_bytes: finalFileSize, loudness_lufs: -14.0, bgm_ducking_db: -8.0, crossfade_ms: 500, subtitles_burned: true, rendered_at: $now.toISOString() };\nreturn { json: { ...mergeCtx, final_video_url: finalVideoUrl, output_media: outputMediaObject } };"
         }
       },
       {
@@ -2355,7 +2359,7 @@
         ],
         "parameters": {
           "method": "PATCH",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.episode_no }}",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -2379,7 +2383,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ output_media: $('Verify Final Master Video & Prepare DB Finalization').item.json.output_media, current_state: 'MIXED', qc_status: 'PENDING' }) }}",
+          "jsonBody": "={{ JSON.stringify({ output_media: $('Verify Final Master Video & Prepare DB Finalization').first().json.output_media, current_state: 'MIXED', qc_status: 'PENDING' }) }}",
           "options": {}
         }
       },
@@ -2396,7 +2400,7 @@
         ],
         "parameters": {
           "method": "PATCH",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.episode_no }}",
+          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -2461,7 +2465,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }) }}",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }) }}",
           "options": {}
         }
       },
@@ -2476,7 +2480,7 @@
         ],
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const finalState = $('Verify Final Master Video & Prepare DB Finalization').item.json;\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `\ud83c\udfa5 **WF-03: Episode ${finalState.episode_no} Production & FFmpeg Mixing Complete!**`,\n  `\ud83d\udcc1 **Project ID:** \\`${finalState.project_id}\\` | **State:** \\`MIXED\\` | **QC Status:** \\`PENDING\\``,\n  `\ud83d\udcca **Production & Cache Metrics:**`,\n  `\u2022 **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `\u2022 **Reused Cache Assets (Rule 9):** ${totalReused} (\\`Scene Library: ${finalState.image_cache_hits}\\`, \\`Motion Library: ${finalState.motion_cache_hits}\\`)`,\n  `\u2022 **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `\ud83c\udfb5 **Part M 3-Tier Audio & Part N CPU FFmpeg Mastering:**`,\n  `\u2022 **BGM Tier 1 (Exact):** ${finalState.bgm_tier_summary.tier_1_exact} | **Tier 2 (Category):** ${finalState.bgm_tier_summary.tier_2_category} | **Tier 3 (CC0 Default):** ${finalState.bgm_tier_summary.tier_3_default_cc0}`,\n  `\u2022 **Total Fallback Tracks Used:** ${totalFallbacks}`,\n  `\u2022 **Audio Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `\ud83d\udd17 **Final Master Video URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
+          "jsCode": "const finalState = $('Verify Final Master Video & Prepare DB Finalization').first().json;\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `🎥 **WF-03: Episode ${finalState.episode_no} Production & FFmpeg Mixing Complete!**`,\n  `📁 **Project ID:** \\`${finalState.project_id}\\` | **State:** \\`MIXED\\` | **QC Status:** \\`PENDING\\``,\n  `📊 **Production & Cache Metrics:**`,\n  `• **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `• **Reused Cache Assets (Rule 9):** ${totalReused} (\\`Scene Library: ${finalState.image_cache_hits}\\`, \\`Motion Library: ${finalState.motion_cache_hits}\\`)`,\n  `• **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `🎵 **Part M 3-Tier Audio & Part N CPU FFmpeg Mastering:**`,\n  `• **BGM Tier 1 (Exact):** ${finalState.bgm_tier_summary.tier_1_exact} | **Tier 2 (Category):** ${finalState.bgm_tier_summary.tier_2_category} | **Tier 3 (CC0 Default):** ${finalState.bgm_tier_summary.tier_3_default_cc0}`,\n  `• **Total Fallback Tracks Used:** ${totalFallbacks}`,\n  `• **Audio Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `🔗 **Final Master Video URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
         }
       }
     ],

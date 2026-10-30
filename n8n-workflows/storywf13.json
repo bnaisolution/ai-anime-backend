@@ -30,7 +30,9 @@
       ]
     },
     {
-      "parameters": {},
+      "parameters": {
+        "inputSource": "passthrough"
+      },
       "id": "3d08008d-f1b0-40f9-8a1c-ee7c7acb4d0e",
       "name": "When Executed by Another Workflow",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
@@ -178,7 +180,7 @@
         "conditions": {
           "boolean": [
             {
-              "value1": "={{ $('Exponential Backoff & Dead-Letter Math').item.json.dispatch_now }}",
+              "value1": "={{ $('Exponential Backoff & Dead-Letter Math').first().json.dispatch_now }}",
               "value2": true
             }
           ]
@@ -208,7 +210,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Exponential Backoff & Dead-Letter Math').item.json.router_payload) }}",
+        "jsonBody": "={{ JSON.stringify($('Exponential Backoff & Dead-Letter Math').first().json.router_payload) }}",
         "options": {
           "timeout": 30000
         }
@@ -251,7 +253,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Exponential Backoff & Dead-Letter Math').item.json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').item.json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').item.json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').item.json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').item.json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').item.json.next_schedule } }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Exponential Backoff & Dead-Letter Math').first().json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').first().json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').first().json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').first().json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').first().json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').first().json.next_schedule } }) }}",
         "options": {}
       },
       "id": "90adc41d-9330-41f1-b289-29e29cc7b3ee",
@@ -268,7 +270,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const calc = $('Exponential Backoff & Dead-Letter Math').item.json;\nreturn { json: calc };"
+        "jsCode": "const calc = $('Exponential Backoff & Dead-Letter Math').first().json;\nreturn { json: calc };"
       },
       "id": "e41d1d16-a2b6-42ee-819d-d3773f4aa1eb",
       "name": "Return Item to Batch Loop",
@@ -281,7 +283,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `\u2728 **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `\ud83e\ude7a **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `\u2022 **Total Jobs Evaluated:** ${processed.length}`,\n  `\u2022 **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `\u2022 **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `\u2022 **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
+        "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `✨ **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `🩺 **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `• **Total Jobs Evaluated:** ${processed.length}`,\n  `• **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `• **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `• **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
       },
       "id": "263f696b-6638-48b9-a9ee-9a8e5f86f859",
       "name": "Final Healer Response Formatter",
@@ -507,7 +509,9 @@
         ]
       },
       {
-        "parameters": {},
+        "parameters": {
+          "inputSource": "passthrough"
+        },
         "id": "3d08008d-f1b0-40f9-8a1c-ee7c7acb4d0e",
         "name": "When Executed by Another Workflow",
         "type": "n8n-nodes-base.executeWorkflowTrigger",
@@ -655,7 +659,7 @@
           "conditions": {
             "boolean": [
               {
-                "value1": "={{ $('Exponential Backoff & Dead-Letter Math').item.json.dispatch_now }}",
+                "value1": "={{ $('Exponential Backoff & Dead-Letter Math').first().json.dispatch_now }}",
                 "value2": true
               }
             ]
@@ -685,7 +689,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($('Exponential Backoff & Dead-Letter Math').item.json.router_payload) }}",
+          "jsonBody": "={{ JSON.stringify($('Exponential Backoff & Dead-Letter Math').first().json.router_payload) }}",
           "options": {
             "timeout": 30000
           }
@@ -728,7 +732,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Exponential Backoff & Dead-Letter Math').item.json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').item.json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').item.json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').item.json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').item.json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').item.json.next_schedule } }) }}",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Exponential Backoff & Dead-Letter Math').first().json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').first().json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').first().json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').first().json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').first().json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').first().json.next_schedule } }) }}",
           "options": {}
         },
         "id": "90adc41d-9330-41f1-b289-29e29cc7b3ee",
@@ -745,7 +749,7 @@
       {
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const calc = $('Exponential Backoff & Dead-Letter Math').item.json;\nreturn { json: calc };"
+          "jsCode": "const calc = $('Exponential Backoff & Dead-Letter Math').first().json;\nreturn { json: calc };"
         },
         "id": "e41d1d16-a2b6-42ee-819d-d3773f4aa1eb",
         "name": "Return Item to Batch Loop",
@@ -758,7 +762,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `\u2728 **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `\ud83e\ude7a **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `\u2022 **Total Jobs Evaluated:** ${processed.length}`,\n  `\u2022 **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `\u2022 **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `\u2022 **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
+          "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `✨ **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `🩺 **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `• **Total Jobs Evaluated:** ${processed.length}`,\n  `• **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `• **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `• **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
         },
         "id": "263f696b-6638-48b9-a9ee-9a8e5f86f859",
         "name": "Final Healer Response Formatter",

@@ -10,7 +10,9 @@
   "triggerCount": 0,
   "nodes": [
     {
-      "parameters": {},
+      "parameters": {
+        "inputSource": "passthrough"
+      },
       "id": "66409776-b8b6-4373-9721-d495d20704f1",
       "name": "When Executed by Another Workflow",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
@@ -23,7 +25,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? 'GPU' : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISOString().slice(0, 10);\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn { json: { ...raw, project_id, service_type, estimated_cost_units, usage_date, sessionId: (raw.sessionId || `sess_${$execution.id}`).toString() } };"
+        "jsCode": "const item = $input.item.json || {};\nconst raw = item.body || item;\nconst extracted = raw.extracted_params || {};\nconst project_id = raw.project_id || raw.projectId || extracted.project_id || null;\nconst user_infrastructure = raw.user_infrastructure || item.user_infrastructure || {};\nconst project_style = raw.project_style || item.project_style || { visual_style: 'ANIME' };\nconst service_type = (raw.service_type || (['GENERATE_EPISODE', 'QUICK_GENERATE_REEL'].includes(raw.intent) ? 'GPU' : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISOString().slice(0, 10);\nif (!project_id) throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n\nreturn {\n  json: {\n    ...raw, project_id, user_infrastructure, project_style, service_type, estimated_cost_units, usage_date,\n    sessionId: (raw.sessionId || `sess_${$execution.id}`).toString()\n  }\n};\n"
       },
       "id": "2d4d7178-e840-44b1-a03f-d3c1c832e843",
       "name": "Input Normalizer & Cost Estimator",
@@ -70,7 +72,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Cost Estimator').item.json;\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISOString() }\n  }\n};"
+        "jsCode": "const base = $('Input Normalizer & Cost Estimator').first().json;\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISOString() }\n  }\n};"
       },
       "id": "9f131fca-b8de-4d4a-9b85-6444786d05da",
       "name": "Quota & Throttling Evaluator",
@@ -169,7 +171,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Quota & Throttling Evaluator').item.json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').item.json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').item.json.service_type, projected_total: $('Quota & Throttling Evaluator').item.json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').item.json.daily_quota_limit } }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Quota & Throttling Evaluator').first().json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').first().json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').first().json.service_type, projected_total: $('Quota & Throttling Evaluator').first().json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').first().json.daily_quota_limit } }) }}",
         "options": {}
       },
       "id": "540090fa-d4dc-4663-91e5-250409f4c384",
@@ -186,7 +188,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const state = $('Quota & Throttling Evaluator').item.json;\n\nconst msg = state.is_allowed\n  ? [\n      `\u2705 **WF-12: Quota Approved (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `\u2022 **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `\u2022 **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `\ud83d\uded1 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `\u2022 **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `\u2022 **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};"
+        "jsCode": "let triggerCtx = {};\ntry { triggerCtx = $('When Executed by Another Workflow').first().json || {}; } catch (e) { triggerCtx = $input.first().json || {}; }\nlet state = {};\ntry { state = $('Quota & Throttling Evaluator').first().json || {}; } catch (e) { state = $input.first().json || {}; }\nconst isAllowed = state.is_allowed !== undefined ? state.is_allowed : true;\nconst msg = isAllowed ? `✅ **WF-12: Quota Approved (${state.service_type || 'LLM'})!** (${state.projected_total_units || 0}/${state.daily_quota_limit || 10000} units)` : `🛑 **WF-12: QUOTA_EXCEEDED (${state.service_type || 'LLM'})!**`;\nreturn {\n  json: {\n    ...triggerCtx, ...state, project_id: state.project_id || triggerCtx.project_id, user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {},\n    project_style: state.project_style || triggerCtx.project_style || { visual_style: 'ANIME' }, ok: isAllowed, status: state.quota_status || 'APPROVED', workflow_name: 'WF-12',\n    execution_id: $execution.id, is_allowed: isAllowed, remaining_quota: state.remaining_quota_units ?? 10000, output: msg, text: msg\n  }\n};\n"
       },
       "id": "7065e197-7638-4671-9c32-72189905a44e",
       "name": "Final Quota Response Formatter",
@@ -314,7 +316,9 @@
     "workflowId": "y5DW83fQjvyrzE98",
     "nodes": [
       {
-        "parameters": {},
+        "parameters": {
+          "inputSource": "passthrough"
+        },
         "id": "66409776-b8b6-4373-9721-d495d20704f1",
         "name": "When Executed by Another Workflow",
         "type": "n8n-nodes-base.executeWorkflowTrigger",
@@ -327,7 +331,7 @@
       {
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? 'GPU' : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISOString().slice(0, 10);\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn { json: { ...raw, project_id, service_type, estimated_cost_units, usage_date, sessionId: (raw.sessionId || `sess_${$execution.id}`).toString() } };"
+          "jsCode": "const item = $input.item.json || {};\nconst raw = item.body || item;\nconst extracted = raw.extracted_params || {};\nconst project_id = raw.project_id || raw.projectId || extracted.project_id || null;\nconst user_infrastructure = raw.user_infrastructure || item.user_infrastructure || {};\nconst project_style = raw.project_style || item.project_style || { visual_style: 'ANIME' };\nconst service_type = (raw.service_type || (['GENERATE_EPISODE', 'QUICK_GENERATE_REEL'].includes(raw.intent) ? 'GPU' : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISOString().slice(0, 10);\nif (!project_id) throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n\nreturn {\n  json: {\n    ...raw, project_id, user_infrastructure, project_style, service_type, estimated_cost_units, usage_date,\n    sessionId: (raw.sessionId || `sess_${$execution.id}`).toString()\n  }\n};\n"
         },
         "id": "2d4d7178-e840-44b1-a03f-d3c1c832e843",
         "name": "Input Normalizer & Cost Estimator",
@@ -374,7 +378,7 @@
       {
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Input Normalizer & Cost Estimator').item.json;\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISOString() }\n  }\n};"
+          "jsCode": "const base = $('Input Normalizer & Cost Estimator').first().json;\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISOString() }\n  }\n};"
         },
         "id": "9f131fca-b8de-4d4a-9b85-6444786d05da",
         "name": "Quota & Throttling Evaluator",
@@ -473,7 +477,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Quota & Throttling Evaluator').item.json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').item.json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').item.json.service_type, projected_total: $('Quota & Throttling Evaluator').item.json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').item.json.daily_quota_limit } }) }}",
+          "jsonBody": "={{ JSON.stringify({ project_id: $('Quota & Throttling Evaluator').first().json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').first().json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').first().json.service_type, projected_total: $('Quota & Throttling Evaluator').first().json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').first().json.daily_quota_limit } }) }}",
           "options": {}
         },
         "id": "540090fa-d4dc-4663-91e5-250409f4c384",
@@ -490,7 +494,7 @@
       {
         "parameters": {
           "mode": "runOnceForEachItem",
-          "jsCode": "const state = $('Quota & Throttling Evaluator').item.json;\n\nconst msg = state.is_allowed\n  ? [\n      `\u2705 **WF-12: Quota Approved (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `\u2022 **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `\u2022 **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `\ud83d\uded1 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `\u2022 **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `\u2022 **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};"
+          "jsCode": "let triggerCtx = {};\ntry { triggerCtx = $('When Executed by Another Workflow').first().json || {}; } catch (e) { triggerCtx = $input.first().json || {}; }\nlet state = {};\ntry { state = $('Quota & Throttling Evaluator').first().json || {}; } catch (e) { state = $input.first().json || {}; }\nconst isAllowed = state.is_allowed !== undefined ? state.is_allowed : true;\nconst msg = isAllowed ? `✅ **WF-12: Quota Approved (${state.service_type || 'LLM'})!** (${state.projected_total_units || 0}/${state.daily_quota_limit || 10000} units)` : `🛑 **WF-12: QUOTA_EXCEEDED (${state.service_type || 'LLM'})!**`;\nreturn {\n  json: {\n    ...triggerCtx, ...state, project_id: state.project_id || triggerCtx.project_id, user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {},\n    project_style: state.project_style || triggerCtx.project_style || { visual_style: 'ANIME' }, ok: isAllowed, status: state.quota_status || 'APPROVED', workflow_name: 'WF-12',\n    execution_id: $execution.id, is_allowed: isAllowed, remaining_quota: state.remaining_quota_units ?? 10000, output: msg, text: msg\n  }\n};\n"
         },
         "id": "7065e197-7638-4671-9c32-72189905a44e",
         "name": "Final Quota Response Formatter",
