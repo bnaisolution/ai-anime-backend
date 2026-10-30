@@ -22,3 +22,4 @@ src/modules/capabilities/
 src/modules/approvals/src/modules/approvals/
 .backup_*
 .env.bak*
+src/modules/approvals/
