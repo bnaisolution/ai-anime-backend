@@ -2,11 +2,9 @@
   "id": "IfZyvmWlEijJ6Ccj",
   "name": "storywf03",
   "active": true,
-  "activeVersionId": "d9ca6d40-8791-4efb-8f4d-2a61f06720d4",
   "createdAt": "2026-10-26T07:42:34.214Z",
   "updatedAt": "2026-10-29T21:00:24.583Z",
   "isArchived": false,
-  "versionId": "d9ca6d40-8791-4efb-8f4d-2a61f06720d4",
   "triggerCount": 0,
   "nodes": [
     {
@@ -18,9 +16,7 @@
         0,
         432
       ],
-      "parameters": {
-        "inputSource": "passthrough"
-      }
+      "parameters": {}
     },
     {
       "id": "6599afb4-e2c0-4efc-998e-faa92417756c",
@@ -33,7 +29,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = $input.item.json || {};\nconst dispatch = raw.wf03_dispatch_payload || raw.payload || raw;\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst intent = (dispatch.intent || raw.intent || 'SAVE_TO_PROJECT').toString().toUpperCase().trim();\nconst isQuickAdHoc = ['QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO'].includes(intent) && raw.mode !== 'SAVE';\nconst mode = isQuickAdHoc ? 'QUICK' : 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || (isQuickAdHoc ? 1 : 0));\nconst user_infrastructure = dispatch.user_infrastructure || raw.user_infrastructure || {};\nconst project_style = dispatch.project_style || raw.project_style || { visual_style: 'ANIME' };\nconst visual_style = (project_style.visual_style || dispatch.visual_style || 'ANIME').toString().toUpperCase().trim();\nconst style_prefix = visual_style === 'REALISTIC'\n  ? 'Photorealistic cinematic film still, 8k RAW live-action photography, ARRI Alexa 65, hyper-detailed realistic skin texture, natural volumetric lighting'\n  : 'Masterpiece cel-shaded anime key visual, ufotable and Makoto Shinkai anime aesthetic, crisp anime lineart, vibrant dynamic anime lighting';\nconst negative_prompt = visual_style === 'REALISTIC'\n  ? 'anime, cartoon, cel-shaded, 2d illustration, drawing, sketch, lowres, bad anatomy, deformed'\n  : 'photorealistic, 3d render, live action, real photo, blurry, lowres, bad anatomy, extra fingers';\n\nif (!project_id) throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n\nreturn {\n  json: {\n    ...raw, project_id, episode_no, episode_number: episode_no, season_no, intent, mode, scene_count,\n    prompt: dispatch.prompt || raw.user_prompt || raw.userPrompt || raw.rawText || '',\n    media_type: dispatch.media_type || (intent === 'QUICK_GENERATE_VIDEO' ? 'VIDEO' : 'IMAGE'),\n    user_infrastructure, project_style: { ...project_style, visual_style }, visual_style, style_prefix, negative_prompt, execution_id: $execution.id\n  }\n};\n"
+        "jsCode": "const raw = $input.item.json || {};\nconst dispatch = raw.wf03_dispatch_payload || raw;\n\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst mode = 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || 0);\n\nif (!project_id) {\n  throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn {\n  json: { project_id, episode_no, season_no, mode, scene_count, execution_id: $execution.id }\n};"
       }
     },
     {
@@ -81,7 +77,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.episode_no }}&order=scene_order.asc",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -114,7 +110,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.episode_no }}&order=scene_order.asc",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -147,7 +143,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -180,7 +176,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -213,7 +209,7 @@
         432
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').item.json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -359,7 +355,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/generate-image",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.COLAB_WORKER_URL) }}/v1/generate-image",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -388,7 +384,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const sceneCtx = $('If Image Generation Needed').first().json;\nconst workerResp = $input.item.json || {};\nlet resolvedImageUrl = sceneCtx.image_url;\nlet fileSizeBytes = Number(workerResp.file_size_bytes || workerResp.size || 0);\n\nif (sceneCtx.run_image_worker) {\n  resolvedImageUrl = workerResp.image_url || workerResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_img.png`;\n  if (!fileSizeBytes || fileSizeBytes <= 0) { fileSizeBytes = 1048576; }\n}\n\nif (!resolvedImageUrl || fileSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} image_url missing or zero file size.`);\n}\n\nconst nextCheckpoint = ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'IMAGE_READY';\n\nreturn { json: { ...sceneCtx, image_url: resolvedImageUrl, image_file_size_bytes: fileSizeBytes, image_ready_at: $now.toISOString(), checkpoint_stage: nextCheckpoint } };"
+        "jsCode": "const sceneCtx = $('If Image Generation Needed').item.json;\nconst workerResp = $input.item.json || {};\nlet resolvedImageUrl = sceneCtx.image_url;\nlet fileSizeBytes = Number(workerResp.file_size_bytes || workerResp.size || 0);\n\nif (sceneCtx.run_image_worker) {\n  resolvedImageUrl = workerResp.image_url || workerResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_img.png`;\n  if (!fileSizeBytes || fileSizeBytes <= 0) { fileSizeBytes = 1048576; }\n}\n\nif (!resolvedImageUrl || fileSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} image_url missing or zero file size.`);\n}\n\nconst nextCheckpoint = ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'IMAGE_READY';\n\nreturn { json: { ...sceneCtx, image_url: resolvedImageUrl, image_file_size_bytes: fileSizeBytes, image_ready_at: $now.toISOString(), checkpoint_stage: nextCheckpoint } };"
       }
     },
     {
@@ -443,7 +439,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const imgCtx = $('Validate Image Integrity & Checkpoint').first().json;\nreturn { json: imgCtx };"
+        "jsCode": "const imgCtx = $('Validate Image Integrity & Checkpoint').item.json;\nreturn { json: imgCtx };"
       }
     },
     {
@@ -478,7 +474,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL))) }}/v1/tts/svara",
+        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.COLAB_WORKER_URL)) }}/v1/tts/svara",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -527,7 +523,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_FALLBACK_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/tts/supertonic",
+        "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_FALLBACK_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/tts/supertonic",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -539,7 +535,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Scene Context After Image').first().json.project_id, episode_no: $('Restore Scene Context After Image').first().json.episode_no, scene_order: $('Restore Scene Context After Image').first().json.scene_order, provider: 'Supertonic TTS', voice_text: $('Restore Scene Context After Image').first().json.voice_text, voice_id: $('Restore Scene Context After Image').first().json.voice_id, emotion: $('Restore Scene Context After Image').first().json.emotion, pitch_multiplier: $('Restore Scene Context After Image').first().json.pitch_multiplier, rate_multiplier: $('Restore Scene Context After Image').first().json.rate_multiplier }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Scene Context After Image').item.json.project_id, episode_no: $('Restore Scene Context After Image').item.json.episode_no, scene_order: $('Restore Scene Context After Image').item.json.scene_order, provider: 'Supertonic TTS', voice_text: $('Restore Scene Context After Image').item.json.voice_text, voice_id: $('Restore Scene Context After Image').item.json.voice_id, emotion: $('Restore Scene Context After Image').item.json.emotion, pitch_multiplier: $('Restore Scene Context After Image').item.json.pitch_multiplier, rate_multiplier: $('Restore Scene Context After Image').item.json.rate_multiplier }) }}",
         "options": {
           "timeout": 30000
         }
@@ -556,7 +552,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const sceneCtx = $('Restore Scene Context After Image').first().json;\nconst ttsResp = $input.item.json || {};\nlet resolvedAudioUrl = sceneCtx.audio_url;\nlet audioSizeBytes = Number(ttsResp.file_size_bytes || ttsResp.size || 0);\n\nif (sceneCtx.run_tts_worker) {\n  resolvedAudioUrl = ttsResp.audio_url || ttsResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_voice.wav`;\n  if (!audioSizeBytes || audioSizeBytes <= 0) { audioSizeBytes = 524288; }\n}\n\nif (sceneCtx.needs_voice && (!resolvedAudioUrl || audioSizeBytes <= 0)) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} audio_url missing or zero bytes.`);\n}\n\nconst nextCheckpoint = ['VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'AUDIO_READY';\n\nreturn { json: { ...sceneCtx, audio_url: resolvedAudioUrl, audio_file_size_bytes: audioSizeBytes, checkpoint_stage: nextCheckpoint } };"
+        "jsCode": "const sceneCtx = $('Restore Scene Context After Image').item.json;\nconst ttsResp = $input.item.json || {};\nlet resolvedAudioUrl = sceneCtx.audio_url;\nlet audioSizeBytes = Number(ttsResp.file_size_bytes || ttsResp.size || 0);\n\nif (sceneCtx.run_tts_worker) {\n  resolvedAudioUrl = ttsResp.audio_url || ttsResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_voice.wav`;\n  if (!audioSizeBytes || audioSizeBytes <= 0) { audioSizeBytes = 524288; }\n}\n\nif (sceneCtx.needs_voice && (!resolvedAudioUrl || audioSizeBytes <= 0)) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} audio_url missing or zero bytes.`);\n}\n\nconst nextCheckpoint = ['VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'AUDIO_READY';\n\nreturn { json: { ...sceneCtx, audio_url: resolvedAudioUrl, audio_file_size_bytes: audioSizeBytes, checkpoint_stage: nextCheckpoint } };"
       }
     },
     {
@@ -611,7 +607,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const audioCtx = $('Validate Audio Integrity & Checkpoint').first().json;\nreturn { json: audioCtx };"
+        "jsCode": "const audioCtx = $('Validate Audio Integrity & Checkpoint').item.json;\nreturn { json: audioCtx };"
       }
     },
     {
@@ -646,7 +642,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/gpu/video-assembly-line",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/gpu/video-assembly-line",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -675,7 +671,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const sceneCtx = $('Restore Scene Context After Audio').first().json;\nconst gpuResp = $input.item.json || {};\nconst needsGpuPass = Boolean(sceneCtx.run_animatediff || sceneCtx.run_musetalk || sceneCtx.run_liveportrait);\nlet resolvedVideoUrl = sceneCtx.video_url;\nlet videoSizeBytes = Number(gpuResp.file_size_bytes || gpuResp.size || 0);\n\nif (needsGpuPass) {\n  resolvedVideoUrl = gpuResp.video_url || gpuResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_gpu.mp4`;\n  if (!videoSizeBytes || videoSizeBytes <= 0) { videoSizeBytes = 4194304; }\n} else if (!resolvedVideoUrl) {\n  resolvedVideoUrl = sceneCtx.image_url;\n  videoSizeBytes = Number(sceneCtx.image_file_size_bytes || 1048576);\n}\n\nif (!resolvedVideoUrl || videoSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} video_url missing or zero bytes.`);\n}\n\nreturn { json: { ...sceneCtx, video_url: resolvedVideoUrl, video_file_size_bytes: videoSizeBytes, video_ready_at: $now.toISOString(), checkpoint_stage: sceneCtx.checkpoint_stage === 'MIXED' ? 'MIXED' : 'VIDEO_READY' } };"
+        "jsCode": "const sceneCtx = $('Restore Scene Context After Audio').item.json;\nconst gpuResp = $input.item.json || {};\nconst needsGpuPass = Boolean(sceneCtx.run_animatediff || sceneCtx.run_musetalk || sceneCtx.run_liveportrait);\nlet resolvedVideoUrl = sceneCtx.video_url;\nlet videoSizeBytes = Number(gpuResp.file_size_bytes || gpuResp.size || 0);\n\nif (needsGpuPass) {\n  resolvedVideoUrl = gpuResp.video_url || gpuResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_gpu.mp4`;\n  if (!videoSizeBytes || videoSizeBytes <= 0) { videoSizeBytes = 4194304; }\n} else if (!resolvedVideoUrl) {\n  resolvedVideoUrl = sceneCtx.image_url;\n  videoSizeBytes = Number(sceneCtx.image_file_size_bytes || 1048576);\n}\n\nif (!resolvedVideoUrl || videoSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} video_url missing or zero bytes.`);\n}\n\nreturn { json: { ...sceneCtx, video_url: resolvedVideoUrl, video_file_size_bytes: videoSizeBytes, video_ready_at: $now.toISOString(), checkpoint_stage: sceneCtx.checkpoint_stage === 'MIXED' ? 'MIXED' : 'VIDEO_READY' } };"
       }
     },
     {
@@ -730,7 +726,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const vidCtx = $('Validate Video Integrity & Checkpoint').first().json;\nreturn { json: vidCtx };"
+        "jsCode": "const vidCtx = $('Validate Video Integrity & Checkpoint').item.json;\nreturn { json: vidCtx };"
       }
     },
     {
@@ -799,7 +795,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.ffmpeg?.worker_url || $env.FFMPEG_WORKER_URL) }}/v1/ffmpeg/render-episode",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.ffmpeg.worker_url || $env.FFMPEG_WORKER_URL) }}/v1/ffmpeg/render-episode",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -811,7 +807,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload) }}",
+        "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').item.json.ffmpeg_cpu_payload) }}",
         "options": {
           "timeout": 180000
         }
@@ -828,7 +824,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const mergeCtx = $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json;\nconst ffmpegResp = $input.item.json || {};\nconst finalVideoUrl = ffmpegResp.final_video_url || ffmpegResp.output_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${mergeCtx.project_id}/season_${mergeCtx.season_no}_ep_${mergeCtx.episode_no}_master.mp4`;\nconst finalFileSize = Number(ffmpegResp.file_size_bytes || 52428800);\n\nif (!finalVideoUrl || finalFileSize <= 0) {\n  throw new Error('Rule 7/29 Final Episode Verification Failed: Output video URL missing or zero file size.');\n}\n\nconst outputMediaObject = { master_video_url: finalVideoUrl, file_size_bytes: finalFileSize, loudness_lufs: -14.0, bgm_ducking_db: -8.0, crossfade_ms: 500, subtitles_burned: true, rendered_at: $now.toISOString() };\nreturn { json: { ...mergeCtx, final_video_url: finalVideoUrl, output_media: outputMediaObject } };"
+        "jsCode": "const mergeCtx = $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').item.json;\nconst ffmpegResp = $input.item.json || {};\nconst finalVideoUrl = ffmpegResp.final_video_url || ffmpegResp.output_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${mergeCtx.project_id}/season_${mergeCtx.season_no}_ep_${mergeCtx.episode_no}_master.mp4`;\nconst finalFileSize = Number(ffmpegResp.file_size_bytes || 52428800);\n\nif (!finalVideoUrl || finalFileSize <= 0) {\n  throw new Error('Rule 7/29 Final Episode Verification Failed: Output video URL missing or zero file size.');\n}\n\nconst outputMediaObject = { master_video_url: finalVideoUrl, file_size_bytes: finalFileSize, loudness_lufs: -14.0, bgm_ducking_db: -8.0, crossfade_ms: 500, subtitles_burned: true, rendered_at: $now.toISOString() };\nreturn { json: { ...mergeCtx, final_video_url: finalVideoUrl, output_media: outputMediaObject } };"
       }
     },
     {
@@ -885,7 +881,7 @@
       ],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.episode_no }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -909,7 +905,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ output_media: $('Verify Final Master Video & Prepare DB Finalization').first().json.output_media, current_state: 'MIXED', qc_status: 'PENDING' }) }}",
+        "jsonBody": "={{ JSON.stringify({ output_media: $('Verify Final Master Video & Prepare DB Finalization').item.json.output_media, current_state: 'MIXED', qc_status: 'PENDING' }) }}",
         "options": {}
       }
     },
@@ -926,7 +922,7 @@
       ],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').item.json.episode_no }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -991,7 +987,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Verify Final Master Video & Prepare DB Finalization').item.json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }) }}",
         "options": {}
       }
     },
@@ -1006,7 +1002,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const finalState = $('Verify Final Master Video & Prepare DB Finalization').first().json;\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `🎥 **WF-03: Episode ${finalState.episode_no} Production & FFmpeg Mixing Complete!**`,\n  `📁 **Project ID:** \\`${finalState.project_id}\\` | **State:** \\`MIXED\\` | **QC Status:** \\`PENDING\\``,\n  `📊 **Production & Cache Metrics:**`,\n  `• **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `• **Reused Cache Assets (Rule 9):** ${totalReused} (\\`Scene Library: ${finalState.image_cache_hits}\\`, \\`Motion Library: ${finalState.motion_cache_hits}\\`)`,\n  `• **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `🎵 **Part M 3-Tier Audio & Part N CPU FFmpeg Mastering:**`,\n  `• **BGM Tier 1 (Exact):** ${finalState.bgm_tier_summary.tier_1_exact} | **Tier 2 (Category):** ${finalState.bgm_tier_summary.tier_2_category} | **Tier 3 (CC0 Default):** ${finalState.bgm_tier_summary.tier_3_default_cc0}`,\n  `• **Total Fallback Tracks Used:** ${totalFallbacks}`,\n  `• **Audio Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `🔗 **Final Master Video URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
+        "jsCode": "const finalState = $('Verify Final Master Video & Prepare DB Finalization').item.json;\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `🎥 **WF-03: Episode ${finalState.episode_no} Production & FFmpeg Mixing Complete!**`,\n  `📁 **Project ID:** \\`${finalState.project_id}\\` | **State:** \\`MIXED\\` | **QC Status:** \\`PENDING\\``,\n  `📊 **Production & Cache Metrics:**`,\n  `• **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `• **Reused Cache Assets (Rule 9):** ${totalReused} (\\`Scene Library: ${finalState.image_cache_hits}\\`, \\`Motion Library: ${finalState.motion_cache_hits}\\`)`,\n  `• **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `🎵 **Part M 3-Tier Audio & Part N CPU FFmpeg Mastering:**`,\n  `• **BGM Tier 1 (Exact):** ${finalState.bgm_tier_summary.tier_1_exact} | **Tier 2 (Category):** ${finalState.bgm_tier_summary.tier_2_category} | **Tier 3 (CC0 Default):** ${finalState.bgm_tier_summary.tier_3_default_cc0}`,\n  `• **Total Fallback Tracks Used:** ${totalFallbacks}`,\n  `• **Audio Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `🔗 **Final Master Video URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
       }
     }
   ],
@@ -1469,1471 +1465,5 @@
       "createdAt": "2026-10-26T06:14:16.780Z",
       "updatedAt": "2026-10-26T06:14:16.780Z"
     }
-  ],
-  "shared": [
-    {
-      "role": "workflow:owner",
-      "workflowId": "IfZyvmWlEijJ6Ccj",
-      "projectId": "DHmXIxR6TKeJcd0d",
-      "createdAt": "2026-10-26T07:42:34.218Z",
-      "updatedAt": "2026-10-26T07:42:34.218Z"
-    }
-  ],
-  "activeVersion": {
-    "versionId": "d9ca6d40-8791-4efb-8f4d-2a61f06720d4",
-    "workflowId": "IfZyvmWlEijJ6Ccj",
-    "nodes": [
-      {
-        "id": "86b2084b-8bba-4567-a8f6-85e181a3fbeb",
-        "name": "When Executed by Another Workflow",
-        "type": "n8n-nodes-base.executeWorkflowTrigger",
-        "typeVersion": 1,
-        "position": [
-          0,
-          432
-        ],
-        "parameters": {
-          "inputSource": "passthrough"
-        }
-      },
-      {
-        "id": "6599afb4-e2c0-4efc-998e-faa92417756c",
-        "name": "Normalize Input & Enforce SAVE Mode",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          224,
-          432
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const raw = $input.item.json || {};\nconst dispatch = raw.wf03_dispatch_payload || raw.payload || raw;\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst intent = (dispatch.intent || raw.intent || 'SAVE_TO_PROJECT').toString().toUpperCase().trim();\nconst isQuickAdHoc = ['QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO'].includes(intent) && raw.mode !== 'SAVE';\nconst mode = isQuickAdHoc ? 'QUICK' : 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || (isQuickAdHoc ? 1 : 0));\nconst user_infrastructure = dispatch.user_infrastructure || raw.user_infrastructure || {};\nconst project_style = dispatch.project_style || raw.project_style || { visual_style: 'ANIME' };\nconst visual_style = (project_style.visual_style || dispatch.visual_style || 'ANIME').toString().toUpperCase().trim();\nconst style_prefix = visual_style === 'REALISTIC'\n  ? 'Photorealistic cinematic film still, 8k RAW live-action photography, ARRI Alexa 65, hyper-detailed realistic skin texture, natural volumetric lighting'\n  : 'Masterpiece cel-shaded anime key visual, ufotable and Makoto Shinkai anime aesthetic, crisp anime lineart, vibrant dynamic anime lighting';\nconst negative_prompt = visual_style === 'REALISTIC'\n  ? 'anime, cartoon, cel-shaded, 2d illustration, drawing, sketch, lowres, bad anatomy, deformed'\n  : 'photorealistic, 3d render, live action, real photo, blurry, lowres, bad anatomy, extra fingers';\n\nif (!project_id) throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n\nreturn {\n  json: {\n    ...raw, project_id, episode_no, episode_number: episode_no, season_no, intent, mode, scene_count,\n    prompt: dispatch.prompt || raw.user_prompt || raw.userPrompt || raw.rawText || '',\n    media_type: dispatch.media_type || (intent === 'QUICK_GENERATE_VIDEO' ? 'VIDEO' : 'IMAGE'),\n    user_infrastructure, project_style: { ...project_style, visual_style }, visual_style, style_prefix, negative_prompt, execution_id: $execution.id\n  }\n};\n"
-        }
-      },
-      {
-        "id": "046a20db-2753-4f94-a429-53994aad4579",
-        "name": "Supabase: Worker Health & Session Gate",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          448,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/kaggle_sessions?select=id,session_name,status,api_endpoint,gpu_id,updated_at&session_name=eq.kaggle_story_engine&limit=1",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "0daead3a-96f5-4679-b5e7-7a8ddd711d0f",
-        "name": "Supabase: Fetch Episode Scenes",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          672,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scenes?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "21225711-d221-45b2-836e-32ee0fae6111",
-        "name": "Supabase: Fetch Clips & Checkpoints",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          896,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?select=*&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}&episode_no=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.episode_no }}&order=scene_order.asc",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "fce49ca4-70c5-4456-8f00-8fd4f5d25f91",
-        "name": "Supabase: Fetch Characters & DNA",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1120,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "31b4ba48-8cb1-45e0-8d44-0321587ac1c6",
-        "name": "Supabase: Fetch Scene Library Cache",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1344,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "8f26d621-b6d9-487c-bdeb-6ff9c8a001d1",
-        "name": "Supabase: Fetch Motion Library Cache",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1568,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.{{ $('Normalize Input & Enforce SAVE Mode').first().json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "93cf2ace-134b-4d28-ab1d-a78ee1c4cbff",
-        "name": "Supabase: Fetch BGM Library",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1792,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/bgm_library?select=id,track_name,genre,mood,file_url,duration_sec",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "35d53113-8100-40fa-b48f-e01053b02133",
-        "name": "Supabase: Fetch SFX Library",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          2016,
-          432
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/sfx_library?select=id,sfx_name,category,file_url,duration_sec",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "60323698-5b1b-42b3-aa0a-861b53314a10",
-        "name": "Cache Evaluator & Stage Resolver",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          2240,
-          432
-        ],
-        "parameters": {
-          "jsCode": "const base = $('Normalize Input & Enforce SAVE Mode').first().json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) { if (r && (!requiredField || r[requiredField] !== undefined)) rows.push(r); }\n      } else if (entry && (!requiredField || entry[requiredField] !== undefined)) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst kaggleRows = unpackRows('Supabase: Worker Health & Session Gate', 'session_name');\nconst kaggleSession = kaggleRows[0] || { session_name: 'kaggle_story_engine', status: 'active' };\nconst isKaggleActive = (kaggleSession.status || '').toString().toLowerCase() === 'active';\n\nconst scenes = unpackRows('Supabase: Fetch Episode Scenes', 'scene_order');\nconst clips = unpackRows('Supabase: Fetch Clips & Checkpoints', 'scene_order');\nconst characters = unpackRows('Supabase: Fetch Characters & DNA', 'character_code');\nconst sceneLibrary = unpackRows('Supabase: Fetch Scene Library Cache', 'image_url');\nconst motionLibrary = unpackRows('Supabase: Fetch Motion Library Cache', 'video_url');\n\nconst clipBySceneOrder = {};\nfor (const c of clips) { clipBySceneOrder[Number(c.scene_order)] = c; }\n\nconst charByCode = {};\nfor (const ch of characters) { charByCode[(ch.character_code || '').toString().toUpperCase().trim()] = ch; }\n\nconst sceneCacheMap = {};\nfor (const sc of sceneLibrary) {\n  const key = (sc.reuse_key || '').toString().toUpperCase().trim();\n  if (key && sc.image_url) sceneCacheMap[key] = sc;\n}\n\nconst motionCacheMap = {};\nfor (const mc of motionLibrary) {\n  const mKey = `${(mc.motion_key || '').toString().toUpperCase().trim()}__${(mc.age_group || 'adult').toString().toLowerCase().trim()}`;\n  const fallbackMKey = (mc.motion_key || '').toString().toUpperCase().trim();\n  if (mc.video_url) {\n    motionCacheMap[mKey] = mc;\n    if (!motionCacheMap[fallbackMKey]) motionCacheMap[fallbackMKey] = mc;\n  }\n}\n\nconst targetScenes = scenes.length > 0 ? scenes : [\n  {\n    project_id: base.project_id, episode_no: base.episode_no, scene_order: 1,\n    location_code: 'LOC_001', reuse_key: 'LOC_001_DEFAULT', visual_prompt: 'Cinematic anime opening frame in rain-soaked shrine',\n    dialogue_speaker_id: 'CHAR_001', voice_text: 'Ab waqt aa gaya hai faisla karne ka!', emotion: 'anger',\n    needs_image: true, needs_voice: true, needs_lipsync: true, needs_motion: false, needs_expression: false,\n    needs_camera_motion: true, needs_subtitles: true, needs_bgm: true, needs_sfx: true, mouth_visible: true,\n    camera_motion_type: 'KEN_BURNS', routing: 'LIPSYNC', gpu_priority: 'P2', bgm_hint: { category: 'battle_orchestral', mood: 'anger' }, sfx_hint: ['rain_ambience', 'sword_draw']\n  }\n];\n\nconst resolvedSceneItems = [];\n\nfor (const sc of targetScenes) {\n  const order = Number(sc.scene_order || 1);\n  const existingClip = clipBySceneOrder[order] || {};\n  const checkpoint = (existingClip.checkpoint_stage || 'PENDING').toString().toUpperCase().trim();\n\n  const speakerCode = (sc.dialogue_speaker_id || '').toString().toUpperCase().trim();\n  const charObj = charByCode[speakerCode] || {};\n  const voiceConfig = charObj.voice_config || {};\n  const emotionProfile = voiceConfig.emotion_profile || { neutral: { pitch: 1.0, rate: 1.0 }, anger: { pitch: 0.95, rate: 1.1 }, joy: { pitch: 1.05, rate: 1.05 }, sadness: { pitch: 0.9, rate: 0.9 }, fear: { pitch: 1.02, rate: 1.08 } };\n\n  const emotionKey = (sc.emotion || existingClip.emotion || 'neutral').toString().toLowerCase().trim();\n  const emotionMultipliers = emotionProfile[emotionKey] || emotionProfile.neutral || { pitch: 1.0, rate: 1.0 };\n  const pitch_multiplier = Number((Number(voiceConfig.pitch ?? 1.0) * Number(emotionMultipliers.pitch ?? 1.0)).toFixed(2));\n  const rate_multiplier = Number((Number(voiceConfig.speed ?? 1.0) * Number(emotionMultipliers.rate ?? 1.0)).toFixed(2));\n  const resolvedVoiceId = existingClip.voice_id || voiceConfig.voice_id || 'svara_hi_male_hero_01';\n\n  const hasExistingImage = Boolean(existingClip.image_url && ['IMAGE_READY', 'AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(checkpoint));\n  const hasExistingAudio = Boolean(existingClip.audio_url && ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(checkpoint));\n  const hasExistingVideo = Boolean(existingClip.video_url && ['VIDEO_READY', 'MIXED'].includes(checkpoint));\n\n  const reuseKey = (sc.reuse_key || sc.scene_key || sc.location_code || '').toString().toUpperCase().trim();\n  const cachedSceneAsset = sceneCacheMap[reuseKey] || null;\n  const imageCacheHit = Boolean(!hasExistingImage && sc.needs_image !== false && cachedSceneAsset && cachedSceneAsset.image_url);\n\n  const effectiveImageUrl = hasExistingImage ? existingClip.image_url : (imageCacheHit ? cachedSceneAsset.image_url : null);\n  const run_image_worker = Boolean(sc.needs_image !== false && !hasExistingImage && !imageCacheHit);\n\n  const hasVoiceText = Boolean(sc.voice_text && sc.voice_text.toString().trim().length > 0);\n  const needsVoice = Boolean(sc.needs_voice !== false && hasVoiceText);\n  const effectiveAudioUrl = hasExistingAudio ? existingClip.audio_url : null;\n  const run_tts_worker = Boolean(needsVoice && !hasExistingAudio);\n\n  const motionKey = (sc.motion_key || sc.routing || '').toString().toUpperCase().trim();\n  const ageGroup = (charObj.visual_dna?.age_group || 'adult').toString().toLowerCase().trim();\n  const cachedMotionAsset = motionCacheMap[`${motionKey}__${ageGroup}`] || motionCacheMap[motionKey] || null;\n  const motionCacheHit = Boolean(!hasExistingVideo && sc.needs_motion === true && cachedMotionAsset && cachedMotionAsset.video_url);\n\n  if (!isKaggleActive && (sc.needs_motion || sc.needs_lipsync || sc.needs_expression) && !hasExistingVideo && !motionCacheHit) {\n    throw new Error(`WF-03 Worker Health Gate Blocked: kaggle_sessions status is '${kaggleSession.status}', expected 'active'.`);\n  }\n\n  const run_animatediff = Boolean(sc.needs_motion === true && !hasExistingVideo && !motionCacheHit);\n  const run_musetalk = Boolean(sc.needs_lipsync === true && sc.mouth_visible === true && !hasExistingVideo);\n  const run_liveportrait = Boolean(sc.needs_expression === true && !hasExistingVideo);\n\n  const effectiveVideoUrl = hasExistingVideo ? existingClip.video_url : (motionCacheHit ? cachedMotionAsset.video_url : null);\n\n  resolvedSceneItems.push({\n    json: {\n      project_id: base.project_id, episode_no: base.episode_no, season_no: base.season_no, mode: base.mode,\n      scene_order: order, location_code: sc.location_code || 'LOC_001', reuse_key: reuseKey,\n      visual_prompt: sc.description || sc.visual_prompt || 'Cinematic anime scene',\n      dialogue_speaker_id: speakerCode || null, character_visual_dna: charObj.visual_dna || {},\n      reference_image_file_id: charObj.image_file_id || `ref_${speakerCode || 'default'}_v${charObj.reference_version || 1}`,\n      voice_text: sc.voice_text || null, voice_id: resolvedVoiceId, emotion: emotionKey,\n      pitch_multiplier, rate_multiplier, duration_sec: Number(sc.duration_sec || 5),\n      needs_image: Boolean(sc.needs_image !== false), needs_voice: needsVoice,\n      needs_lipsync: Boolean(sc.needs_lipsync === true), needs_motion: Boolean(sc.needs_motion === true),\n      needs_expression: Boolean(sc.needs_expression === true), needs_camera_motion: Boolean(sc.needs_camera_motion !== false),\n      needs_subtitles: Boolean(sc.needs_subtitles !== false && needsVoice), needs_bgm: Boolean(sc.needs_bgm !== false), needs_sfx: Boolean(sc.needs_sfx === true),\n      mouth_visible: Boolean(sc.mouth_visible === true), camera_motion_type: sc.camera_motion_type || 'KEN_BURNS',\n      routing_type: sc.routing || sc.routing_type || 'STATIC', gpu_priority: sc.gpu_priority || 'P1',\n      bgm_hint: sc.bgm_hint || existingClip.bgm_hint || { category: 'cinematic_anime', mood: emotionKey },\n      sfx_hint: Array.isArray(sc.sfx_hint) ? sc.sfx_hint : (Array.isArray(sc.sfx_hints) ? sc.sfx_hints : []),\n      checkpoint_stage: checkpoint, surgical_resumed: Boolean(hasExistingImage || hasExistingAudio || hasExistingVideo),\n      image_cache_hit: imageCacheHit, motion_cache_hit: motionCacheHit,\n      run_image_worker, run_tts_worker, run_animatediff, run_musetalk, run_liveportrait,\n      gpu_slot_assignment: { animatediff_slot: 'GPU_0', musetalk_slot: 'GPU_1', liveportrait_slot: 'GPU_1' },\n      image_url: effectiveImageUrl, audio_url: effectiveAudioUrl, video_url: effectiveVideoUrl\n    }\n  });\n}\n\nreturn resolvedSceneItems;"
-        }
-      },
-      {
-        "id": "4d243823-f3c5-4687-944d-fb07dc97b6dc",
-        "name": "Split In Batches (Max 3 Scenes)",
-        "type": "n8n-nodes-base.splitInBatches",
-        "typeVersion": 3,
-        "position": [
-          2464,
-          432
-        ],
-        "parameters": {
-          "batchSize": 3,
-          "options": {}
-        }
-      },
-      {
-        "id": "8c464995-a3a8-4825-812f-c8244669f682",
-        "name": "If Image Generation Needed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          2688,
-          144
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.run_image_worker }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "b11665d7-28b9-4e34-b5f9-42511b871b8f",
-        "name": "Branch A: Colab SDXL + PuLID Worker",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          2912,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/generate-image",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, engine: 'SDXL_LIGHTNING_PULID', prompt: $json.visual_prompt, visual_dna: $json.character_visual_dna, reference_image_file_id: $json.reference_image_file_id }) }}",
-          "options": {
-            "timeout": 60000
-          }
-        }
-      },
-      {
-        "id": "41427c36-bb31-490d-9b6e-95e6c2db7d24",
-        "name": "Validate Image Integrity & Checkpoint",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3136,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const sceneCtx = $('If Image Generation Needed').first().json;\nconst workerResp = $input.item.json || {};\nlet resolvedImageUrl = sceneCtx.image_url;\nlet fileSizeBytes = Number(workerResp.file_size_bytes || workerResp.size || 0);\n\nif (sceneCtx.run_image_worker) {\n  resolvedImageUrl = workerResp.image_url || workerResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_img.png`;\n  if (!fileSizeBytes || fileSizeBytes <= 0) { fileSizeBytes = 1048576; }\n}\n\nif (!resolvedImageUrl || fileSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} image_url missing or zero file size.`);\n}\n\nconst nextCheckpoint = ['AUDIO_READY', 'VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'IMAGE_READY';\n\nreturn { json: { ...sceneCtx, image_url: resolvedImageUrl, image_file_size_bytes: fileSizeBytes, image_ready_at: $now.toISOString(), checkpoint_stage: nextCheckpoint } };"
-        }
-      },
-      {
-        "id": "07f5e4b9-afdd-4bb0-bf72-9bb40c001ca6",
-        "name": "Supabase: Update Checkpoint IMAGE_READY",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          3360,
-          144
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?on_conflict=project_id,episode_no,scene_order",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "resolution=merge-duplicates,return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, image_url: $json.image_url, image_ready_at: $json.image_ready_at, checkpoint_stage: $json.checkpoint_stage }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "f6098f56-536d-41dc-a5ab-eb38998b58e8",
-        "name": "Restore Scene Context After Image",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3584,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const imgCtx = $('Validate Image Integrity & Checkpoint').first().json;\nreturn { json: imgCtx };"
-        }
-      },
-      {
-        "id": "b31fbd4f-2a60-4fa8-90f6-4c3fb30ba245",
-        "name": "If TTS Voice Generation Needed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          3808,
-          144
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.run_tts_worker }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "e4963a55-a338-40a6-a891-717f7a713e4d",
-        "name": "Branch B1: Svara TTS Primary",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          4032,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || ($json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL))) }}/v1/tts/svara",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, provider: 'Svara TTS', voice_text: $json.voice_text, voice_id: $json.voice_id, emotion: $json.emotion, pitch_multiplier: $json.pitch_multiplier, rate_multiplier: $json.rate_multiplier }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "ec77ec16-6550-40ee-af38-f4e965edd78f",
-        "name": "If Svara TTS Failed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          4256,
-          80
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ Boolean($json.audio_url && Number($json.file_size_bytes || 1) > 0) }}"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "6a3640df-6649-4c86-a66d-37405264c11b",
-        "name": "Branch B2: Supertonic TTS Fallback",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          4480,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ (($('When Executed by Another Workflow').first().json.user_infrastructure?.tts.worker_url || $env.TTS_FALLBACK_WORKER_URL) || ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL)) }}/v1/tts/supertonic",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Scene Context After Image').first().json.project_id, episode_no: $('Restore Scene Context After Image').first().json.episode_no, scene_order: $('Restore Scene Context After Image').first().json.scene_order, provider: 'Supertonic TTS', voice_text: $('Restore Scene Context After Image').first().json.voice_text, voice_id: $('Restore Scene Context After Image').first().json.voice_id, emotion: $('Restore Scene Context After Image').first().json.emotion, pitch_multiplier: $('Restore Scene Context After Image').first().json.pitch_multiplier, rate_multiplier: $('Restore Scene Context After Image').first().json.rate_multiplier }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "54ff522b-f9d3-46e1-bb66-78a570b8c50b",
-        "name": "Validate Audio Integrity & Checkpoint",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          4704,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const sceneCtx = $('Restore Scene Context After Image').first().json;\nconst ttsResp = $input.item.json || {};\nlet resolvedAudioUrl = sceneCtx.audio_url;\nlet audioSizeBytes = Number(ttsResp.file_size_bytes || ttsResp.size || 0);\n\nif (sceneCtx.run_tts_worker) {\n  resolvedAudioUrl = ttsResp.audio_url || ttsResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_voice.wav`;\n  if (!audioSizeBytes || audioSizeBytes <= 0) { audioSizeBytes = 524288; }\n}\n\nif (sceneCtx.needs_voice && (!resolvedAudioUrl || audioSizeBytes <= 0)) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} audio_url missing or zero bytes.`);\n}\n\nconst nextCheckpoint = ['VIDEO_READY', 'MIXED'].includes(sceneCtx.checkpoint_stage) ? sceneCtx.checkpoint_stage : 'AUDIO_READY';\n\nreturn { json: { ...sceneCtx, audio_url: resolvedAudioUrl, audio_file_size_bytes: audioSizeBytes, checkpoint_stage: nextCheckpoint } };"
-        }
-      },
-      {
-        "id": "b98018f7-43e9-46c7-8b3d-40ff9fb31f98",
-        "name": "Supabase: Update Checkpoint AUDIO_READY",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          4928,
-          144
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?on_conflict=project_id,episode_no,scene_order",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "resolution=merge-duplicates,return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, audio_url: $json.audio_url, checkpoint_stage: $json.checkpoint_stage }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "28da01a2-302e-4d33-8002-dcdf9f785323",
-        "name": "Restore Scene Context After Audio",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          5152,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const audioCtx = $('Validate Audio Integrity & Checkpoint').first().json;\nreturn { json: audioCtx };"
-        }
-      },
-      {
-        "id": "af339385-4eb2-4db8-9a26-71de4eb109d9",
-        "name": "If Kaggle GPU Animation Needed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          5376,
-          144
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ Boolean($json.run_animatediff || $json.run_musetalk || $json.run_liveportrait) }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "bcbdfee6-62cd-49be-a034-216db4050b54",
-        "name": "Branch C/D/E: Kaggle GPU Worker (AnimateDiff/MuseTalk/LivePortrait)",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          5600,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.kaggle?.worker_url || $env.KAGGLE_WORKER_URL) }}/v1/gpu/video-assembly-line",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, image_url: $json.image_url, audio_url: $json.audio_url, duration_sec: $json.duration_sec, emotion: $json.emotion, gpu_priority: $json.gpu_priority, routing_type: $json.routing_type, stages: { branch_c_animatediff: { enabled: $json.run_animatediff, gpu_slot: 'GPU_0', model: 'AnimateDiff-Lightning', prompt: $json.visual_prompt }, branch_d_musetalk: { enabled: $json.run_musetalk && $json.mouth_visible, gpu_slot: 'GPU_1', model: 'MuseTalk-v1.5', mouth_visible: $json.mouth_visible }, branch_e_liveportrait: { enabled: $json.run_liveportrait, gpu_slot: 'GPU_1', model: 'LivePortrait-Anime', emotion: $json.emotion } } }) }}",
-          "options": {
-            "timeout": 120000
-          }
-        }
-      },
-      {
-        "id": "023f4738-d2a1-45bd-81e5-81bc9a5a365b",
-        "name": "Validate Video Integrity & Checkpoint",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          5824,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const sceneCtx = $('Restore Scene Context After Audio').first().json;\nconst gpuResp = $input.item.json || {};\nconst needsGpuPass = Boolean(sceneCtx.run_animatediff || sceneCtx.run_musetalk || sceneCtx.run_liveportrait);\nlet resolvedVideoUrl = sceneCtx.video_url;\nlet videoSizeBytes = Number(gpuResp.file_size_bytes || gpuResp.size || 0);\n\nif (needsGpuPass) {\n  resolvedVideoUrl = gpuResp.video_url || gpuResp.url || `${$env.SUPABASE_URL}/storage/v1/object/public/assets/${sceneCtx.project_id}/ep_${sceneCtx.episode_no}/scene_${sceneCtx.scene_order}_gpu.mp4`;\n  if (!videoSizeBytes || videoSizeBytes <= 0) { videoSizeBytes = 4194304; }\n} else if (!resolvedVideoUrl) {\n  resolvedVideoUrl = sceneCtx.image_url;\n  videoSizeBytes = Number(sceneCtx.image_file_size_bytes || 1048576);\n}\n\nif (!resolvedVideoUrl || videoSizeBytes <= 0) {\n  throw new Error(`Rule 7/29 Checkpoint Validation Failed: Scene ${sceneCtx.scene_order} video_url missing or zero bytes.`);\n}\n\nreturn { json: { ...sceneCtx, video_url: resolvedVideoUrl, video_file_size_bytes: videoSizeBytes, video_ready_at: $now.toISOString(), checkpoint_stage: sceneCtx.checkpoint_stage === 'MIXED' ? 'MIXED' : 'VIDEO_READY' } };"
-        }
-      },
-      {
-        "id": "ebc086f9-155e-4864-840e-9b89b74be6bd",
-        "name": "Supabase: Update Checkpoint VIDEO_READY",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          6048,
-          144
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?on_conflict=project_id,episode_no,scene_order",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "resolution=merge-duplicates,return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, video_url: $json.video_url, video_ready_at: $json.video_ready_at, checkpoint_stage: $json.checkpoint_stage }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "464b742d-864f-43d9-a2e0-dd237c7e0388",
-        "name": "Pass Scene to Batch Loop",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          6272,
-          384
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const vidCtx = $('Validate Video Integrity & Checkpoint').first().json;\nreturn { json: vidCtx };"
-        }
-      },
-      {
-        "id": "aea83634-e2aa-450d-bd71-926f4db5effd",
-        "name": "Audio Selector (3-Tier Fallback) & Scene Merge Gate",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          2688,
-          432
-        ],
-        "parameters": {
-          "jsCode": "const base = $('Normalize Input & Enforce SAVE Mode').first().json;\nconst processedScenes = $('Pass Scene to Batch Loop').isExecuted ? $('Pass Scene to Batch Loop').all().map(i => i.json) : $('Cache Evaluator & Stage Resolver').all().map(i => i.json);\n\nfunction unpackLibrary(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) { for (const r of entry) { if (r && r[requiredField]) rows.push(r); } }\n      else if (entry && entry[requiredField]) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst bgmCatalog = unpackLibrary('Supabase: Fetch BGM Library', 'file_url');\nconst sfxCatalog = unpackLibrary('Supabase: Fetch SFX Library', 'file_url');\n\nconst DEFAULT_CC0_BGM = { track_name: 'DEFAULT_CC0_AMBIENT_01', genre: 'default_ambient', mood: 'neutral', file_url: `${$env.SUPABASE_URL}/storage/v1/object/public/assets/global/cc0_ambient_fallback.mp3`, tier_used: 'TIER_3_DEFAULT_CC0' };\nconst DEFAULT_SILENCE_SFX = { sfx_name: 'DEFAULT_SILENCE_00', category: 'silence', file_url: null, tier_used: 'TIER_3_SILENCE_FALLBACK' };\n\nconst audioUsageLogs = [];\nconst sceneAssemblyManifest = [];\nlet tier1BgmCount = 0, tier2BgmCount = 0, tier3BgmCount = 0, sfxFallbackCount = 0;\nconst sortedScenes = [...processedScenes].sort((a, b) => Number(a.scene_order) - Number(b.scene_order));\n\nfor (const sc of sortedScenes) {\n  const reqCategory = (sc.bgm_hint?.category || 'cinematic_anime').toString().toLowerCase().trim();\n  const reqMood = (sc.bgm_hint?.mood || sc.emotion || 'neutral').toString().toLowerCase().trim();\n\n  let selectedBgm = null;\n  let bgmTier = 'TIER_3_DEFAULT_CC0';\n\n  const tier1Match = bgmCatalog.find(b => (b.genre || '').toString().toLowerCase().trim() === reqCategory && (b.mood || '').toString().toLowerCase().trim() === reqMood);\n  const tier2Match = !tier1Match ? bgmCatalog.find(b => (b.genre || '').toString().toLowerCase().trim() === reqCategory) : null;\n\n  if (tier1Match) { selectedBgm = tier1Match; bgmTier = 'TIER_1_EXACT_CATEGORY_MOOD'; tier1BgmCount++; }\n  else if (tier2Match) { selectedBgm = tier2Match; bgmTier = 'TIER_2_CATEGORY_ONLY'; tier2BgmCount++; }\n  else { selectedBgm = DEFAULT_CC0_BGM; bgmTier = 'TIER_3_DEFAULT_CC0'; tier3BgmCount++; }\n\n  audioUsageLogs.push({ project_id: base.project_id, episode_no: base.episode_no, scene_order: sc.scene_order, audio_type: 'BGM', requested_hint: { category: reqCategory, mood: reqMood }, resolved_code: selectedBgm.track_name || 'DEFAULT_CC0_AMBIENT_01', resolved_url: selectedBgm.file_url, fallback_tier: bgmTier });\n\n  const requestedSfxList = Array.isArray(sc.sfx_hint) ? sc.sfx_hint : [];\n  const resolvedSfxList = [];\n\n  for (const rawSfx of requestedSfxList) {\n    const sfxQuery = (rawSfx || '').toString().toLowerCase().trim();\n    if (!sfxQuery) continue;\n\n    const sfxT1 = sfxCatalog.find(s => (s.sfx_name || '').toString().toLowerCase().trim() === sfxQuery);\n    const sfxT2 = !sfxT1 ? sfxCatalog.find(s => sfxQuery.includes((s.category || '').toString().toLowerCase().trim()) || (s.category || '').toString().toLowerCase().trim().includes(sfxQuery)) : null;\n\n    let chosenSfx = DEFAULT_SILENCE_SFX;\n    let sfxTier = 'TIER_3_SILENCE_FALLBACK';\n    if (sfxT1) { chosenSfx = sfxT1; sfxTier = 'TIER_1_EXACT_SFX'; }\n    else if (sfxT2) { chosenSfx = sfxT2; sfxTier = 'TIER_2_TYPE_FALLBACK'; sfxFallbackCount++; }\n    else { sfxFallbackCount++; }\n\n    resolvedSfxList.push({ sfx_code: chosenSfx.sfx_name || 'DEFAULT_SILENCE_00', audio_url: chosenSfx.file_url || null, fallback_tier: sfxTier });\n    audioUsageLogs.push({ project_id: base.project_id, episode_no: base.episode_no, scene_order: sc.scene_order, audio_type: 'SFX', requested_hint: { sfx: sfxQuery }, resolved_code: chosenSfx.sfx_name || 'DEFAULT_SILENCE_00', resolved_url: chosenSfx.file_url || null, fallback_tier: sfxTier });\n  }\n\n  sceneAssemblyManifest.push({\n    scene_order: sc.scene_order, duration_sec: sc.duration_sec, routing_type: sc.routing_type, camera_motion_type: sc.camera_motion_type,\n    video_input_url: sc.video_url || sc.image_url, image_input_url: sc.image_url, voice_audio_url: sc.audio_url || null,\n    has_dialogue: Boolean(sc.needs_voice && sc.audio_url), subtitle_text: sc.needs_subtitles ? (sc.voice_text || '') : '',\n    bgm_track_url: selectedBgm.file_url, bgm_tier: bgmTier, sfx_tracks: resolvedSfxList.filter(x => Boolean(x.audio_url))\n  });\n}\n\nconst ffmpegFilterComplex = [\n  '[bgm_raw]volume=1.0[bgm_base];',\n  '[bgm_base][voice_concat]sidechaincompress=threshold=0.03:ratio=6:attack=40:release=400:level_sc=1,volume=-8dB:enable=\\'gt(voice_active,0)\\'[bgm_ducked];',\n  '[bgm_ducked]acrossfade=d=0.5:c1=tri:c2=tri[bgm_xfade];',\n  '[voice_concat][bgm_xfade][sfx_mix]amix=inputs=3:duration=first:dropout_transition=0.5[audio_pre_master];',\n  '[audio_pre_master]loudnorm=I=-14:TP=-1.5:LRA=11[audio_master_14lufs];',\n  '[video_concat]subtitles=episode_subtitles.ass:force_style=\\'Fontname=Noto Sans Devanagari,Fontsize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2\\'[video_final]'\n].join(' ');\n\nconst rawFfmpegCommand = `ffmpeg -y -f concat -safe 0 -i scenes_manifest.txt -filter_complex \"${ffmpegFilterComplex}\" -map \"[video_final]\" -map \"[audio_master_14lufs]\" -c:v libx264 -preset fast -crf 18 -c:a aac -b:a 192k output_episode_${base.episode_no}.mp4`;\n\nreturn [{\n  json: {\n    project_id: base.project_id, episode_no: base.episode_no, season_no: base.season_no, mode: base.mode,\n    total_scenes_processed: sortedScenes.length, image_cache_hits: sortedScenes.filter(s => s.image_cache_hit).length,\n    motion_cache_hits: sortedScenes.filter(s => s.motion_cache_hit).length, surgical_resumed_scenes: sortedScenes.filter(s => s.surgical_resumed).length,\n    bgm_tier_summary: { tier_1_exact: tier1BgmCount, tier_2_category: tier2BgmCount, tier_3_default_cc0: tier3BgmCount, sfx_fallbacks: sfxFallbackCount },\n    audio_usage_log_batch: audioUsageLogs,\n    ffmpeg_cpu_payload: { project_id: base.project_id, episode_no: base.episode_no, engine: 'RAW_CPU_FFMPEG', ducking_db: -8.0, crossfade_ms: 500, target_loudness_lufs: -14.0, burn_subtitles: true, filter_complex: ffmpegFilterComplex, raw_ffmpeg_command: rawFfmpegCommand, scenes_manifest: sceneAssemblyManifest }\n  }\n}];"
-        }
-      },
-      {
-        "id": "af2ed5f7-9899-4895-b90c-092adaef86e4",
-        "name": "Supabase: Insert Audio Usage Log",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          2912,
-          432
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audio_usage_log",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($json.audio_usage_log_batch) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "c1fa14c9-11b8-4f93-a442-179854ca8f9c",
-        "name": "Branch F: CPU FFmpeg Assembly & Audio Mixing",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          3136,
-          432
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.ffmpeg?.worker_url || $env.FFMPEG_WORKER_URL) }}/v1/ffmpeg/render-episode",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload) }}",
-          "options": {
-            "timeout": 180000
-          }
-        }
-      },
-      {
-        "id": "7707fd0a-3866-488f-a050-cb9915d65713",
-        "name": "Verify Final Master Video & Prepare DB Finalization",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3360,
-          432
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const mergeCtx = $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json;\nconst ffmpegResp = $input.item.json || {};\nconst finalVideoUrl = ffmpegResp.final_video_url || ffmpegResp.output_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${mergeCtx.project_id}/season_${mergeCtx.season_no}_ep_${mergeCtx.episode_no}_master.mp4`;\nconst finalFileSize = Number(ffmpegResp.file_size_bytes || 52428800);\n\nif (!finalVideoUrl || finalFileSize <= 0) {\n  throw new Error('Rule 7/29 Final Episode Verification Failed: Output video URL missing or zero file size.');\n}\n\nconst outputMediaObject = { master_video_url: finalVideoUrl, file_size_bytes: finalFileSize, loudness_lufs: -14.0, bgm_ducking_db: -8.0, crossfade_ms: 500, subtitles_burned: true, rendered_at: $now.toISOString() };\nreturn { json: { ...mergeCtx, final_video_url: finalVideoUrl, output_media: outputMediaObject } };"
-        }
-      },
-      {
-        "id": "5b43b16a-a675-4ee7-b980-bd70b875092e",
-        "name": "Supabase: Update Clips Checkpoint MIXED",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          3584,
-          432
-        ],
-        "parameters": {
-          "method": "PATCH",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/clips?project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ checkpoint_stage: 'MIXED', status: 'COMPLETED' }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "79c38e03-8c86-46e1-9203-8bfbc1a85868",
-        "name": "Supabase: Update Episode (MIXED & QC PENDING)",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          3808,
-          432
-        ],
-        "parameters": {
-          "method": "PATCH",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ output_media: $('Verify Final Master Video & Prepare DB Finalization').first().json.output_media, current_state: 'MIXED', qc_status: 'PENDING' }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "9d4fe113-8b5e-4b60-bb6f-128cda96eb7e",
-        "name": "Supabase: Update Episode State (MIXED)",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          4032,
-          432
-        ],
-        "parameters": {
-          "method": "PATCH",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id }}&episode_no=eq.{{ $('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ current_state: 'MIXED' }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "ca0f088e-a055-4745-9fb6-59085bacce7c",
-        "name": "Supabase: Insert Audit Log",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          4256,
-          432
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "9e40e7b1-53bd-446a-a743-8c6bfbe32804",
-        "name": "Final Production Response Formatter",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          4480,
-          432
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const finalState = $('Verify Final Master Video & Prepare DB Finalization').first().json;\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `🎥 **WF-03: Episode ${finalState.episode_no} Production & FFmpeg Mixing Complete!**`,\n  `📁 **Project ID:** \\`${finalState.project_id}\\` | **State:** \\`MIXED\\` | **QC Status:** \\`PENDING\\``,\n  `📊 **Production & Cache Metrics:**`,\n  `• **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `• **Reused Cache Assets (Rule 9):** ${totalReused} (\\`Scene Library: ${finalState.image_cache_hits}\\`, \\`Motion Library: ${finalState.motion_cache_hits}\\`)`,\n  `• **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `🎵 **Part M 3-Tier Audio & Part N CPU FFmpeg Mastering:**`,\n  `• **BGM Tier 1 (Exact):** ${finalState.bgm_tier_summary.tier_1_exact} | **Tier 2 (Category):** ${finalState.bgm_tier_summary.tier_2_category} | **Tier 3 (CC0 Default):** ${finalState.bgm_tier_summary.tier_3_default_cc0}`,\n  `• **Total Fallback Tracks Used:** ${totalFallbacks}`,\n  `• **Audio Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `🔗 **Final Master Video URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
-        }
-      }
-    ],
-    "connections": {
-      "When Executed by Another Workflow": {
-        "main": [
-          [
-            {
-              "node": "Normalize Input & Enforce SAVE Mode",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Normalize Input & Enforce SAVE Mode": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Worker Health & Session Gate",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Worker Health & Session Gate": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Episode Scenes",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Episode Scenes": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Clips & Checkpoints",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Clips & Checkpoints": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Characters & DNA",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Characters & DNA": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Scene Library Cache",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Scene Library Cache": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Motion Library Cache",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Motion Library Cache": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch BGM Library",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch BGM Library": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch SFX Library",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch SFX Library": {
-        "main": [
-          [
-            {
-              "node": "Cache Evaluator & Stage Resolver",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Cache Evaluator & Stage Resolver": {
-        "main": [
-          [
-            {
-              "node": "Split In Batches (Max 3 Scenes)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Split In Batches (Max 3 Scenes)": {
-        "main": [
-          [
-            {
-              "node": "Audio Selector (3-Tier Fallback) & Scene Merge Gate",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "If Image Generation Needed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Image Generation Needed": {
-        "main": [
-          [
-            {
-              "node": "Branch A: Colab SDXL + PuLID Worker",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Validate Image Integrity & Checkpoint",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Branch A: Colab SDXL + PuLID Worker": {
-        "main": [
-          [
-            {
-              "node": "Validate Image Integrity & Checkpoint",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Validate Image Integrity & Checkpoint": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Checkpoint IMAGE_READY",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Checkpoint IMAGE_READY": {
-        "main": [
-          [
-            {
-              "node": "Restore Scene Context After Image",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Restore Scene Context After Image": {
-        "main": [
-          [
-            {
-              "node": "If TTS Voice Generation Needed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If TTS Voice Generation Needed": {
-        "main": [
-          [
-            {
-              "node": "Branch B1: Svara TTS Primary",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Validate Audio Integrity & Checkpoint",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Branch B1: Svara TTS Primary": {
-        "main": [
-          [
-            {
-              "node": "If Svara TTS Failed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Svara TTS Failed": {
-        "main": [
-          [
-            {
-              "node": "Branch B2: Supertonic TTS Fallback",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Validate Audio Integrity & Checkpoint",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Branch B2: Supertonic TTS Fallback": {
-        "main": [
-          [
-            {
-              "node": "Validate Audio Integrity & Checkpoint",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Validate Audio Integrity & Checkpoint": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Checkpoint AUDIO_READY",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Checkpoint AUDIO_READY": {
-        "main": [
-          [
-            {
-              "node": "Restore Scene Context After Audio",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Restore Scene Context After Audio": {
-        "main": [
-          [
-            {
-              "node": "If Kaggle GPU Animation Needed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Kaggle GPU Animation Needed": {
-        "main": [
-          [
-            {
-              "node": "Branch C/D/E: Kaggle GPU Worker (AnimateDiff/MuseTalk/LivePortrait)",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Validate Video Integrity & Checkpoint",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Branch C/D/E: Kaggle GPU Worker (AnimateDiff/MuseTalk/LivePortrait)": {
-        "main": [
-          [
-            {
-              "node": "Validate Video Integrity & Checkpoint",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Validate Video Integrity & Checkpoint": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Checkpoint VIDEO_READY",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Checkpoint VIDEO_READY": {
-        "main": [
-          [
-            {
-              "node": "Pass Scene to Batch Loop",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Pass Scene to Batch Loop": {
-        "main": [
-          [
-            {
-              "node": "Split In Batches (Max 3 Scenes)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Audio Selector (3-Tier Fallback) & Scene Merge Gate": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Insert Audio Usage Log",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Insert Audio Usage Log": {
-        "main": [
-          [
-            {
-              "node": "Branch F: CPU FFmpeg Assembly & Audio Mixing",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Branch F: CPU FFmpeg Assembly & Audio Mixing": {
-        "main": [
-          [
-            {
-              "node": "Verify Final Master Video & Prepare DB Finalization",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Verify Final Master Video & Prepare DB Finalization": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Clips Checkpoint MIXED",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Clips Checkpoint MIXED": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Episode (MIXED & QC PENDING)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Episode (MIXED & QC PENDING)": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Episode State (MIXED)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Episode State (MIXED)": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Insert Audit Log",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Insert Audit Log": {
-        "main": [
-          [
-            {
-              "node": "Final Production Response Formatter",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "nodeGroups": [],
-    "authors": "Neeraj  Behra",
-    "name": null,
-    "description": null,
-    "autosaved": false,
-    "createdAt": "2026-10-29T21:00:24.596Z",
-    "updatedAt": "2026-10-29T21:00:24.596Z"
-  }
+  ]
 }

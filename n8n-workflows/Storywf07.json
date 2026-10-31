@@ -2,11 +2,9 @@
   "id": "zvw63UrbObZhFUiW",
   "name": "Storywf07",
   "active": true,
-  "activeVersionId": "1ecaafa8-8252-4560-bbad-d391047c7484",
   "createdAt": "2026-10-26T09:50:49.973Z",
   "updatedAt": "2026-10-29T21:21:32.230Z",
   "isArchived": false,
-  "versionId": "1ecaafa8-8252-4560-bbad-d391047c7484",
   "triggerCount": 0,
   "nodes": [
     {
@@ -18,9 +16,7 @@
         0,
         224
       ],
-      "parameters": {
-        "inputSource": "passthrough"
-      }
+      "parameters": {}
     },
     {
       "id": "e227c4b2-f232-4909-ae50-e4d724d420fe",
@@ -81,7 +77,7 @@
         224
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season&id=eq.{{ $('Input Normalizer & Parameter Resolver').first().json.project_id }}&limit=1",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season&id=eq.{{ $('Input Normalizer & Parameter Resolver').item.json.project_id }}&limit=1",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -113,7 +109,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Parameter Resolver').first().json;\nconst epRaw = $('Supabase: Fetch Episode & QC State').first().json;\nconst projRaw = $input.item.json;\nconst episodeRec = Array.isArray(epRaw) ? epRaw[0] : (epRaw && epRaw.episode_no !== undefined ? epRaw : null);\nconst projectRec = Array.isArray(projRaw) ? projRaw[0] : (projRaw && projRaw.id ? projRaw : {});\n\nif (!episodeRec) {\n  return {\n    json: {\n      ...base, qc_blocked: true,\n      block_reason: `Episode ${base.episode_no} record not found in episodes table for project ${base.project_id}.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'EPISODE_NOT_FOUND', action_payload: { requested_platforms: base.platforms, force_publish: base.force_publish } }\n    }\n  };\n}\n\nconst currentState = (episodeRec.current_state || '').toString().toUpperCase().trim();\nconst qcStatus = (episodeRec.qc_status || 'PENDING').toString().toUpperCase().trim();\nconst outputMedia = (episodeRec.output_media && typeof episodeRec.output_media === 'object') ? episodeRec.output_media : {};\nconst masterVideoUrl = outputMedia.final_video_url || outputMedia.master_video_url || outputMedia.video_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${base.project_id}/season_${base.season_no}_ep_${base.episode_no}_master.mp4`;\n\nconst scenesList = Array.isArray(episodeRec.script_json?.scenes) ? episodeRec.script_json.scenes : [];\nconst calculatedDurationSec = scenesList.reduce((acc, s) => acc + Number(s.duration_sec || 5), 0) || Number(outputMedia.duration_sec || 120);\nconst isYoutubeShort = calculatedDurationSec < 60;\n\nconst isStateReady = currentState === 'MIXED' || currentState === 'PUBLISHED';\nconst isQcApproved = qcStatus === 'APPROVED';\n\nif ((!isStateReady || !isQcApproved) && !base.force_publish) {\n  return {\n    json: {\n      ...base, project_name: projectRec.name || 'Anime Project', qc_blocked: true, current_state: currentState, qc_status: qcStatus,\n      block_reason: `Rule 18 Publishing Gate Blocked: Episode ${base.episode_no} has current_state='${currentState}' (expected 'MIXED') and qc_status='${qcStatus}' (expected 'APPROVED'). Pass force_publish=true or approve QC first.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'QC_GATE_UNAPPROVED', action_payload: { current_state: currentState, qc_status: qcStatus, requested_platforms: base.platforms, blocked_at: $now.toISOString() } }\n    }\n  };\n}\n\nconst existingPubUrls = {\n  youtube: episodeRec.youtube_url || null,\n  instagram: (Array.isArray(episodeRec.instagram_urls) && episodeRec.instagram_urls.length > 0) ? episodeRec.instagram_urls[0] : null,\n  telegram: episodeRec.telegram_file_id ? `https://t.me/c/${episodeRec.telegram_file_id}` : null\n};\n\nconst pendingPlatforms = [];\nconst skippedPlatforms = [];\n\nfor (const plat of base.platforms) {\n  const key = plat.toLowerCase();\n  if (existingPubUrls[key] && typeof existingPubUrls[key] === 'string' && existingPubUrls[key].startsWith('http')) { skippedPlatforms.push(plat); }\n  else { pendingPlatforms.push(plat); }\n}\n\nreturn {\n  json: {\n    ...base, project_name: projectRec.name || 'Anime Project', story_bible: projectRec.story_bible || {},\n    episode_title: episodeRec.title || `Episode ${base.episode_no}`,\n    episode_logline: episodeRec.logline || episodeRec.script_json?.logline || '',\n    episode_script: episodeRec.script || '',\n    scenes_summary: scenesList.map(s => ({ scene_order: s.scene_order, duration_sec: s.duration_sec || 5, summary: s.action_summary || s.description })),\n    master_video_url: masterVideoUrl, duration_sec: calculatedDurationSec, is_youtube_short: isYoutubeShort,\n    current_state: currentState, qc_status: qcStatus, qc_blocked: false, existing_publication_urls: existingPubUrls,\n    pending_platforms: pendingPlatforms, skipped_platforms: skippedPlatforms, all_already_published: pendingPlatforms.length === 0,\n    needs_youtube: pendingPlatforms.includes('YOUTUBE'), needs_instagram: pendingPlatforms.includes('INSTAGRAM'), needs_telegram: pendingPlatforms.includes('TELEGRAM')\n  }\n};"
+        "jsCode": "const base = $('Input Normalizer & Parameter Resolver').item.json;\nconst epRaw = $('Supabase: Fetch Episode & QC State').item.json;\nconst projRaw = $input.item.json;\nconst episodeRec = Array.isArray(epRaw) ? epRaw[0] : (epRaw && epRaw.episode_no !== undefined ? epRaw : null);\nconst projectRec = Array.isArray(projRaw) ? projRaw[0] : (projRaw && projRaw.id ? projRaw : {});\n\nif (!episodeRec) {\n  return {\n    json: {\n      ...base, qc_blocked: true,\n      block_reason: `Episode ${base.episode_no} record not found in episodes table for project ${base.project_id}.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'EPISODE_NOT_FOUND', action_payload: { requested_platforms: base.platforms, force_publish: base.force_publish } }\n    }\n  };\n}\n\nconst currentState = (episodeRec.current_state || '').toString().toUpperCase().trim();\nconst qcStatus = (episodeRec.qc_status || 'PENDING').toString().toUpperCase().trim();\nconst outputMedia = (episodeRec.output_media && typeof episodeRec.output_media === 'object') ? episodeRec.output_media : {};\nconst masterVideoUrl = outputMedia.final_video_url || outputMedia.master_video_url || outputMedia.video_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${base.project_id}/season_${base.season_no}_ep_${base.episode_no}_master.mp4`;\n\nconst scenesList = Array.isArray(episodeRec.script_json?.scenes) ? episodeRec.script_json.scenes : [];\nconst calculatedDurationSec = scenesList.reduce((acc, s) => acc + Number(s.duration_sec || 5), 0) || Number(outputMedia.duration_sec || 120);\nconst isYoutubeShort = calculatedDurationSec < 60;\n\nconst isStateReady = currentState === 'MIXED' || currentState === 'PUBLISHED';\nconst isQcApproved = qcStatus === 'APPROVED';\n\nif ((!isStateReady || !isQcApproved) && !base.force_publish) {\n  return {\n    json: {\n      ...base, project_name: projectRec.name || 'Anime Project', qc_blocked: true, current_state: currentState, qc_status: qcStatus,\n      block_reason: `Rule 18 Publishing Gate Blocked: Episode ${base.episode_no} has current_state='${currentState}' (expected 'MIXED') and qc_status='${qcStatus}' (expected 'APPROVED'). Pass force_publish=true or approve QC first.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'QC_GATE_UNAPPROVED', action_payload: { current_state: currentState, qc_status: qcStatus, requested_platforms: base.platforms, blocked_at: $now.toISOString() } }\n    }\n  };\n}\n\nconst existingPubUrls = {\n  youtube: episodeRec.youtube_url || null,\n  instagram: (Array.isArray(episodeRec.instagram_urls) && episodeRec.instagram_urls.length > 0) ? episodeRec.instagram_urls[0] : null,\n  telegram: episodeRec.telegram_file_id ? `https://t.me/c/${episodeRec.telegram_file_id}` : null\n};\n\nconst pendingPlatforms = [];\nconst skippedPlatforms = [];\n\nfor (const plat of base.platforms) {\n  const key = plat.toLowerCase();\n  if (existingPubUrls[key] && typeof existingPubUrls[key] === 'string' && existingPubUrls[key].startsWith('http')) { skippedPlatforms.push(plat); }\n  else { pendingPlatforms.push(plat); }\n}\n\nreturn {\n  json: {\n    ...base, project_name: projectRec.name || 'Anime Project', story_bible: projectRec.story_bible || {},\n    episode_title: episodeRec.title || `Episode ${base.episode_no}`,\n    episode_logline: episodeRec.logline || episodeRec.script_json?.logline || '',\n    episode_script: episodeRec.script || '',\n    scenes_summary: scenesList.map(s => ({ scene_order: s.scene_order, duration_sec: s.duration_sec || 5, summary: s.action_summary || s.description })),\n    master_video_url: masterVideoUrl, duration_sec: calculatedDurationSec, is_youtube_short: isYoutubeShort,\n    current_state: currentState, qc_status: qcStatus, qc_blocked: false, existing_publication_urls: existingPubUrls,\n    pending_platforms: pendingPlatforms, skipped_platforms: skippedPlatforms, all_already_published: pendingPlatforms.length === 0,\n    needs_youtube: pendingPlatforms.includes('YOUTUBE'), needs_instagram: pendingPlatforms.includes('INSTAGRAM'), needs_telegram: pendingPlatforms.includes('TELEGRAM')\n  }\n};"
       }
     },
     {
@@ -225,7 +221,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.4, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-07 Viral Anime Metadata Architect. Generate high-CTR Hindi/Hinglish viral distribution metadata in STRICT JSON: {\"seo_titles\": [\"Title 1\", \"Title 2\", \"Title 3\"], \"primary_title\": \"Best under 95 chars\", \"description\": \"Detailed SEO with timestamped chapters\", \"hashtags\": [\"#AnimeHindi\", \"#IndianAnime\"], \"tags\": [\"anime hindi\"], \"pinned_comment\": \"Engaging question in Hinglish\"}.' }, { role: 'user', content: 'Project: ' + $json.project_name + '\\nSeason: ' + $json.season_no + ' Episode: ' + $json.episode_no + '\\nEpisode Title: ' + $json.episode_title + '\\nLogline: ' + $json.episode_logline + '\\nDuration Sec: ' + $json.duration_sec + ' (Is Shorts: ' + $json.is_youtube_short + ')\\nScenes: ' + JSON.stringify($json.scenes_summary) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.4, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-07 Viral Anime Metadata Architect. Generate high-CTR Hindi/Hinglish viral distribution metadata in STRICT JSON: {\"seo_titles\": [\"Title 1\", \"Title 2\", \"Title 3\"], \"primary_title\": \"Best under 95 chars\", \"description\": \"Detailed SEO with timestamped chapters\", \"hashtags\": [\"#AnimeHindi\", \"#IndianAnime\"], \"tags\": [\"anime hindi\"], \"pinned_comment\": \"Engaging question in Hinglish\"}.' }, { role: 'user', content: 'Project: ' + $json.project_name + '\\nSeason: ' + $json.season_no + ' Episode: ' + $json.episode_no + '\\nEpisode Title: ' + $json.episode_title + '\\nLogline: ' + $json.episode_logline + '\\nDuration Sec: ' + $json.duration_sec + ' (Is Shorts: ' + $json.is_youtube_short + ')\\nScenes: ' + JSON.stringify($json.scenes_summary) } ] }) }}",
         "options": {
           "timeout": 25000
         }
@@ -278,7 +274,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.4, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Generate viral Hindi/Hinglish anime metadata in STRICT JSON: {\"seo_titles\": [\"...\"], \"primary_title\": \"...\", \"description\": \"...\", \"hashtags\": [\"#AnimeHindi\", \"#IndianAnime\"], \"tags\": [\"...\"], \"pinned_comment\": \"...\"}.' }, { role: 'user', content: 'Project: ' + $('Gatekeeper & Idempotency Evaluator').first().json.project_name + '\\nEpisode: ' + $('Gatekeeper & Idempotency Evaluator').first().json.episode_no + ' - ' + $('Gatekeeper & Idempotency Evaluator').first().json.episode_title + '\\nLogline: ' + $('Gatekeeper & Idempotency Evaluator').first().json.episode_logline } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.4, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Generate viral Hindi/Hinglish anime metadata in STRICT JSON: {\"seo_titles\": [\"...\"], \"primary_title\": \"...\", \"description\": \"...\", \"hashtags\": [\"#AnimeHindi\", \"#IndianAnime\"], \"tags\": [\"...\"], \"pinned_comment\": \"...\"}.' }, { role: 'user', content: 'Project: ' + $('Gatekeeper & Idempotency Evaluator').item.json.project_name + '\\nEpisode: ' + $('Gatekeeper & Idempotency Evaluator').item.json.episode_no + ' - ' + $('Gatekeeper & Idempotency Evaluator').item.json.episode_title + '\\nLogline: ' + $('Gatekeeper & Idempotency Evaluator').item.json.episode_logline } ] }) }}",
         "options": {
           "timeout": 25000
         }
@@ -295,7 +291,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const ctx = $('Gatekeeper & Idempotency Evaluator').first().json;\nconst llmRaw = $input.item.json || {};\nlet parsedMeta = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) parsedMeta = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim());\n} catch (e) { parsedMeta = null; }\n\nconst defaultTitle = `${ctx.project_name} - Ep ${ctx.episode_no}: ${ctx.episode_title}`;\nconst seoTitles = Array.isArray(parsedMeta?.seo_titles) && parsedMeta.seo_titles.length >= 3 ? parsedMeta.seo_titles.slice(0, 3).map(t => t.toString().slice(0, 100)) : [defaultTitle, `Ep ${ctx.episode_no}: ${ctx.episode_title} — Full Action Hindi Anime!`, `${ctx.episode_title} | ${ctx.project_name} Season ${ctx.season_no} Ep ${ctx.episode_no}`];\nlet primaryTitle = (parsedMeta?.primary_title || seoTitles[0] || defaultTitle).toString().trim();\nif (ctx.is_youtube_short && !/#shorts/i.test(primaryTitle)) { primaryTitle = `${primaryTitle.slice(0, 88)} #Shorts`; }\nprimaryTitle = primaryTitle.slice(0, 100);\n\nconst hashtags = Array.isArray(parsedMeta?.hashtags) && parsedMeta.hashtags.length > 0 ? parsedMeta.hashtags.map(h => h.toString().startsWith('#') ? h.toString() : `#${h}`) : ['#AnimeHindi', '#IndianAnime', '#CinematicAnime', '#AIAnime'];\nconst tags = Array.isArray(parsedMeta?.tags) && parsedMeta.tags.length > 0 ? parsedMeta.tags.map(t => t.toString()) : ['anime hindi', 'indian anime', 'hindi anime episode', ctx.project_name.toLowerCase()];\n\nconst rawDesc = (parsedMeta?.description || `${ctx.episode_logline}\\n\\n00:00 Opening Hook\\n00:30 Main Story\\n01:30 Climax & Cliffhanger`).toString().trim();\nconst youtubeDescription = `${rawDesc}\\n\\n${hashtags.join(' ')}`.slice(0, 4950);\nconst instagramCaption = `${primaryTitle}\\n\\n${ctx.episode_logline}\\n\\n${hashtags.join(' ')}`.slice(0, 2150);\nconst pinnedComment = (parsedMeta?.pinned_comment || `Bhai log, Episode ${ctx.episode_no} ka climax kaisa laga? Comment me batao! 🔥`).toString();\n\nreturn { json: { ...ctx, viral_metadata: { seo_titles: seoTitles, primary_title: primaryTitle, youtube_format: ctx.is_youtube_short ? 'YOUTUBE_SHORTS' : 'YOUTUBE_LONG_FORM', youtube_description: youtubeDescription, instagram_caption: instagramCaption, hashtags, tags, pinned_comment: pinnedComment }, live_urls: { ...ctx.existing_publication_urls } } };"
+        "jsCode": "const ctx = $('Gatekeeper & Idempotency Evaluator').item.json;\nconst llmRaw = $input.item.json || {};\nlet parsedMeta = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) parsedMeta = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim());\n} catch (e) { parsedMeta = null; }\n\nconst defaultTitle = `${ctx.project_name} - Ep ${ctx.episode_no}: ${ctx.episode_title}`;\nconst seoTitles = Array.isArray(parsedMeta?.seo_titles) && parsedMeta.seo_titles.length >= 3 ? parsedMeta.seo_titles.slice(0, 3).map(t => t.toString().slice(0, 100)) : [defaultTitle, `Ep ${ctx.episode_no}: ${ctx.episode_title} — Full Action Hindi Anime!`, `${ctx.episode_title} | ${ctx.project_name} Season ${ctx.season_no} Ep ${ctx.episode_no}`];\nlet primaryTitle = (parsedMeta?.primary_title || seoTitles[0] || defaultTitle).toString().trim();\nif (ctx.is_youtube_short && !/#shorts/i.test(primaryTitle)) { primaryTitle = `${primaryTitle.slice(0, 88)} #Shorts`; }\nprimaryTitle = primaryTitle.slice(0, 100);\n\nconst hashtags = Array.isArray(parsedMeta?.hashtags) && parsedMeta.hashtags.length > 0 ? parsedMeta.hashtags.map(h => h.toString().startsWith('#') ? h.toString() : `#${h}`) : ['#AnimeHindi', '#IndianAnime', '#CinematicAnime', '#AIAnime'];\nconst tags = Array.isArray(parsedMeta?.tags) && parsedMeta.tags.length > 0 ? parsedMeta.tags.map(t => t.toString()) : ['anime hindi', 'indian anime', 'hindi anime episode', ctx.project_name.toLowerCase()];\n\nconst rawDesc = (parsedMeta?.description || `${ctx.episode_logline}\\n\\n00:00 Opening Hook\\n00:30 Main Story\\n01:30 Climax & Cliffhanger`).toString().trim();\nconst youtubeDescription = `${rawDesc}\\n\\n${hashtags.join(' ')}`.slice(0, 4950);\nconst instagramCaption = `${primaryTitle}\\n\\n${ctx.episode_logline}\\n\\n${hashtags.join(' ')}`.slice(0, 2150);\nconst pinnedComment = (parsedMeta?.pinned_comment || `Bhai log, Episode ${ctx.episode_no} ka climax kaisa laga? Comment me batao! 🔥`).toString();\n\nreturn { json: { ...ctx, viral_metadata: { seo_titles: seoTitles, primary_title: primaryTitle, youtube_format: ctx.is_youtube_short ? 'YOUTUBE_SHORTS' : 'YOUTUBE_LONG_FORM', youtube_description: youtubeDescription, instagram_caption: instagramCaption, hashtags, tags, pinned_comment: pinnedComment }, live_urls: { ...ctx.existing_publication_urls } } };"
       }
     },
     {
@@ -346,15 +342,15 @@
           "parameters": [
             {
               "name": "client_id",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_id || $env.YOUTUBE_CLIENT_ID) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_id || $env.YOUTUBE_CLIENT_ID) }}"
             },
             {
               "name": "client_secret",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
             },
             {
               "name": "refresh_token",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
             },
             {
               "name": "grant_type",
@@ -379,13 +375,13 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.upload_bridge_url || $env.YOUTUBE_UPLOAD_BRIDGE_URL) || 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status' }}",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.upload_bridge_url || $env.YOUTUBE_UPLOAD_BRIDGE_URL) || 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
+              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
             },
             {
               "name": "Content-Type",
@@ -393,13 +389,13 @@
             },
             {
               "name": "X-Source-Stream-Url",
-              "value": "={{ $('Metadata Normalizer & Limit Enforcer').first().json.master_video_url }}"
+              "value": "={{ $('Metadata Normalizer & Limit Enforcer').item.json.master_video_url }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ stream_source_url: $('Metadata Normalizer & Limit Enforcer').first().json.master_video_url, snippet: { title: $('Metadata Normalizer & Limit Enforcer').first().json.viral_metadata.primary_title, description: $('Metadata Normalizer & Limit Enforcer').first().json.viral_metadata.youtube_description, tags: $('Metadata Normalizer & Limit Enforcer').first().json.viral_metadata.tags, categoryId: '1', defaultLanguage: 'hi', defaultAudioLanguage: 'hi' }, status: { privacyStatus: 'public', selfDeclaredMadeForKids: false } }) }}",
+        "jsonBody": "={{ JSON.stringify({ stream_source_url: $('Metadata Normalizer & Limit Enforcer').item.json.master_video_url, snippet: { title: $('Metadata Normalizer & Limit Enforcer').item.json.viral_metadata.primary_title, description: $('Metadata Normalizer & Limit Enforcer').item.json.viral_metadata.youtube_description, tags: $('Metadata Normalizer & Limit Enforcer').item.json.viral_metadata.tags, categoryId: '1', defaultLanguage: 'hi', defaultAudioLanguage: 'hi' }, status: { privacyStatus: 'public', selfDeclaredMadeForKids: false } }) }}",
         "options": {
           "timeout": 60000
         }
@@ -416,7 +412,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Metadata Normalizer & Limit Enforcer').first().json;\nconst ytResp = $input.item.json || {};\nlet ytUrl = base.live_urls?.youtube || null;\nlet ytVideoId = ytResp.id || ytResp.video_id || null;\nif (base.needs_youtube) {\n  if (!ytVideoId) { ytVideoId = `yt_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  ytUrl = base.is_youtube_short ? `https://youtube.com/shorts/${ytVideoId}` : `https://youtu.be/${ytVideoId}`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(ytUrl ? { youtube: ytUrl, youtube_video_id: ytVideoId, youtube_format: base.viral_metadata.youtube_format } : {}) } } };"
+        "jsCode": "const base = $('Metadata Normalizer & Limit Enforcer').item.json;\nconst ytResp = $input.item.json || {};\nlet ytUrl = base.live_urls?.youtube || null;\nlet ytVideoId = ytResp.id || ytResp.video_id || null;\nif (base.needs_youtube) {\n  if (!ytVideoId) { ytVideoId = `yt_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  ytUrl = base.is_youtube_short ? `https://youtube.com/shorts/${ytVideoId}` : `https://youtu.be/${ytVideoId}`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(ytUrl ? { youtube: ytUrl, youtube_video_id: ytVideoId, youtube_format: base.viral_metadata.youtube_format } : {}) } } };"
       }
     },
     {
@@ -451,7 +447,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media",
+        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -463,7 +459,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ media_type: 'REELS', video_url: $json.master_video_url, caption: $json.viral_metadata.instagram_caption, share_to_feed: true, access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
+        "jsonBody": "={{ JSON.stringify({ media_type: 'REELS', video_url: $json.master_video_url, caption: $json.viral_metadata.instagram_caption, share_to_feed: true, access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
         "options": {
           "timeout": 30000
         }
@@ -481,7 +477,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media_publish",
+        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media_publish",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -493,7 +489,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ creation_id: $json.id || 'ig_container_pending', access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
+        "jsonBody": "={{ JSON.stringify({ creation_id: $json.id || 'ig_container_pending', access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
         "options": {
           "timeout": 30000
         }
@@ -510,7 +506,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Record YouTube URL & Restore Context').first().json;\nconst igResp = $input.item.json || {};\nlet igUrl = base.live_urls?.instagram || null;\nlet igMediaId = igResp.id || null;\nif (base.needs_instagram) {\n  if (!igMediaId) { igMediaId = `ig_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  igUrl = igResp.permalink || `https://www.instagram.com/reel/${igMediaId}/`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(igUrl ? { instagram: igUrl, instagram_media_id: igMediaId } : {}) } } };"
+        "jsCode": "const base = $('Record YouTube URL & Restore Context').item.json;\nconst igResp = $input.item.json || {};\nlet igUrl = base.live_urls?.instagram || null;\nlet igMediaId = igResp.id || null;\nif (base.needs_instagram) {\n  if (!igMediaId) { igMediaId = `ig_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  igUrl = igResp.permalink || `https://www.instagram.com/reel/${igMediaId}/`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(igUrl ? { instagram: igUrl, instagram_media_id: igMediaId } : {}) } } };"
       }
     },
     {
@@ -545,7 +541,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -557,7 +553,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🔥 <b>NEW ANIME EPISODE PREMIERE!</b>\\n\\n🎬 <b>' + $json.viral_metadata.primary_title + '</b>\\n📝 ' + $json.episode_logline + '\\n\\n▶️ <b>YouTube:</b> ' + ($json.live_urls.youtube || 'Coming Soon') + '\\n📸 <b>Instagram Reel:</b> ' + ($json.live_urls.instagram || 'Coming Soon') + '\\n🎥 <b>Direct Master Stream:</b> ' + $json.master_video_url + '\\n\\n' + $json.viral_metadata.hashtags.join(' ') }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🔥 <b>NEW ANIME EPISODE PREMIERE!</b>\\n\\n🎬 <b>' + $json.viral_metadata.primary_title + '</b>\\n📝 ' + $json.episode_logline + '\\n\\n▶️ <b>YouTube:</b> ' + ($json.live_urls.youtube || 'Coming Soon') + '\\n📸 <b>Instagram Reel:</b> ' + ($json.live_urls.instagram || 'Coming Soon') + '\\n🎥 <b>Direct Master Stream:</b> ' + $json.master_video_url + '\\n\\n' + $json.viral_metadata.hashtags.join(' ') }) }}",
         "options": {
           "timeout": 20000
         }
@@ -574,7 +570,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Record Instagram URL & Restore Context').first().json;\nconst tgResp = $input.item.json || {};\nconst publishedAtIso = $now.toISOString();\nlet tgUrl = base.live_urls?.telegram || null;\nif (base.needs_telegram) {\n  const msgId = tgResp?.result?.message_id || `msg_${base.episode_no}`;\n  const cleanChan = ($env.TELEGRAM_CHANNEL_ID || 'anime_channel').toString().replace(/^@/, '');\n  tgUrl = `https://t.me/${cleanChan}/${msgId}`;\n}\n\nconst finalInstaArray = base.live_urls.instagram ? [base.live_urls.instagram] : [];\nreturn { json: { ...base, published_at: publishedAtIso, final_yt_url: base.live_urls.youtube || null, final_ig_urls: finalInstaArray, final_tg_msg_id: tgResp?.result?.message_id || null } };"
+        "jsCode": "const base = $('Record Instagram URL & Restore Context').item.json;\nconst tgResp = $input.item.json || {};\nconst publishedAtIso = $now.toISOString();\nlet tgUrl = base.live_urls?.telegram || null;\nif (base.needs_telegram) {\n  const msgId = tgResp?.result?.message_id || `msg_${base.episode_no}`;\n  const cleanChan = ($env.TELEGRAM_CHANNEL_ID || 'anime_channel').toString().replace(/^@/, '');\n  tgUrl = `https://t.me/${cleanChan}/${msgId}`;\n}\n\nconst finalInstaArray = base.live_urls.instagram ? [base.live_urls.instagram] : [];\nreturn { json: { ...base, published_at: publishedAtIso, final_yt_url: base.live_urls.youtube || null, final_ig_urls: finalInstaArray, final_tg_msg_id: tgResp?.result?.message_id || null } };"
       }
     },
     {
@@ -631,7 +627,7 @@
       ],
       "parameters": {
         "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Merge Results & Database Finalization').first().json.project_id }}&episode_no=eq.{{ $('Merge Results & Database Finalization').first().json.episode_no }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Merge Results & Database Finalization').item.json.project_id }}&episode_no=eq.{{ $('Merge Results & Database Finalization').item.json.episode_no }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -696,7 +692,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Merge Results & Database Finalization').first().json.project_id, episode_no: $('Merge Results & Database Finalization').first().json.episode_no, workflow_name: 'WF-07', action: 'EPISODE_PUBLISHED', execution_id: $execution.id, new_value: { youtube: $('Merge Results & Database Finalization').first().json.final_yt_url, instagram: $('Merge Results & Database Finalization').first().json.final_ig_urls } }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Merge Results & Database Finalization').item.json.project_id, episode_no: $('Merge Results & Database Finalization').item.json.episode_no, workflow_name: 'WF-07', action: 'EPISODE_PUBLISHED', execution_id: $execution.id, new_value: { youtube: $('Merge Results & Database Finalization').item.json.final_yt_url, instagram: $('Merge Results & Database Finalization').item.json.final_ig_urls } }) }}",
         "options": {}
       }
     },
@@ -711,7 +707,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const gate = $('Gatekeeper & Idempotency Evaluator').first().json;\n\nif (gate.qc_blocked === true) {\n  const blockMsg = [\n    `🛑 **WF-07: Publishing Blocked by Rule 18 QC Gate!**`,\n    `📁 **Project ID:** \\`${gate.project_id}\\` | **Episode:** ${gate.episode_no}`,\n    `• **Reason:** ${gate.block_reason}`,\n    `• **Action Taken:** Item queued in \\`pending_actions\\` (\\`status = MANUAL_REVIEW\\`). QC approve karne ke baad ya \\`force_publish: true\\` ke sath retry karein.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'BLOCKED_QC_UNAPPROVED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, output: blockMsg, text: blockMsg } };\n}\n\nif (gate.all_already_published === true) {\n  const idemMsg = [\n    `✅ **WF-07: Idempotency Guard — Episode ${gate.episode_no} Already Published!**`,\n    `• **Skipped Platforms (Already Live):** ${gate.skipped_platforms.join(', ')}`,\n    `• **YouTube:** ${gate.existing_publication_urls.youtube || 'N/A'}`,\n    `• **Instagram:** ${gate.existing_publication_urls.instagram || 'N/A'}`,\n    `• **Telegram:** ${gate.existing_publication_urls.telegram || 'N/A'}`\n  ].join('\\n');\n  return { json: { ok: true, status: 'ALREADY_PUBLISHED_IDEMPOTENT', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, publication_urls: gate.existing_publication_urls, output: idemMsg, text: idemMsg } };\n}\n\nconst finalState = $('Merge Results & Database Finalization').first().json;\nconst pubs = { youtube: finalState.final_yt_url, instagram: finalState.final_ig_urls?.[0] };\nconst meta = finalState.viral_metadata;\n\nconst successMsg = [\n  `🚀 **WF-07: Episode ${finalState.episode_no} Successfully Published!**`,\n  `🎬 **SEO Title:** ${meta.primary_title} (\\`${meta.youtube_format}\\`)`,\n  `📌 **Pinned Comment Draft:** ${meta.pinned_comment}`,\n  ``, `🌐 **Live Distribution Links:**`,\n  `• **YouTube:** ${pubs.youtube || 'Not Requested'}`,\n  `• **Instagram Reels:** ${pubs.instagram || 'Not Requested'}`,\n  `• **Telegram Premiere:** ${finalState.final_tg_msg_id ? 'Sent successfully' : 'Not Requested'}`,\n  finalState.skipped_platforms.length > 0 ? `• **Idempotent Skipped (Already Live):** ${finalState.skipped_platforms.join(', ')}` : ''\n].filter(Boolean).join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: 'PUBLISHED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no,\n    published_at: finalState.published_at, published_platforms: finalState.pending_platforms, skipped_platforms: finalState.skipped_platforms,\n    publication_urls: pubs, viral_metadata: meta, output: successMsg, text: successMsg\n  }\n};"
+        "jsCode": "const gate = $('Gatekeeper & Idempotency Evaluator').item.json;\n\nif (gate.qc_blocked === true) {\n  const blockMsg = [\n    `🛑 **WF-07: Publishing Blocked by Rule 18 QC Gate!**`,\n    `📁 **Project ID:** \\`${gate.project_id}\\` | **Episode:** ${gate.episode_no}`,\n    `• **Reason:** ${gate.block_reason}`,\n    `• **Action Taken:** Item queued in \\`pending_actions\\` (\\`status = MANUAL_REVIEW\\`). QC approve karne ke baad ya \\`force_publish: true\\` ke sath retry karein.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'BLOCKED_QC_UNAPPROVED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, output: blockMsg, text: blockMsg } };\n}\n\nif (gate.all_already_published === true) {\n  const idemMsg = [\n    `✅ **WF-07: Idempotency Guard — Episode ${gate.episode_no} Already Published!**`,\n    `• **Skipped Platforms (Already Live):** ${gate.skipped_platforms.join(', ')}`,\n    `• **YouTube:** ${gate.existing_publication_urls.youtube || 'N/A'}`,\n    `• **Instagram:** ${gate.existing_publication_urls.instagram || 'N/A'}`,\n    `• **Telegram:** ${gate.existing_publication_urls.telegram || 'N/A'}`\n  ].join('\\n');\n  return { json: { ok: true, status: 'ALREADY_PUBLISHED_IDEMPOTENT', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, publication_urls: gate.existing_publication_urls, output: idemMsg, text: idemMsg } };\n}\n\nconst finalState = $('Merge Results & Database Finalization').item.json;\nconst pubs = { youtube: finalState.final_yt_url, instagram: finalState.final_ig_urls?.[0] };\nconst meta = finalState.viral_metadata;\n\nconst successMsg = [\n  `🚀 **WF-07: Episode ${finalState.episode_no} Successfully Published!**`,\n  `🎬 **SEO Title:** ${meta.primary_title} (\\`${meta.youtube_format}\\`)`,\n  `📌 **Pinned Comment Draft:** ${meta.pinned_comment}`,\n  ``, `🌐 **Live Distribution Links:**`,\n  `• **YouTube:** ${pubs.youtube || 'Not Requested'}`,\n  `• **Instagram Reels:** ${pubs.instagram || 'Not Requested'}`,\n  `• **Telegram Premiere:** ${finalState.final_tg_msg_id ? 'Sent successfully' : 'Not Requested'}`,\n  finalState.skipped_platforms.length > 0 ? `• **Idempotent Skipped (Already Live):** ${finalState.skipped_platforms.join(', ')}` : ''\n].filter(Boolean).join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: 'PUBLISHED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no,\n    published_at: finalState.published_at, published_platforms: finalState.pending_platforms, skipped_platforms: finalState.skipped_platforms,\n    publication_urls: pubs, viral_metadata: meta, output: successMsg, text: successMsg\n  }\n};"
       }
     }
   ],
@@ -1060,1062 +1056,5 @@
       "createdAt": "2026-10-26T06:14:16.780Z",
       "updatedAt": "2026-10-26T06:14:16.780Z"
     }
-  ],
-  "shared": [
-    {
-      "role": "workflow:owner",
-      "workflowId": "zvw63UrbObZhFUiW",
-      "projectId": "DHmXIxR6TKeJcd0d",
-      "createdAt": "2026-10-26T09:50:49.976Z",
-      "updatedAt": "2026-10-26T09:50:49.976Z"
-    }
-  ],
-  "activeVersion": {
-    "versionId": "1ecaafa8-8252-4560-bbad-d391047c7484",
-    "workflowId": "zvw63UrbObZhFUiW",
-    "nodes": [
-      {
-        "id": "657d59ee-29c4-494a-bc7f-b34f4bf11d4e",
-        "name": "When Executed by Another Workflow",
-        "type": "n8n-nodes-base.executeWorkflowTrigger",
-        "typeVersion": 1,
-        "position": [
-          0,
-          224
-        ],
-        "parameters": {
-          "inputSource": "passthrough"
-        }
-      },
-      {
-        "id": "e227c4b2-f232-4909-ae50-e4d724d420fe",
-        "name": "Input Normalizer & Parameter Resolver",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          224,
-          224
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || extracted.season_no || 1);\n\nconst VALID_PLATFORMS = ['YOUTUBE', 'INSTAGRAM', 'TELEGRAM'];\nlet requestedPlatforms = Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms.map(p => p.toString().toUpperCase().trim()).filter(p => VALID_PLATFORMS.includes(p)) : VALID_PLATFORMS;\nif (requestedPlatforms.length === 0) requestedPlatforms = VALID_PLATFORMS;\n\nconst force_publish = Boolean(raw.force_publish === true || raw.force_publish === 'true' || /\\b(--force|force_publish)\\b/i.test(raw.rawText || ''));\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-07 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { project_id, episode_no, season_no, platforms: requestedPlatforms, force_publish, sessionId, requested_at: $now.toISOString() } };"
-        }
-      },
-      {
-        "id": "9a7f4f8a-932d-4706-b396-e085b500dfb2",
-        "name": "Supabase: Fetch Episode & QC State",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          448,
-          224
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?select=id,project_id,episode_no,title,script,script_json,output_media,current_state,qc_status,youtube_url,instagram_urls,telegram_file_id&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}&limit=1",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "5c82de00-ddca-422a-9bd9-bdf1ad53cfd4",
-        "name": "Supabase: Fetch Project Info",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          672,
-          224
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season&id=eq.{{ $('Input Normalizer & Parameter Resolver').first().json.project_id }}&limit=1",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "563e7a2a-9450-43b0-bef0-323d0d38b205",
-        "name": "Gatekeeper & Idempotency Evaluator",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          896,
-          224
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Input Normalizer & Parameter Resolver').first().json;\nconst epRaw = $('Supabase: Fetch Episode & QC State').first().json;\nconst projRaw = $input.item.json;\nconst episodeRec = Array.isArray(epRaw) ? epRaw[0] : (epRaw && epRaw.episode_no !== undefined ? epRaw : null);\nconst projectRec = Array.isArray(projRaw) ? projRaw[0] : (projRaw && projRaw.id ? projRaw : {});\n\nif (!episodeRec) {\n  return {\n    json: {\n      ...base, qc_blocked: true,\n      block_reason: `Episode ${base.episode_no} record not found in episodes table for project ${base.project_id}.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'EPISODE_NOT_FOUND', action_payload: { requested_platforms: base.platforms, force_publish: base.force_publish } }\n    }\n  };\n}\n\nconst currentState = (episodeRec.current_state || '').toString().toUpperCase().trim();\nconst qcStatus = (episodeRec.qc_status || 'PENDING').toString().toUpperCase().trim();\nconst outputMedia = (episodeRec.output_media && typeof episodeRec.output_media === 'object') ? episodeRec.output_media : {};\nconst masterVideoUrl = outputMedia.final_video_url || outputMedia.master_video_url || outputMedia.video_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${base.project_id}/season_${base.season_no}_ep_${base.episode_no}_master.mp4`;\n\nconst scenesList = Array.isArray(episodeRec.script_json?.scenes) ? episodeRec.script_json.scenes : [];\nconst calculatedDurationSec = scenesList.reduce((acc, s) => acc + Number(s.duration_sec || 5), 0) || Number(outputMedia.duration_sec || 120);\nconst isYoutubeShort = calculatedDurationSec < 60;\n\nconst isStateReady = currentState === 'MIXED' || currentState === 'PUBLISHED';\nconst isQcApproved = qcStatus === 'APPROVED';\n\nif ((!isStateReady || !isQcApproved) && !base.force_publish) {\n  return {\n    json: {\n      ...base, project_name: projectRec.name || 'Anime Project', qc_blocked: true, current_state: currentState, qc_status: qcStatus,\n      block_reason: `Rule 18 Publishing Gate Blocked: Episode ${base.episode_no} has current_state='${currentState}' (expected 'MIXED') and qc_status='${qcStatus}' (expected 'APPROVED'). Pass force_publish=true or approve QC first.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'QC_GATE_UNAPPROVED', action_payload: { current_state: currentState, qc_status: qcStatus, requested_platforms: base.platforms, blocked_at: $now.toISOString() } }\n    }\n  };\n}\n\nconst existingPubUrls = {\n  youtube: episodeRec.youtube_url || null,\n  instagram: (Array.isArray(episodeRec.instagram_urls) && episodeRec.instagram_urls.length > 0) ? episodeRec.instagram_urls[0] : null,\n  telegram: episodeRec.telegram_file_id ? `https://t.me/c/${episodeRec.telegram_file_id}` : null\n};\n\nconst pendingPlatforms = [];\nconst skippedPlatforms = [];\n\nfor (const plat of base.platforms) {\n  const key = plat.toLowerCase();\n  if (existingPubUrls[key] && typeof existingPubUrls[key] === 'string' && existingPubUrls[key].startsWith('http')) { skippedPlatforms.push(plat); }\n  else { pendingPlatforms.push(plat); }\n}\n\nreturn {\n  json: {\n    ...base, project_name: projectRec.name || 'Anime Project', story_bible: projectRec.story_bible || {},\n    episode_title: episodeRec.title || `Episode ${base.episode_no}`,\n    episode_logline: episodeRec.logline || episodeRec.script_json?.logline || '',\n    episode_script: episodeRec.script || '',\n    scenes_summary: scenesList.map(s => ({ scene_order: s.scene_order, duration_sec: s.duration_sec || 5, summary: s.action_summary || s.description })),\n    master_video_url: masterVideoUrl, duration_sec: calculatedDurationSec, is_youtube_short: isYoutubeShort,\n    current_state: currentState, qc_status: qcStatus, qc_blocked: false, existing_publication_urls: existingPubUrls,\n    pending_platforms: pendingPlatforms, skipped_platforms: skippedPlatforms, all_already_published: pendingPlatforms.length === 0,\n    needs_youtube: pendingPlatforms.includes('YOUTUBE'), needs_instagram: pendingPlatforms.includes('INSTAGRAM'), needs_telegram: pendingPlatforms.includes('TELEGRAM')\n  }\n};"
-        }
-      },
-      {
-        "id": "ae76aac6-f357-46c1-a912-b91cbc8738cd",
-        "name": "If QC Gate Blocked",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          1120,
-          224
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.qc_blocked }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "7f887b9a-4238-465e-986e-ea143a47a69f",
-        "name": "Supabase: Queue Unapproved Publish in pending_actions",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          5376,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($json.manual_review_payload) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "e12b93b0-8fdf-4c84-9fcb-acd10275c06b",
-        "name": "If All Platforms Already Published",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          1344,
-          288
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.all_already_published }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "f3b1d6fc-ed78-4e23-9e48-047dc51a1fbf",
-        "name": "Primary Groq Viral Metadata Generator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          1568,
-          368
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.4, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-07 Viral Anime Metadata Architect. Generate high-CTR Hindi/Hinglish viral distribution metadata in STRICT JSON: {\"seo_titles\": [\"Title 1\", \"Title 2\", \"Title 3\"], \"primary_title\": \"Best under 95 chars\", \"description\": \"Detailed SEO with timestamped chapters\", \"hashtags\": [\"#AnimeHindi\", \"#IndianAnime\"], \"tags\": [\"anime hindi\"], \"pinned_comment\": \"Engaging question in Hinglish\"}.' }, { role: 'user', content: 'Project: ' + $json.project_name + '\\nSeason: ' + $json.season_no + ' Episode: ' + $json.episode_no + '\\nEpisode Title: ' + $json.episode_title + '\\nLogline: ' + $json.episode_logline + '\\nDuration Sec: ' + $json.duration_sec + ' (Is Shorts: ' + $json.is_youtube_short + ')\\nScenes: ' + JSON.stringify($json.scenes_summary) } ] }) }}",
-          "options": {
-            "timeout": 25000
-          }
-        }
-      },
-      {
-        "id": "5f16a031-4d5e-4e42-9372-3459a616896e",
-        "name": "If Primary Groq Failed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          1792,
-          368
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "be5778cf-1a6d-421e-b653-5e6eb5cb8b61",
-        "name": "Fallback Gemini Viral Metadata Generator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          2016,
-          288
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.4, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Generate viral Hindi/Hinglish anime metadata in STRICT JSON: {\"seo_titles\": [\"...\"], \"primary_title\": \"...\", \"description\": \"...\", \"hashtags\": [\"#AnimeHindi\", \"#IndianAnime\"], \"tags\": [\"...\"], \"pinned_comment\": \"...\"}.' }, { role: 'user', content: 'Project: ' + $('Gatekeeper & Idempotency Evaluator').first().json.project_name + '\\nEpisode: ' + $('Gatekeeper & Idempotency Evaluator').first().json.episode_no + ' - ' + $('Gatekeeper & Idempotency Evaluator').first().json.episode_title + '\\nLogline: ' + $('Gatekeeper & Idempotency Evaluator').first().json.episode_logline } ] }) }}",
-          "options": {
-            "timeout": 25000
-          }
-        }
-      },
-      {
-        "id": "91fbefc8-0715-41c6-bc09-db4321cf968a",
-        "name": "Metadata Normalizer & Limit Enforcer",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          2240,
-          368
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const ctx = $('Gatekeeper & Idempotency Evaluator').first().json;\nconst llmRaw = $input.item.json || {};\nlet parsedMeta = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) parsedMeta = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim());\n} catch (e) { parsedMeta = null; }\n\nconst defaultTitle = `${ctx.project_name} - Ep ${ctx.episode_no}: ${ctx.episode_title}`;\nconst seoTitles = Array.isArray(parsedMeta?.seo_titles) && parsedMeta.seo_titles.length >= 3 ? parsedMeta.seo_titles.slice(0, 3).map(t => t.toString().slice(0, 100)) : [defaultTitle, `Ep ${ctx.episode_no}: ${ctx.episode_title} — Full Action Hindi Anime!`, `${ctx.episode_title} | ${ctx.project_name} Season ${ctx.season_no} Ep ${ctx.episode_no}`];\nlet primaryTitle = (parsedMeta?.primary_title || seoTitles[0] || defaultTitle).toString().trim();\nif (ctx.is_youtube_short && !/#shorts/i.test(primaryTitle)) { primaryTitle = `${primaryTitle.slice(0, 88)} #Shorts`; }\nprimaryTitle = primaryTitle.slice(0, 100);\n\nconst hashtags = Array.isArray(parsedMeta?.hashtags) && parsedMeta.hashtags.length > 0 ? parsedMeta.hashtags.map(h => h.toString().startsWith('#') ? h.toString() : `#${h}`) : ['#AnimeHindi', '#IndianAnime', '#CinematicAnime', '#AIAnime'];\nconst tags = Array.isArray(parsedMeta?.tags) && parsedMeta.tags.length > 0 ? parsedMeta.tags.map(t => t.toString()) : ['anime hindi', 'indian anime', 'hindi anime episode', ctx.project_name.toLowerCase()];\n\nconst rawDesc = (parsedMeta?.description || `${ctx.episode_logline}\\n\\n00:00 Opening Hook\\n00:30 Main Story\\n01:30 Climax & Cliffhanger`).toString().trim();\nconst youtubeDescription = `${rawDesc}\\n\\n${hashtags.join(' ')}`.slice(0, 4950);\nconst instagramCaption = `${primaryTitle}\\n\\n${ctx.episode_logline}\\n\\n${hashtags.join(' ')}`.slice(0, 2150);\nconst pinnedComment = (parsedMeta?.pinned_comment || `Bhai log, Episode ${ctx.episode_no} ka climax kaisa laga? Comment me batao! 🔥`).toString();\n\nreturn { json: { ...ctx, viral_metadata: { seo_titles: seoTitles, primary_title: primaryTitle, youtube_format: ctx.is_youtube_short ? 'YOUTUBE_SHORTS' : 'YOUTUBE_LONG_FORM', youtube_description: youtubeDescription, instagram_caption: instagramCaption, hashtags, tags, pinned_comment: pinnedComment }, live_urls: { ...ctx.existing_publication_urls } } };"
-        }
-      },
-      {
-        "id": "5476d4e8-b2e9-43b5-834d-7c018970c549",
-        "name": "If YouTube Publish Needed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          2464,
-          368
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.needs_youtube }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "6ccc9e42-89e2-4073-bb50-5e4c556404ac",
-        "name": "YouTube: OAuth2 Token Refresh",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          2688,
-          288
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "https://oauth2.googleapis.com/token",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
-            ]
-          },
-          "sendBody": true,
-          "contentType": "form-urlencoded",
-          "bodyParameters": {
-            "parameters": [
-              {
-                "name": "client_id",
-                "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_id || $env.YOUTUBE_CLIENT_ID) }}"
-              },
-              {
-                "name": "client_secret",
-                "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
-              },
-              {
-                "name": "refresh_token",
-                "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
-              },
-              {
-                "name": "grant_type",
-                "value": "refresh_token"
-              }
-            ]
-          },
-          "options": {
-            "timeout": 15000
-          }
-        }
-      },
-      {
-        "id": "7a1dbafa-cc97-4b96-a6d3-16031575509f",
-        "name": "Platform A: YouTube API v3 Stream Upload",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          2912,
-          288
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.upload_bridge_url || $env.YOUTUBE_UPLOAD_BRIDGE_URL) || 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "X-Source-Stream-Url",
-                "value": "={{ $('Metadata Normalizer & Limit Enforcer').first().json.master_video_url }}"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ stream_source_url: $('Metadata Normalizer & Limit Enforcer').first().json.master_video_url, snippet: { title: $('Metadata Normalizer & Limit Enforcer').first().json.viral_metadata.primary_title, description: $('Metadata Normalizer & Limit Enforcer').first().json.viral_metadata.youtube_description, tags: $('Metadata Normalizer & Limit Enforcer').first().json.viral_metadata.tags, categoryId: '1', defaultLanguage: 'hi', defaultAudioLanguage: 'hi' }, status: { privacyStatus: 'public', selfDeclaredMadeForKids: false } }) }}",
-          "options": {
-            "timeout": 60000
-          }
-        }
-      },
-      {
-        "id": "b02ee1fc-6407-4b1e-ab42-2f8f2168aa34",
-        "name": "Record YouTube URL & Restore Context",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3136,
-          368
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Metadata Normalizer & Limit Enforcer').first().json;\nconst ytResp = $input.item.json || {};\nlet ytUrl = base.live_urls?.youtube || null;\nlet ytVideoId = ytResp.id || ytResp.video_id || null;\nif (base.needs_youtube) {\n  if (!ytVideoId) { ytVideoId = `yt_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  ytUrl = base.is_youtube_short ? `https://youtube.com/shorts/${ytVideoId}` : `https://youtu.be/${ytVideoId}`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(ytUrl ? { youtube: ytUrl, youtube_video_id: ytVideoId, youtube_format: base.viral_metadata.youtube_format } : {}) } } };"
-        }
-      },
-      {
-        "id": "396d02b7-932a-43e6-92dc-5cb9d9a64f10",
-        "name": "If Instagram Publish Needed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          3360,
-          368
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.needs_instagram }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "23c03208-46eb-47b0-9b74-f591482cac36",
-        "name": "Platform B1: Instagram Create Reels Container",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          3584,
-          288
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ media_type: 'REELS', video_url: $json.master_video_url, caption: $json.viral_metadata.instagram_caption, share_to_feed: true, access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "a09885df-adba-43b2-b690-e509e3cef19e",
-        "name": "Platform B2: Instagram Publish Reels Container",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          3808,
-          288
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media_publish",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ creation_id: $json.id || 'ig_container_pending', access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "6428bc7a-a70b-48c3-8b7a-8c83eb3c34a3",
-        "name": "Record Instagram URL & Restore Context",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          4032,
-          368
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Record YouTube URL & Restore Context').first().json;\nconst igResp = $input.item.json || {};\nlet igUrl = base.live_urls?.instagram || null;\nlet igMediaId = igResp.id || null;\nif (base.needs_instagram) {\n  if (!igMediaId) { igMediaId = `ig_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  igUrl = igResp.permalink || `https://www.instagram.com/reel/${igMediaId}/`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(igUrl ? { instagram: igUrl, instagram_media_id: igMediaId } : {}) } } };"
-        }
-      },
-      {
-        "id": "bd49f21c-aa6b-4172-a4c4-eebc7483150d",
-        "name": "If Telegram Broadcast Needed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          4256,
-          368
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.needs_telegram }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "0305f58d-5192-41ac-91cc-5f4b0e4c7b26",
-        "name": "Platform C: Telegram Channel Premiere Broadcast",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          4480,
-          288
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🔥 <b>NEW ANIME EPISODE PREMIERE!</b>\\n\\n🎬 <b>' + $json.viral_metadata.primary_title + '</b>\\n📝 ' + $json.episode_logline + '\\n\\n▶️ <b>YouTube:</b> ' + ($json.live_urls.youtube || 'Coming Soon') + '\\n📸 <b>Instagram Reel:</b> ' + ($json.live_urls.instagram || 'Coming Soon') + '\\n🎥 <b>Direct Master Stream:</b> ' + $json.master_video_url + '\\n\\n' + $json.viral_metadata.hashtags.join(' ') }) }}",
-          "options": {
-            "timeout": 20000
-          }
-        }
-      },
-      {
-        "id": "c7a92f24-c124-4d28-9afe-0b3129820a73",
-        "name": "Merge Results & Database Finalization",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          4704,
-          368
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Record Instagram URL & Restore Context').first().json;\nconst tgResp = $input.item.json || {};\nconst publishedAtIso = $now.toISOString();\nlet tgUrl = base.live_urls?.telegram || null;\nif (base.needs_telegram) {\n  const msgId = tgResp?.result?.message_id || `msg_${base.episode_no}`;\n  const cleanChan = ($env.TELEGRAM_CHANNEL_ID || 'anime_channel').toString().replace(/^@/, '');\n  tgUrl = `https://t.me/${cleanChan}/${msgId}`;\n}\n\nconst finalInstaArray = base.live_urls.instagram ? [base.live_urls.instagram] : [];\nreturn { json: { ...base, published_at: publishedAtIso, final_yt_url: base.live_urls.youtube || null, final_ig_urls: finalInstaArray, final_tg_msg_id: tgResp?.result?.message_id || null } };"
-        }
-      },
-      {
-        "id": "dd9b0c1b-bdc2-473f-98cb-c57910d35e7e",
-        "name": "Supabase: Update Episode (PUBLISHED)",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          4928,
-          368
-        ],
-        "parameters": {
-          "method": "PATCH",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ youtube_url: $json.final_yt_url, instagram_urls: $json.final_ig_urls, telegram_file_id: $json.final_tg_msg_id, current_state: 'PUBLISHED', published_at: $json.published_at }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "be162d6e-93ed-4bdb-bb1b-2bd396839012",
-        "name": "Supabase: Update Episode State (PUBLISHED)",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          5152,
-          368
-        ],
-        "parameters": {
-          "method": "PATCH",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?project_id=eq.{{ $('Merge Results & Database Finalization').first().json.project_id }}&episode_no=eq.{{ $('Merge Results & Database Finalization').first().json.episode_no }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ current_state: 'PUBLISHED' }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "059c5426-96dc-41ae-b025-e7f3f2048856",
-        "name": "Supabase: Insert Audit Log",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          5376,
-          368
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Merge Results & Database Finalization').first().json.project_id, episode_no: $('Merge Results & Database Finalization').first().json.episode_no, workflow_name: 'WF-07', action: 'EPISODE_PUBLISHED', execution_id: $execution.id, new_value: { youtube: $('Merge Results & Database Finalization').first().json.final_yt_url, instagram: $('Merge Results & Database Finalization').first().json.final_ig_urls } }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "2cb970d1-1294-4ecf-941f-25510ad13963",
-        "name": "Final Response Formatter",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          5600,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const gate = $('Gatekeeper & Idempotency Evaluator').first().json;\n\nif (gate.qc_blocked === true) {\n  const blockMsg = [\n    `🛑 **WF-07: Publishing Blocked by Rule 18 QC Gate!**`,\n    `📁 **Project ID:** \\`${gate.project_id}\\` | **Episode:** ${gate.episode_no}`,\n    `• **Reason:** ${gate.block_reason}`,\n    `• **Action Taken:** Item queued in \\`pending_actions\\` (\\`status = MANUAL_REVIEW\\`). QC approve karne ke baad ya \\`force_publish: true\\` ke sath retry karein.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'BLOCKED_QC_UNAPPROVED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, output: blockMsg, text: blockMsg } };\n}\n\nif (gate.all_already_published === true) {\n  const idemMsg = [\n    `✅ **WF-07: Idempotency Guard — Episode ${gate.episode_no} Already Published!**`,\n    `• **Skipped Platforms (Already Live):** ${gate.skipped_platforms.join(', ')}`,\n    `• **YouTube:** ${gate.existing_publication_urls.youtube || 'N/A'}`,\n    `• **Instagram:** ${gate.existing_publication_urls.instagram || 'N/A'}`,\n    `• **Telegram:** ${gate.existing_publication_urls.telegram || 'N/A'}`\n  ].join('\\n');\n  return { json: { ok: true, status: 'ALREADY_PUBLISHED_IDEMPOTENT', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, publication_urls: gate.existing_publication_urls, output: idemMsg, text: idemMsg } };\n}\n\nconst finalState = $('Merge Results & Database Finalization').first().json;\nconst pubs = { youtube: finalState.final_yt_url, instagram: finalState.final_ig_urls?.[0] };\nconst meta = finalState.viral_metadata;\n\nconst successMsg = [\n  `🚀 **WF-07: Episode ${finalState.episode_no} Successfully Published!**`,\n  `🎬 **SEO Title:** ${meta.primary_title} (\\`${meta.youtube_format}\\`)`,\n  `📌 **Pinned Comment Draft:** ${meta.pinned_comment}`,\n  ``, `🌐 **Live Distribution Links:**`,\n  `• **YouTube:** ${pubs.youtube || 'Not Requested'}`,\n  `• **Instagram Reels:** ${pubs.instagram || 'Not Requested'}`,\n  `• **Telegram Premiere:** ${finalState.final_tg_msg_id ? 'Sent successfully' : 'Not Requested'}`,\n  finalState.skipped_platforms.length > 0 ? `• **Idempotent Skipped (Already Live):** ${finalState.skipped_platforms.join(', ')}` : ''\n].filter(Boolean).join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: 'PUBLISHED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no,\n    published_at: finalState.published_at, published_platforms: finalState.pending_platforms, skipped_platforms: finalState.skipped_platforms,\n    publication_urls: pubs, viral_metadata: meta, output: successMsg, text: successMsg\n  }\n};"
-        }
-      }
-    ],
-    "connections": {
-      "When Executed by Another Workflow": {
-        "main": [
-          [
-            {
-              "node": "Input Normalizer & Parameter Resolver",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Input Normalizer & Parameter Resolver": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Episode & QC State",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Episode & QC State": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Project Info",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Project Info": {
-        "main": [
-          [
-            {
-              "node": "Gatekeeper & Idempotency Evaluator",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Gatekeeper & Idempotency Evaluator": {
-        "main": [
-          [
-            {
-              "node": "If QC Gate Blocked",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If QC Gate Blocked": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Queue Unapproved Publish in pending_actions",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "If All Platforms Already Published",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Queue Unapproved Publish in pending_actions": {
-        "main": [
-          [
-            {
-              "node": "Final Response Formatter",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If All Platforms Already Published": {
-        "main": [
-          [
-            {
-              "node": "Final Response Formatter",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Primary Groq Viral Metadata Generator",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Primary Groq Viral Metadata Generator": {
-        "main": [
-          [
-            {
-              "node": "If Primary Groq Failed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Primary Groq Failed": {
-        "main": [
-          [
-            {
-              "node": "Fallback Gemini Viral Metadata Generator",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Metadata Normalizer & Limit Enforcer",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Fallback Gemini Viral Metadata Generator": {
-        "main": [
-          [
-            {
-              "node": "Metadata Normalizer & Limit Enforcer",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Metadata Normalizer & Limit Enforcer": {
-        "main": [
-          [
-            {
-              "node": "If YouTube Publish Needed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If YouTube Publish Needed": {
-        "main": [
-          [
-            {
-              "node": "YouTube: OAuth2 Token Refresh",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Record YouTube URL & Restore Context",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "YouTube: OAuth2 Token Refresh": {
-        "main": [
-          [
-            {
-              "node": "Platform A: YouTube API v3 Stream Upload",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Platform A: YouTube API v3 Stream Upload": {
-        "main": [
-          [
-            {
-              "node": "Record YouTube URL & Restore Context",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Record YouTube URL & Restore Context": {
-        "main": [
-          [
-            {
-              "node": "If Instagram Publish Needed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Instagram Publish Needed": {
-        "main": [
-          [
-            {
-              "node": "Platform B1: Instagram Create Reels Container",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Record Instagram URL & Restore Context",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Platform B1: Instagram Create Reels Container": {
-        "main": [
-          [
-            {
-              "node": "Platform B2: Instagram Publish Reels Container",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Platform B2: Instagram Publish Reels Container": {
-        "main": [
-          [
-            {
-              "node": "Record Instagram URL & Restore Context",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Record Instagram URL & Restore Context": {
-        "main": [
-          [
-            {
-              "node": "If Telegram Broadcast Needed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Telegram Broadcast Needed": {
-        "main": [
-          [
-            {
-              "node": "Platform C: Telegram Channel Premiere Broadcast",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Merge Results & Database Finalization",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Platform C: Telegram Channel Premiere Broadcast": {
-        "main": [
-          [
-            {
-              "node": "Merge Results & Database Finalization",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Merge Results & Database Finalization": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Episode (PUBLISHED)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Episode (PUBLISHED)": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Update Episode State (PUBLISHED)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Update Episode State (PUBLISHED)": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Insert Audit Log",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Insert Audit Log": {
-        "main": [
-          [
-            {
-              "node": "Final Response Formatter",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "nodeGroups": [],
-    "authors": "Neeraj  Behra",
-    "name": null,
-    "description": null,
-    "autosaved": false,
-    "createdAt": "2026-10-29T21:21:32.240Z",
-    "updatedAt": "2026-10-29T21:21:32.240Z"
-  }
+  ]
 }

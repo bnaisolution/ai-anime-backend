@@ -17,7 +17,6 @@ import ownerRoutes from './modules/owner/owner.routes';
 import userRoutes from './modules/user/user.routes';
 import skillsRoutes from './modules/skills/skills.routes';
 import configRoutes from './modules/config/config.routes';
-
 // --- v3.1 NEW IMPORTS ---
 import capabilitiesRoutes from './modules/capabilities/capabilities.routes';
 import skillsV31Routes from './modules/skills/skills.v31.routes';
@@ -27,6 +26,7 @@ import trustedControllerRoutes from './modules/trusted-controller/trustedControl
 import notificationsRoutes from './modules/notifications/notifications.routes';
 import filesRoutes from './modules/files/files.routes';
 import cinematicRoutes from './modules/cinematic/cinematic.routes';
+import telegramProxyRoutes from './modules/anime/media/telegram.proxy';
 
 const server = Fastify({ logger: { level: env.NODE_ENV === 'production' ? 'info' : 'debug' }, bodyLimit: 5 * 1024 * 1024 });
 
@@ -39,11 +39,11 @@ async function bootstrap() {
       if (allowedOrigins.includes(origin)) return cb(null, true);
       return cb(null, false);
     },
-    credentials: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Service-Token', 'X-Client-Version', 'Accept']
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Service-Token', 'X-Client-Version', 'Accept', 'Idempotency-Key', 'X-Request-Id']
   });
   await server.register(rateLimit, { max: 120, timeWindow: '1 minute' });
-
   await server.register(supabasePlugin);
   await server.register(authPlugin);
 
@@ -70,10 +70,12 @@ async function bootstrap() {
   await server.register(filesRoutes, { prefix: '/api/v1/files' });
   await server.register(cinematicRoutes, { prefix: '/api/v1/cinematic' });
 
+  // --- TELEGRAM PERMANENT MEDIA STREAM PROXY ---
+  await server.register(telegramProxyRoutes);
+
   // --- EXISTING WORKERS & MODULES ---
   const taskWorker = (await import('./modules/tasks/task.worker')).default;
   await server.register(taskWorker);
-
   await server.register(systemRoutes, { prefix: '/api/system' });
   await server.register(incidentsRoutes, { prefix: '/api/incidents' });
   startHealthCheckJob(server);

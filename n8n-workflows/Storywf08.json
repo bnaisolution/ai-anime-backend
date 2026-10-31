@@ -2,11 +2,9 @@
   "id": "MrWrz58aRUVTzpLr",
   "name": "Storywf08",
   "active": true,
-  "activeVersionId": "a5977563-84c8-463c-b438-7393f9e27b70",
   "createdAt": "2026-10-26T09:55:21.702Z",
   "updatedAt": "2026-10-29T21:21:32.590Z",
   "isArchived": false,
-  "versionId": "a5977563-84c8-463c-b438-7393f9e27b70",
   "triggerCount": 0,
   "nodes": [
     {
@@ -18,9 +16,7 @@
         0,
         80
       ],
-      "parameters": {
-        "inputSource": "passthrough"
-      }
+      "parameters": {}
     },
     {
       "id": "b3fa061d-bf3f-4e0a-95d9-9f60c77b898e",
@@ -80,7 +76,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Target Resolver').first().json;\nconst rawEp = $input.item.json;\nconst epRow = Array.isArray(rawEp) ? rawEp[0] : (rawEp && (rawEp.youtube_url || rawEp.instagram_urls) ? rawEp : {});\n\nlet ytVideoId = null;\nif (epRow.youtube_url) {\n  const m = epRow.youtube_url.match(/(?:youtu\\.be\\/|shorts\\/|v=)([a-zA-Z0-9_-]{6,20})/i);\n  if (m) ytVideoId = m[1];\n}\n\nlet igMediaId = null;\nif (Array.isArray(epRow.instagram_urls) && epRow.instagram_urls.length > 0) {\n  const match = epRow.instagram_urls[0].match(/\\/(?:reel|p)\\/([a-zA-Z0-9_-]+)/i);\n  if (match) igMediaId = match[1];\n}\n\nreturn {\n  json: {\n    ...base, episode_title: epRow?.title || `Episode ${base.episode_no}`,\n    youtube_video_id: ytVideoId || 'DEMO_YOUTUBE_ID', instagram_media_id: igMediaId || 'DEMO_IG_ID',\n    fetch_youtube: base.platforms.includes('YOUTUBE'), fetch_instagram: base.platforms.includes('INSTAGRAM')\n  }\n};"
+        "jsCode": "const base = $('Input Normalizer & Target Resolver').item.json;\nconst rawEp = $input.item.json;\nconst epRow = Array.isArray(rawEp) ? rawEp[0] : (rawEp && (rawEp.youtube_url || rawEp.instagram_urls) ? rawEp : {});\n\nlet ytVideoId = null;\nif (epRow.youtube_url) {\n  const m = epRow.youtube_url.match(/(?:youtu\\.be\\/|shorts\\/|v=)([a-zA-Z0-9_-]{6,20})/i);\n  if (m) ytVideoId = m[1];\n}\n\nlet igMediaId = null;\nif (Array.isArray(epRow.instagram_urls) && epRow.instagram_urls.length > 0) {\n  const match = epRow.instagram_urls[0].match(/\\/(?:reel|p)\\/([a-zA-Z0-9_-]+)/i);\n  if (match) igMediaId = match[1];\n}\n\nreturn {\n  json: {\n    ...base, episode_title: epRow?.title || `Episode ${base.episode_no}`,\n    youtube_video_id: ytVideoId || 'DEMO_YOUTUBE_ID', instagram_media_id: igMediaId || 'DEMO_IG_ID',\n    fetch_youtube: base.platforms.includes('YOUTUBE'), fetch_instagram: base.platforms.includes('INSTAGRAM')\n  }\n};"
       }
     },
     {
@@ -131,15 +127,15 @@
           "parameters": [
             {
               "name": "client_id",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_id || $env.YOUTUBE_CLIENT_ID) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_id || $env.YOUTUBE_CLIENT_ID) }}"
             },
             {
               "name": "client_secret",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
             },
             {
               "name": "refresh_token",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
             },
             {
               "name": "grant_type",
@@ -164,13 +160,13 @@
         0
       ],
       "parameters": {
-        "url": "=https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id={{ $('Unpack Publication IDs').first().json.youtube_video_id }}",
+        "url": "=https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id={{ $('Unpack Publication IDs').item.json.youtube_video_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
+              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
             },
             {
               "name": "Accept",
@@ -194,7 +190,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Unpack Publication IDs').first().json;\nreturn { json: base };"
+        "jsCode": "const base = $('Unpack Publication IDs').item.json;\nreturn { json: base };"
       }
     },
     {
@@ -229,7 +225,7 @@
         0
       ],
       "parameters": {
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.instagram_media_id }}/insights?metric=plays,reach,shares,saves,comments&access_token={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }}",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.instagram_media_id }}/insights?metric=plays,reach,shares,saves,comments&access_token={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -255,7 +251,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Unpack Publication IDs').first().json;\nconst ytNode = $('YouTube Analytics API: Fetch Stats').isExecuted ? $('YouTube Analytics API: Fetch Stats').first().json : {};\nconst igNode = $('Instagram Graph API: Fetch Insights').isExecuted ? $('Instagram Graph API: Fetch Insights').first().json : {};\n\nconst ytStats = ytNode?.items?.[0]?.statistics || {};\nconst ytViews = Number(ytStats.viewCount ?? 12450);\nconst ytLikes = Number(ytStats.likeCount ?? 1420);\nconst ytComments = Number(ytStats.commentCount ?? 230);\nconst ytWatchMin = Math.round(ytViews * 2.5);\nconst ytEstimatedShares = Math.round(ytViews * 0.02);\n\nconst igData = Array.isArray(igNode?.data) ? igNode.data : [];\nconst getIgVal = (name) => Number(igData.find(x => x.name === name)?.values?.[0]?.value ?? 0);\n\nconst igPlays = getIgVal('plays') || 8400;\nconst igReach = getIgVal('reach') || 6200;\nconst igShares = getIgVal('shares') || 410;\nconst igSaves = getIgVal('saves') || 780;\nconst igComments = getIgVal('comments') || 115;\n\nconst total_views = ytViews + igPlays;\nconst total_watch_time_min = ytWatchMin + Math.round(igPlays * 0.8);\nconst total_watch_time_sec = total_watch_time_min * 60;\nconst avg_retention_pct = Number(ytStats.averageViewPercentage ?? 68.5);\nconst avg_view_duration = Math.round(total_watch_time_sec / Math.max(1, total_views));\nconst total_likes = ytLikes + Math.round(igReach * 0.15);\nconst total_shares = igShares + ytEstimatedShares;\nconst total_saves = igSaves + Math.round(ytViews * 0.03);\nconst total_comments = ytComments + igComments;\n\nconst rawScore = ((total_views * 0.1) + (total_likes * 0.5) + (total_comments * 1.5) + (total_shares * 4.0) + (total_saves * 5.0)) / Math.max(1, total_views / 100);\nconst engagement_score = Number(Math.min(100, Math.max(0, rawScore)).toFixed(1));\nconst engagement_rate_pct = Number(((total_likes + total_comments + total_shares + total_saves) / Math.max(1, total_views) * 100).toFixed(2));\n\nconst unifiedReport = {\n  project_id: base.project_id, episode_no: base.episode_no, season_no: base.season_no,\n  total_views, total_watch_time_min, total_watch_time_sec, avg_retention_pct, avg_view_duration,\n  total_likes, total_shares, total_saves, total_comments, engagement_score, engagement_rate_pct,\n  platforms_measured: base.platforms, recorded_at: $now.toISOString()\n};\n\nreturn { json: { ...base, unified_report: unifiedReport } };"
+        "jsCode": "const base = $('Unpack Publication IDs').item.json;\nconst ytNode = $('YouTube Analytics API: Fetch Stats').isExecuted ? $('YouTube Analytics API: Fetch Stats').item.json : {};\nconst igNode = $('Instagram Graph API: Fetch Insights').isExecuted ? $('Instagram Graph API: Fetch Insights').item.json : {};\n\nconst ytStats = ytNode?.items?.[0]?.statistics || {};\nconst ytViews = Number(ytStats.viewCount ?? 12450);\nconst ytLikes = Number(ytStats.likeCount ?? 1420);\nconst ytComments = Number(ytStats.commentCount ?? 230);\nconst ytWatchMin = Math.round(ytViews * 2.5);\nconst ytEstimatedShares = Math.round(ytViews * 0.02);\n\nconst igData = Array.isArray(igNode?.data) ? igNode.data : [];\nconst getIgVal = (name) => Number(igData.find(x => x.name === name)?.values?.[0]?.value ?? 0);\n\nconst igPlays = getIgVal('plays') || 8400;\nconst igReach = getIgVal('reach') || 6200;\nconst igShares = getIgVal('shares') || 410;\nconst igSaves = getIgVal('saves') || 780;\nconst igComments = getIgVal('comments') || 115;\n\nconst total_views = ytViews + igPlays;\nconst total_watch_time_min = ytWatchMin + Math.round(igPlays * 0.8);\nconst total_watch_time_sec = total_watch_time_min * 60;\nconst avg_retention_pct = Number(ytStats.averageViewPercentage ?? 68.5);\nconst avg_view_duration = Math.round(total_watch_time_sec / Math.max(1, total_views));\nconst total_likes = ytLikes + Math.round(igReach * 0.15);\nconst total_shares = igShares + ytEstimatedShares;\nconst total_saves = igSaves + Math.round(ytViews * 0.03);\nconst total_comments = ytComments + igComments;\n\nconst rawScore = ((total_views * 0.1) + (total_likes * 0.5) + (total_comments * 1.5) + (total_shares * 4.0) + (total_saves * 5.0)) / Math.max(1, total_views / 100);\nconst engagement_score = Number(Math.min(100, Math.max(0, rawScore)).toFixed(1));\nconst engagement_rate_pct = Number(((total_likes + total_comments + total_shares + total_saves) / Math.max(1, total_views) * 100).toFixed(2));\n\nconst unifiedReport = {\n  project_id: base.project_id, episode_no: base.episode_no, season_no: base.season_no,\n  total_views, total_watch_time_min, total_watch_time_sec, avg_retention_pct, avg_view_duration,\n  total_likes, total_shares, total_saves, total_comments, engagement_score, engagement_rate_pct,\n  platforms_measured: base.platforms, recorded_at: $now.toISOString()\n};\n\nreturn { json: { ...base, unified_report: unifiedReport } };"
       }
     },
     {
@@ -286,7 +282,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-08 Analytics & Narrative Feedback AI. Analyze performance metrics. Output STRICT JSON with exact keys: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"string\"], \"drop_off_diagnostics\": \"string\", \"script_optimization_tips\": [\"string\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($json.unified_report) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-08 Analytics & Narrative Feedback AI. Analyze performance metrics. Output STRICT JSON with exact keys: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"string\"], \"drop_off_diagnostics\": \"string\", \"script_optimization_tips\": [\"string\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($json.unified_report) } ] }) }}",
         "options": {
           "timeout": 25000
         }
@@ -339,7 +335,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Analyze performance metrics and output STRICT JSON: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"...\"], \"drop_off_diagnostics\": \"...\", \"script_optimization_tips\": [\"...\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($('Data Aggregator & Normalizer').first().json.unified_report) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Analyze performance metrics and output STRICT JSON: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"...\"], \"drop_off_diagnostics\": \"...\", \"script_optimization_tips\": [\"...\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($('Data Aggregator & Normalizer').item.json.unified_report) } ] }) }}",
         "options": {
           "timeout": 25000
         }
@@ -356,7 +352,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const aggregator = $('Data Aggregator & Normalizer').first().json;\nconst llmRaw = $input.item.json || {};\nlet parsedInsights = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) { parsedInsights = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsedInsights = null; }\n\nconst insights = parsedInsights || {\n  sentiment: 'positive', top_performing_elements: ['Cinematic pacing', 'Character dialogue hook'],\n  drop_off_diagnostics: 'Minor retention dip around minute 2.', script_optimization_tips: ['Increase action frequency', 'Keep cliffhangers sharper']\n};\n\nconst rep = aggregator.unified_report;\nconst isMilestoneReached = Boolean(rep.total_views >= 10000 || rep.engagement_rate_pct >= 8.0);\n\nreturn { json: { ...aggregator, ai_insights: insights, is_milestone_reached: isMilestoneReached } };"
+        "jsCode": "const aggregator = $('Data Aggregator & Normalizer').item.json;\nconst llmRaw = $input.item.json || {};\nlet parsedInsights = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) { parsedInsights = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsedInsights = null; }\n\nconst insights = parsedInsights || {\n  sentiment: 'positive', top_performing_elements: ['Cinematic pacing', 'Character dialogue hook'],\n  drop_off_diagnostics: 'Minor retention dip around minute 2.', script_optimization_tips: ['Increase action frequency', 'Keep cliffhangers sharper']\n};\n\nconst rep = aggregator.unified_report;\nconst isMilestoneReached = Boolean(rep.total_views >= 10000 || rep.engagement_rate_pct >= 8.0);\n\nreturn { json: { ...aggregator, ai_insights: insights, is_milestone_reached: isMilestoneReached } };"
       }
     },
     {
@@ -392,7 +388,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -404,7 +400,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🏆 <b>ANIME EPISODE PERFORMANCE MILESTONE!</b>\\n\\n📊 <b>Episode ' + $json.episode_no + ' Stats:</b>\\n• Views: <b>' + $json.unified_report.total_views.toLocaleString() + '</b>\\n• Engagement Score: <b>' + $json.unified_report.engagement_score + '/100</b>\\n• Engagement Rate: <b>' + $json.unified_report.engagement_rate_pct + '%</b>\\n• Sentiment: <i>' + $json.ai_insights.sentiment + '</i>' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🏆 <b>ANIME EPISODE PERFORMANCE MILESTONE!</b>\\n\\n📊 <b>Episode ' + $json.episode_no + ' Stats:</b>\\n• Views: <b>' + $json.unified_report.total_views.toLocaleString() + '</b>\\n• Engagement Score: <b>' + $json.unified_report.engagement_score + '/100</b>\\n• Engagement Rate: <b>' + $json.unified_report.engagement_rate_pct + '%</b>\\n• Sentiment: <i>' + $json.ai_insights.sentiment + '</i>' }) }}",
         "options": {
           "timeout": 20000
         }
@@ -421,7 +417,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const evalNode = $('AI Insights Parser & Milestone Evaluator').first().json;\nreturn { json: evalNode };"
+        "jsCode": "const evalNode = $('AI Insights Parser & Milestone Evaluator').item.json;\nreturn { json: evalNode };"
       }
     },
     {
@@ -502,7 +498,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').first().json.project_id, episode_no: $('Restore Context After Telegram').first().json.episode_no, sentiment: $('Restore Context After Telegram').first().json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').first().json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').first().json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').first().json.ai_insights.script_optimization_tips, created_at: $now.toISOString() }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, sentiment: $('Restore Context After Telegram').item.json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').item.json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').item.json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').item.json.ai_insights.script_optimization_tips, created_at: $now.toISOString() }) }}",
         "options": {}
       }
     },
@@ -543,7 +539,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').first().json.project_id, episode_no: $('Restore Context After Telegram').first().json.episode_no, workflow_name: 'WF-08', action: 'ANALYTICS_SYNCHRONIZED', execution_id: $execution.id }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, workflow_name: 'WF-08', action: 'ANALYTICS_SYNCHRONIZED', execution_id: $execution.id }) }}",
         "options": {}
       }
     },
@@ -558,7 +554,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const state = $('Restore Context After Telegram').first().json;\nconst rep = state.unified_report;\nconst ins = state.ai_insights;\nconst summaryText = [\n  `📊 **WF-08: Episode ${state.episode_no} Analytics & Performance Synchronized!**`,\n  `📁 **Project ID:** \\`${state.project_id}\\` | **Platforms:** ${rep.platforms_measured.join(', ')}`,\n  ``, `📈 **Unified Performance Metrics:**`,\n  `• **Total Views:** ${rep.total_views.toLocaleString()}`,\n  `• **Engagement Score:** \\`${rep.engagement_score}/100\\` (Rate: ${rep.engagement_rate_pct}%)`,\n  `• **Likes / Shares / Saves / Comments:** ${rep.total_likes} / ${rep.total_shares} / ${rep.total_saves} / ${rep.total_comments}`,\n  ``, `🧠 **AI Narrative Feedback Loop (Saved for WF-02):**`,\n  `• **Audience Sentiment:** \\`${ins.sentiment.toUpperCase()}\\``,\n  `• **Top Elements:** ${ins.top_performing_elements.join(', ')}`,\n  `• **Optimization Tips:** ${ins.script_optimization_tips.map(t => `\\n  - ${t}`).join('')}`\n].join('\\n');\nreturn { json: { ok: true, status: 'ANALYTICS_SYNCHRONIZED', workflow_name: 'WF-08', execution_id: $execution.id, project_id: state.project_id, episode_no: state.episode_no, engagement_score: rep.engagement_score, unified_metrics: rep, ai_insights: ins, output: summaryText, text: summaryText } };"
+        "jsCode": "const state = $('Restore Context After Telegram').item.json;\nconst rep = state.unified_report;\nconst ins = state.ai_insights;\nconst summaryText = [\n  `📊 **WF-08: Episode ${state.episode_no} Analytics & Performance Synchronized!**`,\n  `📁 **Project ID:** \\`${state.project_id}\\` | **Platforms:** ${rep.platforms_measured.join(', ')}`,\n  ``, `📈 **Unified Performance Metrics:**`,\n  `• **Total Views:** ${rep.total_views.toLocaleString()}`,\n  `• **Engagement Score:** \\`${rep.engagement_score}/100\\` (Rate: ${rep.engagement_rate_pct}%)`,\n  `• **Likes / Shares / Saves / Comments:** ${rep.total_likes} / ${rep.total_shares} / ${rep.total_saves} / ${rep.total_comments}`,\n  ``, `🧠 **AI Narrative Feedback Loop (Saved for WF-02):**`,\n  `• **Audience Sentiment:** \\`${ins.sentiment.toUpperCase()}\\``,\n  `• **Top Elements:** ${ins.top_performing_elements.join(', ')}`,\n  `• **Optimization Tips:** ${ins.script_optimization_tips.map(t => `\\n  - ${t}`).join('')}`\n].join('\\n');\nreturn { json: { ok: true, status: 'ANALYTICS_SYNCHRONIZED', workflow_name: 'WF-08', execution_id: $execution.id, project_id: state.project_id, episode_no: state.episode_no, engagement_score: rep.engagement_score, unified_metrics: rep, ai_insights: ins, output: summaryText, text: summaryText } };"
       }
     }
   ],
@@ -838,840 +834,5 @@
       "createdAt": "2026-10-26T06:14:16.780Z",
       "updatedAt": "2026-10-26T06:14:16.780Z"
     }
-  ],
-  "shared": [
-    {
-      "role": "workflow:owner",
-      "workflowId": "MrWrz58aRUVTzpLr",
-      "projectId": "DHmXIxR6TKeJcd0d",
-      "createdAt": "2026-10-26T09:55:21.706Z",
-      "updatedAt": "2026-10-26T09:55:21.706Z"
-    }
-  ],
-  "activeVersion": {
-    "versionId": "a5977563-84c8-463c-b438-7393f9e27b70",
-    "workflowId": "MrWrz58aRUVTzpLr",
-    "nodes": [
-      {
-        "id": "17aabf04-418a-43c6-acd2-be5910076561",
-        "name": "When Executed by Another Workflow",
-        "type": "n8n-nodes-base.executeWorkflowTrigger",
-        "typeVersion": 1,
-        "position": [
-          0,
-          80
-        ],
-        "parameters": {
-          "inputSource": "passthrough"
-        }
-      },
-      {
-        "id": "b3fa061d-bf3f-4e0a-95d9-9f60c77b898e",
-        "name": "Input Normalizer & Target Resolver",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          224,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || 1);\n\nconst VALID_PLATFORMS = ['YOUTUBE', 'INSTAGRAM'];\nlet platforms = Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms.map(p => p.toString().toUpperCase().trim()).filter(p => VALID_PLATFORMS.includes(p)) : VALID_PLATFORMS;\nif (platforms.length === 0) platforms = VALID_PLATFORMS;\n\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-08 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { project_id, episode_no, season_no, platforms, sessionId, evaluated_at: $now.toISOString() } };"
-        }
-      },
-      {
-        "id": "e92539e1-4afa-43fe-baf9-81e949c715c8",
-        "name": "Supabase: Fetch Publication URLs",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          448,
-          80
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?select=id,project_id,episode_no,title,youtube_url,instagram_urls&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}&limit=1",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "9301709b-37c4-4c56-a844-ba61bc26ac80",
-        "name": "Unpack Publication IDs",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          672,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Input Normalizer & Target Resolver').first().json;\nconst rawEp = $input.item.json;\nconst epRow = Array.isArray(rawEp) ? rawEp[0] : (rawEp && (rawEp.youtube_url || rawEp.instagram_urls) ? rawEp : {});\n\nlet ytVideoId = null;\nif (epRow.youtube_url) {\n  const m = epRow.youtube_url.match(/(?:youtu\\.be\\/|shorts\\/|v=)([a-zA-Z0-9_-]{6,20})/i);\n  if (m) ytVideoId = m[1];\n}\n\nlet igMediaId = null;\nif (Array.isArray(epRow.instagram_urls) && epRow.instagram_urls.length > 0) {\n  const match = epRow.instagram_urls[0].match(/\\/(?:reel|p)\\/([a-zA-Z0-9_-]+)/i);\n  if (match) igMediaId = match[1];\n}\n\nreturn {\n  json: {\n    ...base, episode_title: epRow?.title || `Episode ${base.episode_no}`,\n    youtube_video_id: ytVideoId || 'DEMO_YOUTUBE_ID', instagram_media_id: igMediaId || 'DEMO_IG_ID',\n    fetch_youtube: base.platforms.includes('YOUTUBE'), fetch_instagram: base.platforms.includes('INSTAGRAM')\n  }\n};"
-        }
-      },
-      {
-        "id": "3d99af66-d53c-4cc5-8e5e-8d14f4652957",
-        "name": "If YouTube Metrics Requested",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          896,
-          80
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.fetch_youtube }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "d1934e68-783f-4dcc-a3fa-85d9818c7d2a",
-        "name": "YouTube: OAuth2 Token Refresh",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          1120,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "https://oauth2.googleapis.com/token",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/x-www-form-urlencoded"
-              }
-            ]
-          },
-          "sendBody": true,
-          "contentType": "form-urlencoded",
-          "bodyParameters": {
-            "parameters": [
-              {
-                "name": "client_id",
-                "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_id || $env.YOUTUBE_CLIENT_ID) }}"
-              },
-              {
-                "name": "client_secret",
-                "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
-              },
-              {
-                "name": "refresh_token",
-                "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
-              },
-              {
-                "name": "grant_type",
-                "value": "refresh_token"
-              }
-            ]
-          },
-          "options": {
-            "timeout": 15000
-          }
-        }
-      },
-      {
-        "id": "e4bc46df-93df-4027-aed9-189091f60071",
-        "name": "YouTube Analytics API: Fetch Stats",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1344,
-          0
-        ],
-        "parameters": {
-          "url": "=https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id={{ $('Unpack Publication IDs').first().json.youtube_video_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {
-            "timeout": 20000
-          }
-        }
-      },
-      {
-        "id": "5914beea-f684-4107-b6b5-dfbd8e78e424",
-        "name": "Restore Context Before Instagram",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          1568,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Unpack Publication IDs').first().json;\nreturn { json: base };"
-        }
-      },
-      {
-        "id": "57d83acd-7119-4b60-adaa-287d8917456f",
-        "name": "If Instagram Metrics Requested",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          1792,
-          80
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.fetch_instagram }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "fca47ba4-798d-4022-9dcf-654543d9dd6e",
-        "name": "Instagram Graph API: Fetch Insights",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          2016,
-          0
-        ],
-        "parameters": {
-          "url": "=https://graph.facebook.com/v21.0/{{ $json.instagram_media_id }}/insights?metric=plays,reach,shares,saves,comments&access_token={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {
-            "timeout": 20000
-          }
-        }
-      },
-      {
-        "id": "fba8ea69-597a-4e89-be54-23de494a8d0f",
-        "name": "Data Aggregator & Normalizer",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          2240,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Unpack Publication IDs').first().json;\nconst ytNode = $('YouTube Analytics API: Fetch Stats').isExecuted ? $('YouTube Analytics API: Fetch Stats').first().json : {};\nconst igNode = $('Instagram Graph API: Fetch Insights').isExecuted ? $('Instagram Graph API: Fetch Insights').first().json : {};\n\nconst ytStats = ytNode?.items?.[0]?.statistics || {};\nconst ytViews = Number(ytStats.viewCount ?? 12450);\nconst ytLikes = Number(ytStats.likeCount ?? 1420);\nconst ytComments = Number(ytStats.commentCount ?? 230);\nconst ytWatchMin = Math.round(ytViews * 2.5);\nconst ytEstimatedShares = Math.round(ytViews * 0.02);\n\nconst igData = Array.isArray(igNode?.data) ? igNode.data : [];\nconst getIgVal = (name) => Number(igData.find(x => x.name === name)?.values?.[0]?.value ?? 0);\n\nconst igPlays = getIgVal('plays') || 8400;\nconst igReach = getIgVal('reach') || 6200;\nconst igShares = getIgVal('shares') || 410;\nconst igSaves = getIgVal('saves') || 780;\nconst igComments = getIgVal('comments') || 115;\n\nconst total_views = ytViews + igPlays;\nconst total_watch_time_min = ytWatchMin + Math.round(igPlays * 0.8);\nconst total_watch_time_sec = total_watch_time_min * 60;\nconst avg_retention_pct = Number(ytStats.averageViewPercentage ?? 68.5);\nconst avg_view_duration = Math.round(total_watch_time_sec / Math.max(1, total_views));\nconst total_likes = ytLikes + Math.round(igReach * 0.15);\nconst total_shares = igShares + ytEstimatedShares;\nconst total_saves = igSaves + Math.round(ytViews * 0.03);\nconst total_comments = ytComments + igComments;\n\nconst rawScore = ((total_views * 0.1) + (total_likes * 0.5) + (total_comments * 1.5) + (total_shares * 4.0) + (total_saves * 5.0)) / Math.max(1, total_views / 100);\nconst engagement_score = Number(Math.min(100, Math.max(0, rawScore)).toFixed(1));\nconst engagement_rate_pct = Number(((total_likes + total_comments + total_shares + total_saves) / Math.max(1, total_views) * 100).toFixed(2));\n\nconst unifiedReport = {\n  project_id: base.project_id, episode_no: base.episode_no, season_no: base.season_no,\n  total_views, total_watch_time_min, total_watch_time_sec, avg_retention_pct, avg_view_duration,\n  total_likes, total_shares, total_saves, total_comments, engagement_score, engagement_rate_pct,\n  platforms_measured: base.platforms, recorded_at: $now.toISOString()\n};\n\nreturn { json: { ...base, unified_report: unifiedReport } };"
-        }
-      },
-      {
-        "id": "9778ffdc-c41b-499f-a88e-7b215beaa425",
-        "name": "Primary Groq AI Insights Generator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          2464,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-08 Analytics & Narrative Feedback AI. Analyze performance metrics. Output STRICT JSON with exact keys: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"string\"], \"drop_off_diagnostics\": \"string\", \"script_optimization_tips\": [\"string\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($json.unified_report) } ] }) }}",
-          "options": {
-            "timeout": 25000
-          }
-        }
-      },
-      {
-        "id": "c9d58423-5cad-4b79-afad-91be5a3ea4a7",
-        "name": "If Primary Groq Failed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          2688,
-          80
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "d0ac1b14-c2dd-4b3f-bb3d-68303ef3183b",
-        "name": "Fallback Gemini AI Insights Generator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          2912,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Analyze performance metrics and output STRICT JSON: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"...\"], \"drop_off_diagnostics\": \"...\", \"script_optimization_tips\": [\"...\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($('Data Aggregator & Normalizer').first().json.unified_report) } ] }) }}",
-          "options": {
-            "timeout": 25000
-          }
-        }
-      },
-      {
-        "id": "ba526d7c-ac28-4365-8589-ba3c20e4cd52",
-        "name": "AI Insights Parser & Milestone Evaluator",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3136,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const aggregator = $('Data Aggregator & Normalizer').first().json;\nconst llmRaw = $input.item.json || {};\nlet parsedInsights = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) { parsedInsights = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsedInsights = null; }\n\nconst insights = parsedInsights || {\n  sentiment: 'positive', top_performing_elements: ['Cinematic pacing', 'Character dialogue hook'],\n  drop_off_diagnostics: 'Minor retention dip around minute 2.', script_optimization_tips: ['Increase action frequency', 'Keep cliffhangers sharper']\n};\n\nconst rep = aggregator.unified_report;\nconst isMilestoneReached = Boolean(rep.total_views >= 10000 || rep.engagement_rate_pct >= 8.0);\n\nreturn { json: { ...aggregator, ai_insights: insights, is_milestone_reached: isMilestoneReached } };"
-        }
-      },
-      {
-        "id": "15a13dfa-b326-4c7d-b8d4-754f32f4eb45",
-        "name": "If Milestone Threshold Exceeded",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          3360,
-          80
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.is_milestone_reached }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "8ee42fd1-97ae-47d0-ac78-5c6c4a1d5d1c",
-        "name": "Telegram: Send Milestone Alert",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          3584,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🏆 <b>ANIME EPISODE PERFORMANCE MILESTONE!</b>\\n\\n📊 <b>Episode ' + $json.episode_no + ' Stats:</b>\\n• Views: <b>' + $json.unified_report.total_views.toLocaleString() + '</b>\\n• Engagement Score: <b>' + $json.unified_report.engagement_score + '/100</b>\\n• Engagement Rate: <b>' + $json.unified_report.engagement_rate_pct + '%</b>\\n• Sentiment: <i>' + $json.ai_insights.sentiment + '</i>' }) }}",
-          "options": {
-            "timeout": 20000
-          }
-        }
-      },
-      {
-        "id": "48b03059-0e96-4c85-9ce0-21835fe86bb4",
-        "name": "Restore Context After Telegram",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3808,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const evalNode = $('AI Insights Parser & Milestone Evaluator').first().json;\nreturn { json: evalNode };"
-        }
-      },
-      {
-        "id": "794591c3-dc5a-466f-9b88-90f86b41c1f3",
-        "name": "Supabase: Upsert episode_analytics",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          4032,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_analytics?on_conflict=project_id,episode_no,platform",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "resolution=merge-duplicates,return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, platform: 'UNIFIED_CROSS_PLATFORM', views: $json.unified_report.total_views, watch_time_seconds: $json.unified_report.total_watch_time_sec, avg_view_duration: $json.unified_report.avg_view_duration, ctr: $json.unified_report.avg_retention_pct, likes: $json.unified_report.total_likes, comments: $json.unified_report.total_comments, shares: $json.unified_report.total_shares, saves: $json.unified_report.total_saves, engagement_score: $json.unified_report.engagement_score, fetched_at: $json.unified_report.recorded_at }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "0943b941-a82e-42ed-ab13-668e695e1af3",
-        "name": "Supabase: Insert project_analytics_insights",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          4256,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/project_analytics_insights",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').first().json.project_id, episode_no: $('Restore Context After Telegram').first().json.episode_no, sentiment: $('Restore Context After Telegram').first().json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').first().json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').first().json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').first().json.ai_insights.script_optimization_tips, created_at: $now.toISOString() }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "b53bab5f-3af4-4cdf-8562-5735a8806617",
-        "name": "Supabase: Insert Audit Log",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          4480,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').first().json.project_id, episode_no: $('Restore Context After Telegram').first().json.episode_no, workflow_name: 'WF-08', action: 'ANALYTICS_SYNCHRONIZED', execution_id: $execution.id }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "b2bb7718-2f66-4fec-9be8-630863542b41",
-        "name": "Final Analytics Response Formatter",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          4704,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const state = $('Restore Context After Telegram').first().json;\nconst rep = state.unified_report;\nconst ins = state.ai_insights;\nconst summaryText = [\n  `📊 **WF-08: Episode ${state.episode_no} Analytics & Performance Synchronized!**`,\n  `📁 **Project ID:** \\`${state.project_id}\\` | **Platforms:** ${rep.platforms_measured.join(', ')}`,\n  ``, `📈 **Unified Performance Metrics:**`,\n  `• **Total Views:** ${rep.total_views.toLocaleString()}`,\n  `• **Engagement Score:** \\`${rep.engagement_score}/100\\` (Rate: ${rep.engagement_rate_pct}%)`,\n  `• **Likes / Shares / Saves / Comments:** ${rep.total_likes} / ${rep.total_shares} / ${rep.total_saves} / ${rep.total_comments}`,\n  ``, `🧠 **AI Narrative Feedback Loop (Saved for WF-02):**`,\n  `• **Audience Sentiment:** \\`${ins.sentiment.toUpperCase()}\\``,\n  `• **Top Elements:** ${ins.top_performing_elements.join(', ')}`,\n  `• **Optimization Tips:** ${ins.script_optimization_tips.map(t => `\\n  - ${t}`).join('')}`\n].join('\\n');\nreturn { json: { ok: true, status: 'ANALYTICS_SYNCHRONIZED', workflow_name: 'WF-08', execution_id: $execution.id, project_id: state.project_id, episode_no: state.episode_no, engagement_score: rep.engagement_score, unified_metrics: rep, ai_insights: ins, output: summaryText, text: summaryText } };"
-        }
-      }
-    ],
-    "connections": {
-      "When Executed by Another Workflow": {
-        "main": [
-          [
-            {
-              "node": "Input Normalizer & Target Resolver",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Input Normalizer & Target Resolver": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Publication URLs",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Publication URLs": {
-        "main": [
-          [
-            {
-              "node": "Unpack Publication IDs",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Unpack Publication IDs": {
-        "main": [
-          [
-            {
-              "node": "If YouTube Metrics Requested",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If YouTube Metrics Requested": {
-        "main": [
-          [
-            {
-              "node": "YouTube: OAuth2 Token Refresh",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Restore Context Before Instagram",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "YouTube: OAuth2 Token Refresh": {
-        "main": [
-          [
-            {
-              "node": "YouTube Analytics API: Fetch Stats",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "YouTube Analytics API: Fetch Stats": {
-        "main": [
-          [
-            {
-              "node": "Restore Context Before Instagram",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Restore Context Before Instagram": {
-        "main": [
-          [
-            {
-              "node": "If Instagram Metrics Requested",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Instagram Metrics Requested": {
-        "main": [
-          [
-            {
-              "node": "Instagram Graph API: Fetch Insights",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Data Aggregator & Normalizer",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Instagram Graph API: Fetch Insights": {
-        "main": [
-          [
-            {
-              "node": "Data Aggregator & Normalizer",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Data Aggregator & Normalizer": {
-        "main": [
-          [
-            {
-              "node": "Primary Groq AI Insights Generator",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Primary Groq AI Insights Generator": {
-        "main": [
-          [
-            {
-              "node": "If Primary Groq Failed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Primary Groq Failed": {
-        "main": [
-          [
-            {
-              "node": "Fallback Gemini AI Insights Generator",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "AI Insights Parser & Milestone Evaluator",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Fallback Gemini AI Insights Generator": {
-        "main": [
-          [
-            {
-              "node": "AI Insights Parser & Milestone Evaluator",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "AI Insights Parser & Milestone Evaluator": {
-        "main": [
-          [
-            {
-              "node": "If Milestone Threshold Exceeded",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Milestone Threshold Exceeded": {
-        "main": [
-          [
-            {
-              "node": "Telegram: Send Milestone Alert",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Restore Context After Telegram",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Telegram: Send Milestone Alert": {
-        "main": [
-          [
-            {
-              "node": "Restore Context After Telegram",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Restore Context After Telegram": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Upsert episode_analytics",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Upsert episode_analytics": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Insert project_analytics_insights",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Insert project_analytics_insights": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Insert Audit Log",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Insert Audit Log": {
-        "main": [
-          [
-            {
-              "node": "Final Analytics Response Formatter",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "nodeGroups": [],
-    "authors": "Neeraj  Behra",
-    "name": null,
-    "description": null,
-    "autosaved": false,
-    "createdAt": "2026-10-29T21:21:32.595Z",
-    "updatedAt": "2026-10-29T21:21:32.595Z"
-  }
+  ]
 }

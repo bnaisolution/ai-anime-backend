@@ -2,11 +2,9 @@
   "id": "WAB7tCTJSUilOp07",
   "name": "storywf06",
   "active": true,
-  "activeVersionId": "d70e7565-0083-4e17-b9aa-30247071b2e2",
   "createdAt": "2026-10-26T09:49:01.907Z",
   "updatedAt": "2026-10-29T22:43:45.007Z",
   "isArchived": false,
-  "versionId": "d70e7565-0083-4e17-b9aa-30247071b2e2",
   "triggerCount": 0,
   "nodes": [
     {
@@ -18,9 +16,7 @@
         0,
         144
       ],
-      "parameters": {
-        "inputSource": "passthrough"
-      }
+      "parameters": {}
     },
     {
       "id": "068f6610-c73d-4401-ae53-b91bc7b7d2b3",
@@ -81,7 +77,7 @@
         144
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?select=fact_key,fact_value,canon_status,fact_type&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?select=fact_key,fact_value,canon_status,fact_type&project_id=eq.{{ $('Input Normalizer & Scope Resolver').item.json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -114,7 +110,7 @@
         144
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_state_snapshots?select=episode_id,season_id,snapshot_data&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}&episode_id=lt.{{ $('Input Normalizer & Scope Resolver').first().json.episode_no }}&order=episode_id.desc&limit=1",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_state_snapshots?select=episode_id,season_id,snapshot_data&project_id=eq.{{ $('Input Normalizer & Scope Resolver').item.json.project_id }}&episode_id=lt.{{ $('Input Normalizer & Scope Resolver').item.json.episode_no }}&order=episode_id.desc&limit=1",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -147,7 +143,7 @@
         144
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.{{ $('Input Normalizer & Scope Resolver').item.json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -180,7 +176,7 @@
         144
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_timeline?select=episode_no,event_code,event_description,location,characters_involved&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}&order=episode_no.desc,created_at.desc&limit=20",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_timeline?select=episode_no,event_code,event_description,location,characters_involved&project_id=eq.{{ $('Input Normalizer & Scope Resolver').item.json.project_id }}&order=episode_no.desc,created_at.desc&limit=20",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -213,7 +209,7 @@
         144
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.{{ $('Input Normalizer & Scope Resolver').item.json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -246,7 +242,7 @@
         144
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/mystery_tracker?select=mystery_id,description,status,clues&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}&status=in.(OPEN,PARTIAL,ACTIVE)",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/mystery_tracker?select=mystery_id,description,status,clues&project_id=eq.{{ $('Input Normalizer & Scope Resolver').item.json.project_id }}&status=in.(OPEN,PARTIAL,ACTIVE)",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -278,7 +274,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Scope Resolver').first().json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) { if (r && (!requiredField || r[requiredField] !== undefined)) rows.push(r); }\n      } else if (entry && (!requiredField || entry[requiredField] !== undefined)) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst projectRows = unpackRows('Supabase: Fetch Project & Bible', 'id');\nconst projectRec = projectRows[0] || {};\nconst storyBible = projectRec.story_bible || {};\nconst resolvedSeason = Number(projectRec.current_season || base.season_no || 1);\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst snapshots = unpackRows('Supabase: Fetch Story State Snapshot', 'snapshot_data');\nconst latestSnapshot = snapshots[0] ? snapshots[0].snapshot_data : null;\nconst charStatuses = unpackRows('Supabase: Fetch Character Status', 'character_code');\nconst timelineEvents = unpackRows('Supabase: Fetch Story Timeline', 'event_description');\nconst storyRules = unpackRows('Supabase: Fetch Story Rules', 'rule_code');\nconst mysteries = unpackRows('Supabase: Fetch Mystery Tracker', 'description');\n\nconst deterministicViolations = [];\nconst statusByChar = {};\nconst deadCharacters = new Set();\n\nfor (const cs of charStatuses) {\n  const code = (cs.character_code || '').toString().toUpperCase().trim();\n  const st = (cs.status || 'alive').toString().toLowerCase().trim();\n  if (!code) continue;\n  statusByChar[code] = { status: st, status_changed_ep: Number(cs.status_changed_ep || 0) };\n  if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); }\n}\n\nif (latestSnapshot && latestSnapshot.world_state && typeof latestSnapshot.world_state === 'object') {\n  const wsStatuses = latestSnapshot.world_state.character_statuses || {};\n  for (const [k, v] of Object.entries(wsStatuses)) {\n    const code = k.toUpperCase().trim();\n    const st = (v || '').toString().toLowerCase().trim();\n    if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); statusByChar[code] = { status: 'dead', status_changed_ep: latestSnapshot.episode_id }; }\n  }\n}\n\nconst lastLocationByChar = {};\nfor (const ev of timelineEvents) {\n  const loc = (ev.location || '').toString().toUpperCase().trim();\n  if (!loc) continue;\n  const parts = Array.isArray(ev.characters_involved) ? ev.characters_involved : (typeof ev.characters_involved === 'string' ? ev.characters_involved.split(',') : []);\n  for (const p of parts) {\n    const code = p.toString().toUpperCase().trim();\n    if (code && !lastLocationByChar[code]) { lastLocationByChar[code] = { location: loc, episode_no: ev.episode_no, event_code: ev.event_code }; }\n  }\n}\n\nconst flashbackRegex = /\\b(flashback|memory|past\\s+vision|dream\\s+sequence|hallucination|yaad|ateet|purani\\s+yaad)\\b/i;\nconst travelTransitionRegex = /\\b(travel|portal|teleport|arrive|journey|train|flight|walked|reached|timeskip|next\\s+day|drove|flew|ship|gate)\\b/i;\nconst runningLocationByChar = { ...lastLocationByChar };\n\nfor (let i = 0; i < base.scenes.length; i++) {\n  const sc = base.scenes[i] || {};\n  const sceneOrder = Number(sc.scene_order || (i + 1));\n  const speaker = (sc.dialogue_speaker_id || '').toString().toUpperCase().trim();\n  const sceneLoc = (sc.location_code || '').toString().toUpperCase().trim();\n  const combinedSceneText = `${sc.visual_prompt || sc.description || ''} ${sc.action_summary || ''} ${sc.voice_text || ''}`;\n  const isFlashback = Boolean(sc.is_flashback === true || flashbackRegex.test(combinedSceneText));\n\n  if (speaker && deadCharacters.has(speaker) && !isFlashback) {\n    deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${speaker} has active dialogue/action in Scene ${sceneOrder} without an explicit flashback flag.`, entities_involved: [speaker, `SCENE_${sceneOrder}`], suggested_fix: `Mark Scene ${sceneOrder} as a flashback or remove ${speaker}.` });\n  }\n\n  for (const deadCode of deadCharacters) {\n    if (deadCode !== speaker && new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(combinedSceneText) && !isFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} appears in Scene ${sceneOrder} outside of a flashback.`, entities_involved: [deadCode, `SCENE_${sceneOrder}`], suggested_fix: `Convert Scene ${sceneOrder} to a flashback sequence.` });\n    }\n  }\n\n  if (speaker && speaker !== 'NARRATOR' && sceneLoc && !isFlashback) {\n    const prevLocObj = runningLocationByChar[speaker];\n    if (prevLocObj && prevLocObj.location && prevLocObj.location !== sceneLoc) {\n      const hasTravelCue = travelTransitionRegex.test(combinedSceneText);\n      if (!hasTravelCue) {\n        deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'WARNING', description: `Deterministic Location Guard: Character ${speaker} jumped from ${prevLocObj.location} to ${sceneLoc} without a travel transition.`, entities_involved: [speaker, prevLocObj.location, sceneLoc], suggested_fix: `Add a travel transition for ${speaker}.` });\n      }\n    }\n    runningLocationByChar[speaker] = { location: sceneLoc, episode_no: base.episode_no, event_code: sceneOrder };\n  }\n}\n\nconst textToInspect = `${base.script_text || ''}\\n${base.user_prompt || ''}`;\nif (textToInspect.trim().length > 0 && base.scenes.length === 0) {\n  const hasGlobalFlashback = flashbackRegex.test(textToInspect);\n  for (const deadCode of deadCharacters) {\n    if (new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(textToInspect) && !hasGlobalFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} referenced in script/prompt without flashback context.`, entities_involved: [deadCode], suggested_fix: `Ensure ${deadCode} is only depicted in flashbacks.` });\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...base, season_no: resolvedSeason, season_number: resolvedSeason,\n    hydrated_sources: { story_bible: storyBible, canon_facts: canonFacts, latest_snapshot: latestSnapshot, character_status: charStatuses, story_timeline: timelineEvents, story_rules: storyRules, mystery_tracker: mysteries },\n    dead_characters: Array.from(deadCharacters), last_known_locations: lastLocationByChar,\n    deterministic_violations: deterministicViolations, has_deterministic_critical: deterministicViolations.some(v => v.severity === 'CRITICAL')\n  }\n};"
+        "jsCode": "const base = $('Input Normalizer & Scope Resolver').item.json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) { if (r && (!requiredField || r[requiredField] !== undefined)) rows.push(r); }\n      } else if (entry && (!requiredField || entry[requiredField] !== undefined)) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst projectRows = unpackRows('Supabase: Fetch Project & Bible', 'id');\nconst projectRec = projectRows[0] || {};\nconst storyBible = projectRec.story_bible || {};\nconst resolvedSeason = Number(projectRec.current_season || base.season_no || 1);\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst snapshots = unpackRows('Supabase: Fetch Story State Snapshot', 'snapshot_data');\nconst latestSnapshot = snapshots[0] ? snapshots[0].snapshot_data : null;\nconst charStatuses = unpackRows('Supabase: Fetch Character Status', 'character_code');\nconst timelineEvents = unpackRows('Supabase: Fetch Story Timeline', 'event_description');\nconst storyRules = unpackRows('Supabase: Fetch Story Rules', 'rule_code');\nconst mysteries = unpackRows('Supabase: Fetch Mystery Tracker', 'description');\n\nconst deterministicViolations = [];\nconst statusByChar = {};\nconst deadCharacters = new Set();\n\nfor (const cs of charStatuses) {\n  const code = (cs.character_code || '').toString().toUpperCase().trim();\n  const st = (cs.status || 'alive').toString().toLowerCase().trim();\n  if (!code) continue;\n  statusByChar[code] = { status: st, status_changed_ep: Number(cs.status_changed_ep || 0) };\n  if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); }\n}\n\nif (latestSnapshot && latestSnapshot.world_state && typeof latestSnapshot.world_state === 'object') {\n  const wsStatuses = latestSnapshot.world_state.character_statuses || {};\n  for (const [k, v] of Object.entries(wsStatuses)) {\n    const code = k.toUpperCase().trim();\n    const st = (v || '').toString().toLowerCase().trim();\n    if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); statusByChar[code] = { status: 'dead', status_changed_ep: latestSnapshot.episode_id }; }\n  }\n}\n\nconst lastLocationByChar = {};\nfor (const ev of timelineEvents) {\n  const loc = (ev.location || '').toString().toUpperCase().trim();\n  if (!loc) continue;\n  const parts = Array.isArray(ev.characters_involved) ? ev.characters_involved : (typeof ev.characters_involved === 'string' ? ev.characters_involved.split(',') : []);\n  for (const p of parts) {\n    const code = p.toString().toUpperCase().trim();\n    if (code && !lastLocationByChar[code]) { lastLocationByChar[code] = { location: loc, episode_no: ev.episode_no, event_code: ev.event_code }; }\n  }\n}\n\nconst flashbackRegex = /\\b(flashback|memory|past\\s+vision|dream\\s+sequence|hallucination|yaad|ateet|purani\\s+yaad)\\b/i;\nconst travelTransitionRegex = /\\b(travel|portal|teleport|arrive|journey|train|flight|walked|reached|timeskip|next\\s+day|drove|flew|ship|gate)\\b/i;\nconst runningLocationByChar = { ...lastLocationByChar };\n\nfor (let i = 0; i < base.scenes.length; i++) {\n  const sc = base.scenes[i] || {};\n  const sceneOrder = Number(sc.scene_order || (i + 1));\n  const speaker = (sc.dialogue_speaker_id || '').toString().toUpperCase().trim();\n  const sceneLoc = (sc.location_code || '').toString().toUpperCase().trim();\n  const combinedSceneText = `${sc.visual_prompt || sc.description || ''} ${sc.action_summary || ''} ${sc.voice_text || ''}`;\n  const isFlashback = Boolean(sc.is_flashback === true || flashbackRegex.test(combinedSceneText));\n\n  if (speaker && deadCharacters.has(speaker) && !isFlashback) {\n    deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${speaker} has active dialogue/action in Scene ${sceneOrder} without an explicit flashback flag.`, entities_involved: [speaker, `SCENE_${sceneOrder}`], suggested_fix: `Mark Scene ${sceneOrder} as a flashback or remove ${speaker}.` });\n  }\n\n  for (const deadCode of deadCharacters) {\n    if (deadCode !== speaker && new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(combinedSceneText) && !isFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} appears in Scene ${sceneOrder} outside of a flashback.`, entities_involved: [deadCode, `SCENE_${sceneOrder}`], suggested_fix: `Convert Scene ${sceneOrder} to a flashback sequence.` });\n    }\n  }\n\n  if (speaker && speaker !== 'NARRATOR' && sceneLoc && !isFlashback) {\n    const prevLocObj = runningLocationByChar[speaker];\n    if (prevLocObj && prevLocObj.location && prevLocObj.location !== sceneLoc) {\n      const hasTravelCue = travelTransitionRegex.test(combinedSceneText);\n      if (!hasTravelCue) {\n        deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'WARNING', description: `Deterministic Location Guard: Character ${speaker} jumped from ${prevLocObj.location} to ${sceneLoc} without a travel transition.`, entities_involved: [speaker, prevLocObj.location, sceneLoc], suggested_fix: `Add a travel transition for ${speaker}.` });\n      }\n    }\n    runningLocationByChar[speaker] = { location: sceneLoc, episode_no: base.episode_no, event_code: sceneOrder };\n  }\n}\n\nconst textToInspect = `${base.script_text || ''}\\n${base.user_prompt || ''}`;\nif (textToInspect.trim().length > 0 && base.scenes.length === 0) {\n  const hasGlobalFlashback = flashbackRegex.test(textToInspect);\n  for (const deadCode of deadCharacters) {\n    if (new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(textToInspect) && !hasGlobalFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} referenced in script/prompt without flashback context.`, entities_involved: [deadCode], suggested_fix: `Ensure ${deadCode} is only depicted in flashbacks.` });\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...base, season_no: resolvedSeason, season_number: resolvedSeason,\n    hydrated_sources: { story_bible: storyBible, canon_facts: canonFacts, latest_snapshot: latestSnapshot, character_status: charStatuses, story_timeline: timelineEvents, story_rules: storyRules, mystery_tracker: mysteries },\n    dead_characters: Array.from(deadCharacters), last_known_locations: lastLocationByChar,\n    deterministic_violations: deterministicViolations, has_deterministic_critical: deterministicViolations.some(v => v.severity === 'CRITICAL')\n  }\n};"
       }
     },
     {
@@ -323,7 +319,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-06 Semantic Story Continuity & Canon Intelligence Engine for AI Cinematic Anime Engine (Master Blueprint v6.5.0). Analyze the 7 hydrated continuity sources and target episode content/prompt for: 1) Character Knowledge Leaks (KNOWLEDGE_LEAK: character knows unrevealed mystery/secret), 2) Canon Contradictions (CANON_CONTRADICTION: violates locked canon_facts or story_bible), 3) Character Status Violations (STATUS_VIOLATION: dead/missing character acting without flashback or impossible teleportation), 4) Power System Violations (POWER_LIMIT: violating story_rules or power limitations). Output STRICT JSON matching this exact structure: {\"continuity_score\": 0-100, \"status\": \"PASSED\"|\"WARNINGS_RESOLVED\"|\"BLOCKED_CRITICAL\", \"violations\": [{\"type\": \"CANON_CONTRADICTION\"|\"KNOWLEDGE_LEAK\"|\"STATUS_VIOLATION\"|\"POWER_LIMIT\", \"severity\": \"CRITICAL\"|\"WARNING\"|\"INFO\", \"description\": \"string\", \"entities_involved\": [\"string\"], \"suggested_fix\": \"string\"}], \"continuity_summary\": \"Clear Hinglish explanation\", \"recommended_context_patches\": {\"must_enforce_constraints\": [\"string\"], \"character_location_locks\": {}, \"auto_corrections\": [\"string\"]}}.' }, { role: 'user', content: $json.compiled_continuity_context } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-06 Semantic Story Continuity & Canon Intelligence Engine for AI Cinematic Anime Engine (Master Blueprint v6.5.0). Analyze the 7 hydrated continuity sources and target episode content/prompt for: 1) Character Knowledge Leaks (KNOWLEDGE_LEAK: character knows unrevealed mystery/secret), 2) Canon Contradictions (CANON_CONTRADICTION: violates locked canon_facts or story_bible), 3) Character Status Violations (STATUS_VIOLATION: dead/missing character acting without flashback or impossible teleportation), 4) Power System Violations (POWER_LIMIT: violating story_rules or power limitations). Output STRICT JSON matching this exact structure: {\"continuity_score\": 0-100, \"status\": \"PASSED\"|\"WARNINGS_RESOLVED\"|\"BLOCKED_CRITICAL\", \"violations\": [{\"type\": \"CANON_CONTRADICTION\"|\"KNOWLEDGE_LEAK\"|\"STATUS_VIOLATION\"|\"POWER_LIMIT\", \"severity\": \"CRITICAL\"|\"WARNING\"|\"INFO\", \"description\": \"string\", \"entities_involved\": [\"string\"], \"suggested_fix\": \"string\"}], \"continuity_summary\": \"Clear Hinglish explanation\", \"recommended_context_patches\": {\"must_enforce_constraints\": [\"string\"], \"character_location_locks\": {}, \"auto_corrections\": [\"string\"]}}.' }, { role: 'user', content: $json.compiled_continuity_context } ] }) }}",
         "options": {
           "timeout": 30000
         }
@@ -376,7 +372,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-06 Semantic Story Continuity & Canon Intelligence Engine for AI Cinematic Anime Engine (Master Blueprint v6.5.0). Output STRICT JSON matching: {\"continuity_score\": 0-100, \"status\": \"PASSED\"|\"WARNINGS_RESOLVED\"|\"BLOCKED_CRITICAL\", \"violations\": [{\"type\": \"CANON_CONTRADICTION\"|\"KNOWLEDGE_LEAK\"|\"STATUS_VIOLATION\"|\"POWER_LIMIT\", \"severity\": \"CRITICAL\"|\"WARNING\"|\"INFO\", \"description\": \"string\", \"entities_involved\": [\"string\"], \"suggested_fix\": \"string\"}], \"continuity_summary\": \"Clear Hinglish explanation\", \"recommended_context_patches\": {\"must_enforce_constraints\": [\"string\"], \"character_location_locks\": {}, \"auto_corrections\": [\"string\"]}}.' }, { role: 'user', content: $('Context Assembly & Continuity Prompt Constructor').first().json.compiled_continuity_context } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-06 Semantic Story Continuity & Canon Intelligence Engine for AI Cinematic Anime Engine (Master Blueprint v6.5.0). Output STRICT JSON matching: {\"continuity_score\": 0-100, \"status\": \"PASSED\"|\"WARNINGS_RESOLVED\"|\"BLOCKED_CRITICAL\", \"violations\": [{\"type\": \"CANON_CONTRADICTION\"|\"KNOWLEDGE_LEAK\"|\"STATUS_VIOLATION\"|\"POWER_LIMIT\", \"severity\": \"CRITICAL\"|\"WARNING\"|\"INFO\", \"description\": \"string\", \"entities_involved\": [\"string\"], \"suggested_fix\": \"string\"}], \"continuity_summary\": \"Clear Hinglish explanation\", \"recommended_context_patches\": {\"must_enforce_constraints\": [\"string\"], \"character_location_locks\": {}, \"auto_corrections\": [\"string\"]}}.' }, { role: 'user', content: $('Context Assembly & Continuity Prompt Constructor').item.json.compiled_continuity_context } ] }) }}",
         "options": {
           "timeout": 30000
         }
@@ -393,7 +389,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const ctx = $('Context Assembly & Continuity Prompt Constructor').first().json;\nconst llmRaw = $input.item.json || {};\n\nconst VALID_TYPES = new Set(['CANON_CONTRADICTION', 'KNOWLEDGE_LEAK', 'STATUS_VIOLATION', 'POWER_LIMIT']);\nconst VALID_SEVERITIES = new Set(['CRITICAL', 'WARNING', 'INFO']);\n\nlet parsedLlm = null;\ntry {\n  const rawText = llmRaw?.choices?.[0]?.message?.content;\n  if (rawText) {\n    const cleanStr = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsedLlm = JSON.parse(cleanStr);\n  }\n} catch (e) { parsedLlm = null; }\n\nconst llmViolations = Array.isArray(parsedLlm?.violations) ? parsedLlm.violations : [];\nconst mergedViolations = [...(ctx.deterministic_violations || [])];\n\nfor (const v of llmViolations) {\n  if (!v || !v.description) continue;\n  const normType = VALID_TYPES.has(v.type) ? v.type : 'CANON_CONTRADICTION';\n  const normSeverity = VALID_SEVERITIES.has(v.severity) ? v.severity : 'WARNING';\n  const isDuplicate = mergedViolations.some(existing => existing.type === normType && existing.description.toLowerCase() === v.description.toString().toLowerCase());\n  if (!isDuplicate) {\n    mergedViolations.push({ type: normType, severity: normSeverity, description: v.description.toString(), entities_involved: Array.isArray(v.entities_involved) ? v.entities_involved : [], suggested_fix: (v.suggested_fix || 'Align scene with active Story Bible and Canon Facts.').toString() });\n  }\n}\n\nconst criticalCount = mergedViolations.filter(v => v.severity === 'CRITICAL').length;\nconst warningCount = mergedViolations.filter(v => v.severity === 'WARNING').length;\n\nlet rawScore = typeof parsedLlm?.continuity_score === 'number' ? Number(parsedLlm.continuity_score) : 100;\nconst maxAllowedByPenalties = Math.max(0, 100 - (criticalCount * 35) - (warningCount * 10));\nconst continuity_score = Math.max(0, Math.min(100, Math.min(rawScore, maxAllowedByPenalties)));\n\nlet gate_status = 'PASSED';\nif (criticalCount > 0 || continuity_score < 70) { gate_status = 'BLOCKED_CRITICAL'; }\nelse if (continuity_score >= 90) { gate_status = 'PASSED'; }\nelse { gate_status = 'WARNINGS_RESOLVED'; }\n\nconst can_proceed = gate_status !== 'BLOCKED_CRITICAL';\n\nconst recommendedPatches = {\n  ...(parsedLlm?.recommended_context_patches || {}),\n  dead_characters_prohibited_in_present: ctx.dead_characters || [],\n  last_known_locations: ctx.last_known_locations || {},\n  auto_corrections: mergedViolations.filter(v => v.severity !== 'CRITICAL').map(v => v.suggested_fix)\n};\n\nconst continuitySummary = parsedLlm?.continuity_summary || (\n  gate_status === 'PASSED' ? `Continuity check 100% clean hai (Score: ${continuity_score}/100). Koi canon ya character status violation nahi mila.` :\n  gate_status === 'WARNINGS_RESOLVED' ? `Continuity check minor warnings ke sath pass hua (Score: ${continuity_score}/100). Auto-corrections downstream WF-02 ke liye attach kar diye gaye hain.` :\n  `CRITICAL Continuity Violation detect hua hai (Score: ${continuity_score}/100)! Execution ko safely block kar diya gaya hai.`\n);\n\nreturn { json: { ...ctx, continuity_score, status: gate_status, gate_status, can_proceed, violations: mergedViolations, violations_count: { total: mergedViolations.length, critical: criticalCount, warning: warningCount }, continuity_summary: continuitySummary, recommended_context_patches: recommendedPatches } };"
+        "jsCode": "const ctx = $('Context Assembly & Continuity Prompt Constructor').item.json;\nconst llmRaw = $input.item.json || {};\n\nconst VALID_TYPES = new Set(['CANON_CONTRADICTION', 'KNOWLEDGE_LEAK', 'STATUS_VIOLATION', 'POWER_LIMIT']);\nconst VALID_SEVERITIES = new Set(['CRITICAL', 'WARNING', 'INFO']);\n\nlet parsedLlm = null;\ntry {\n  const rawText = llmRaw?.choices?.[0]?.message?.content;\n  if (rawText) {\n    const cleanStr = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsedLlm = JSON.parse(cleanStr);\n  }\n} catch (e) { parsedLlm = null; }\n\nconst llmViolations = Array.isArray(parsedLlm?.violations) ? parsedLlm.violations : [];\nconst mergedViolations = [...(ctx.deterministic_violations || [])];\n\nfor (const v of llmViolations) {\n  if (!v || !v.description) continue;\n  const normType = VALID_TYPES.has(v.type) ? v.type : 'CANON_CONTRADICTION';\n  const normSeverity = VALID_SEVERITIES.has(v.severity) ? v.severity : 'WARNING';\n  const isDuplicate = mergedViolations.some(existing => existing.type === normType && existing.description.toLowerCase() === v.description.toString().toLowerCase());\n  if (!isDuplicate) {\n    mergedViolations.push({ type: normType, severity: normSeverity, description: v.description.toString(), entities_involved: Array.isArray(v.entities_involved) ? v.entities_involved : [], suggested_fix: (v.suggested_fix || 'Align scene with active Story Bible and Canon Facts.').toString() });\n  }\n}\n\nconst criticalCount = mergedViolations.filter(v => v.severity === 'CRITICAL').length;\nconst warningCount = mergedViolations.filter(v => v.severity === 'WARNING').length;\n\nlet rawScore = typeof parsedLlm?.continuity_score === 'number' ? Number(parsedLlm.continuity_score) : 100;\nconst maxAllowedByPenalties = Math.max(0, 100 - (criticalCount * 35) - (warningCount * 10));\nconst continuity_score = Math.max(0, Math.min(100, Math.min(rawScore, maxAllowedByPenalties)));\n\nlet gate_status = 'PASSED';\nif (criticalCount > 0 || continuity_score < 70) { gate_status = 'BLOCKED_CRITICAL'; }\nelse if (continuity_score >= 90) { gate_status = 'PASSED'; }\nelse { gate_status = 'WARNINGS_RESOLVED'; }\n\nconst can_proceed = gate_status !== 'BLOCKED_CRITICAL';\n\nconst recommendedPatches = {\n  ...(parsedLlm?.recommended_context_patches || {}),\n  dead_characters_prohibited_in_present: ctx.dead_characters || [],\n  last_known_locations: ctx.last_known_locations || {},\n  auto_corrections: mergedViolations.filter(v => v.severity !== 'CRITICAL').map(v => v.suggested_fix)\n};\n\nconst continuitySummary = parsedLlm?.continuity_summary || (\n  gate_status === 'PASSED' ? `Continuity check 100% clean hai (Score: ${continuity_score}/100). Koi canon ya character status violation nahi mila.` :\n  gate_status === 'WARNINGS_RESOLVED' ? `Continuity check minor warnings ke sath pass hua (Score: ${continuity_score}/100). Auto-corrections downstream WF-02 ke liye attach kar diye gaye hain.` :\n  `CRITICAL Continuity Violation detect hua hai (Score: ${continuity_score}/100)! Execution ko safely block kar diya gaya hai.`\n);\n\nreturn { json: { ...ctx, continuity_score, status: gate_status, gate_status, can_proceed, violations: mergedViolations, violations_count: { total: mergedViolations.length, critical: criticalCount, warning: warningCount }, continuity_summary: continuitySummary, recommended_context_patches: recommendedPatches } };"
       }
     },
     {
@@ -448,7 +444,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "let triggerCtx = {};\ntry { triggerCtx = $('When Executed by Another Workflow').first().json || {}; } catch (e) { triggerCtx = $input.first().json || {}; }\nlet state = {};\ntry { state = $('Continuity Score & Decision Engine').first().json || {}; } catch (e) { state = $input.first().json || {}; }\n\nconst badge = state.gate_status === 'PASSED' ? '✅ PASSED' : state.gate_status === 'WARNINGS_RESOLVED' ? '⚠️ WARNINGS_RESOLVED' : '🛑 BLOCKED_CRITICAL';\nconst msg = [`🛡️ **WF-06 Continuity Report**`, `📊 **Score:** ${state.continuity_score ?? 100}/100 | **Gate:** ${badge}`, `💬 **Summary:** ${state.continuity_summary || 'Continuity check completed.'}`].join('\\n');\nconst basePrompt = state.user_prompt || triggerCtx.user_prompt || triggerCtx.userPrompt || '';\nconst patchedUserPrompt = state.can_proceed && Array.isArray(state.violations) && state.violations.length > 0\n  ? `${basePrompt}\\n\\n[PATCHES]: ${JSON.stringify(state.recommended_context_patches || {})}` : basePrompt;\n\nreturn {\n  json: {\n    ...triggerCtx, user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {}, project_style: state.project_style || triggerCtx.project_style || { visual_style: 'ANIME' },\n    project_id: state.project_id || triggerCtx.project_id, project_name: state.project_name || triggerCtx.project_name || 'Active Anime Project',\n    episode_no: state.episode_no || triggerCtx.episode_no || 1, episode_number: state.episode_no || triggerCtx.episode_number || 1,\n    season_no: state.season_no || triggerCtx.season_no || 1, season_number: state.season_no || triggerCtx.season_number || 1,\n    mode: state.mode || triggerCtx.mode || 'SAVE', sessionId: state.sessionId || triggerCtx.sessionId, intent: triggerCtx.intent || state.intent || 'CHECK_CONTINUITY',\n    downstream_command: triggerCtx.downstream_command || state.downstream_command || 'CHECK_CONTINUITY', target_workflow_id: state.target_workflow_id || triggerCtx.target_workflow_id || $env.WF_02_STORY_ID || null,\n    preflight_workflow_ids: state.preflight_workflow_ids || triggerCtx.preflight_workflow_ids || {}, extracted_params: state.extracted_params || triggerCtx.extracted_params || { episode_number: state.episode_no || 1 },\n    user_prompt: patchedUserPrompt, userPrompt: patchedUserPrompt, rawText: state.rawText || patchedUserPrompt, ok: state.can_proceed !== undefined ? state.can_proceed : true,\n    workflow_name: 'WF-06', execution_id: $execution.id, continuity_score: state.continuity_score ?? 100, status: state.gate_status || 'PASSED', gate_status: state.gate_status || 'PASSED',\n    can_proceed: state.can_proceed !== undefined ? state.can_proceed : true, violations: state.violations || [], violations_count: state.violations_count || 0,\n    continuity_summary: state.continuity_summary || '', recommended_context_patches: state.recommended_context_patches || {}, output: msg, text: msg\n  }\n};\n"
+        "jsCode": "const state = $('Continuity Score & Decision Engine').first().json; const triggerCtx = $('When Executed by Another Workflow').first().json || {}; const badge = state.gate_status === 'PASSED' ? '✅ PASSED' : state.gate_status === 'WARNINGS_RESOLVED' ? '⚠️ WARNINGS_RESOLVED' : '🛑 BLOCKED_CRITICAL'; const msg = [`🛡️ **WF-06 Report**`, `📊 **Score:** ${state.continuity_score}/100 | **Gate:** ${badge}`, `💬 **Summary:** ${state.continuity_summary}`].join('\\n'); const patchedUserPrompt = state.can_proceed && state.violations.length > 0 ? `${state.user_prompt}\\n\\n[PATCHES]: ${JSON.stringify(state.recommended_context_patches)}` : state.user_prompt; return { json: { user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {}, project_style: state.project_style || triggerCtx.project_style || {}, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, episode_number: state.episode_no, season_no: state.season_no, season_number: state.season_no, mode: state.mode || 'SAVE', sessionId: state.sessionId, intent: state.intent || 'CHECK_CONTINUITY', downstream_command: state.downstream_command || 'CHECK_CONTINUITY', target_workflow_id: state.target_workflow_id || $env.WF_02_STORY_ID || null, preflight_workflow_ids: state.preflight_workflow_ids || {}, extracted_params: state.extracted_params || { episode_number: state.episode_no }, user_prompt: patchedUserPrompt, userPrompt: patchedUserPrompt, rawText: state.rawText || state.user_prompt, ok: state.can_proceed, workflow_name: 'WF-06', execution_id: $execution.id, continuity_score: state.continuity_score, status: state.gate_status, gate_status: state.gate_status, can_proceed: state.can_proceed, violations: state.violations, violations_count: state.violations_count, continuity_summary: state.continuity_summary, recommended_context_patches: state.recommended_context_patches, output: msg, text: msg } };"
       }
     }
   ],
@@ -652,654 +648,5 @@
       "createdAt": "2026-10-26T06:14:16.780Z",
       "updatedAt": "2026-10-26T06:14:16.780Z"
     }
-  ],
-  "shared": [
-    {
-      "role": "workflow:owner",
-      "workflowId": "WAB7tCTJSUilOp07",
-      "projectId": "DHmXIxR6TKeJcd0d",
-      "createdAt": "2026-10-26T09:49:01.918Z",
-      "updatedAt": "2026-10-26T09:49:01.918Z"
-    }
-  ],
-  "activeVersion": {
-    "versionId": "d70e7565-0083-4e17-b9aa-30247071b2e2",
-    "workflowId": "WAB7tCTJSUilOp07",
-    "nodes": [
-      {
-        "id": "fa6c2cc3-9b36-4d8e-bd1d-429975890afa",
-        "name": "When Executed by Another Workflow",
-        "type": "n8n-nodes-base.executeWorkflowTrigger",
-        "typeVersion": 1,
-        "position": [
-          0,
-          144
-        ],
-        "parameters": {
-          "inputSource": "passthrough"
-        }
-      },
-      {
-        "id": "068f6610-c73d-4401-ae53-b91bc7b7d2b3",
-        "name": "Input Normalizer & Scope Resolver",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          240,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst project_name = raw.project_name || 'Active Anime Project';\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || extracted.season_no || 1);\n\nconst script_text = (raw.script_text || raw.script || '').toString().trim();\nconst scenes = Array.isArray(raw.scenes) ? raw.scenes : (Array.isArray(raw.script_json?.scenes) ? raw.script_json.scenes : []);\nconst user_prompt = (raw.user_prompt || raw.userPrompt || raw.rawText || `Verify continuity for Episode ${episode_no}`).toString().trim();\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\nconst caller_workflow = (raw.caller_workflow || (script_text || scenes.length > 0 ? 'WF-02' : 'WF-00')).toString();\n\nif (!project_id) {\n  throw new Error('WF-06 Error: project_id is strictly required for Continuity Evaluation (Rule 5 Project Isolation).');\n}\n\nconst hasContentPayload = Boolean(script_text.length > 0 || scenes.length > 0);\nconst evaluation_mode = hasContentPayload ? 'CONTENT_VALIDATION' : 'PREFLIGHT_READINESS';\n\nreturn {\n  json: {\n    ...raw, project_id, project_name, episode_no, episode_number: episode_no, season_no, season_number: season_no,\n    script_text, scenes, user_prompt, sessionId, caller_workflow, evaluation_mode\n  }\n};"
-        }
-      },
-      {
-        "id": "9d9b9c9e-b2dc-4146-8159-aaa124cd3a0b",
-        "name": "Supabase: Fetch Project & Bible",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          480,
-          144
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season&id=eq.{{ $json.project_id }}&limit=1",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "a092abf7-c3c7-4013-972e-9462c2c177aa",
-        "name": "Supabase: Fetch Canon Facts",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          720,
-          144
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?select=fact_key,fact_value,canon_status,fact_type&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "1d4d938b-a56e-4bf6-a4dd-25a84fce2426",
-        "name": "Supabase: Fetch Story State Snapshot",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          960,
-          144
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_state_snapshots?select=episode_id,season_id,snapshot_data&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}&episode_id=lt.{{ $('Input Normalizer & Scope Resolver').first().json.episode_no }}&order=episode_id.desc&limit=1",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "df6fcb0b-a22a-486b-8eb8-cc316fbf7968",
-        "name": "Supabase: Fetch Character Status",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1200,
-          144
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "bfc5ebea-f389-45a8-8868-29d620629af7",
-        "name": "Supabase: Fetch Story Timeline",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1440,
-          144
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_timeline?select=episode_no,event_code,event_description,location,characters_involved&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}&order=episode_no.desc,created_at.desc&limit=20",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "4ec71770-3380-4cfc-8363-bc0e0b255357",
-        "name": "Supabase: Fetch Story Rules",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1680,
-          144
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "d7a2a6a7-74bc-405f-b78e-4d871e8ed4bb",
-        "name": "Supabase: Fetch Mystery Tracker",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          1920,
-          144
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/mystery_tracker?select=mystery_id,description,status,clues&project_id=eq.{{ $('Input Normalizer & Scope Resolver').first().json.project_id }}&status=in.(OPEN,PARTIAL,ACTIVE)",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "93b25791-2397-470c-a71f-38802193e744",
-        "name": "Deterministic Pre-Check Engine",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          2160,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Input Normalizer & Scope Resolver').first().json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) { if (r && (!requiredField || r[requiredField] !== undefined)) rows.push(r); }\n      } else if (entry && (!requiredField || entry[requiredField] !== undefined)) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst projectRows = unpackRows('Supabase: Fetch Project & Bible', 'id');\nconst projectRec = projectRows[0] || {};\nconst storyBible = projectRec.story_bible || {};\nconst resolvedSeason = Number(projectRec.current_season || base.season_no || 1);\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst snapshots = unpackRows('Supabase: Fetch Story State Snapshot', 'snapshot_data');\nconst latestSnapshot = snapshots[0] ? snapshots[0].snapshot_data : null;\nconst charStatuses = unpackRows('Supabase: Fetch Character Status', 'character_code');\nconst timelineEvents = unpackRows('Supabase: Fetch Story Timeline', 'event_description');\nconst storyRules = unpackRows('Supabase: Fetch Story Rules', 'rule_code');\nconst mysteries = unpackRows('Supabase: Fetch Mystery Tracker', 'description');\n\nconst deterministicViolations = [];\nconst statusByChar = {};\nconst deadCharacters = new Set();\n\nfor (const cs of charStatuses) {\n  const code = (cs.character_code || '').toString().toUpperCase().trim();\n  const st = (cs.status || 'alive').toString().toLowerCase().trim();\n  if (!code) continue;\n  statusByChar[code] = { status: st, status_changed_ep: Number(cs.status_changed_ep || 0) };\n  if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); }\n}\n\nif (latestSnapshot && latestSnapshot.world_state && typeof latestSnapshot.world_state === 'object') {\n  const wsStatuses = latestSnapshot.world_state.character_statuses || {};\n  for (const [k, v] of Object.entries(wsStatuses)) {\n    const code = k.toUpperCase().trim();\n    const st = (v || '').toString().toLowerCase().trim();\n    if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); statusByChar[code] = { status: 'dead', status_changed_ep: latestSnapshot.episode_id }; }\n  }\n}\n\nconst lastLocationByChar = {};\nfor (const ev of timelineEvents) {\n  const loc = (ev.location || '').toString().toUpperCase().trim();\n  if (!loc) continue;\n  const parts = Array.isArray(ev.characters_involved) ? ev.characters_involved : (typeof ev.characters_involved === 'string' ? ev.characters_involved.split(',') : []);\n  for (const p of parts) {\n    const code = p.toString().toUpperCase().trim();\n    if (code && !lastLocationByChar[code]) { lastLocationByChar[code] = { location: loc, episode_no: ev.episode_no, event_code: ev.event_code }; }\n  }\n}\n\nconst flashbackRegex = /\\b(flashback|memory|past\\s+vision|dream\\s+sequence|hallucination|yaad|ateet|purani\\s+yaad)\\b/i;\nconst travelTransitionRegex = /\\b(travel|portal|teleport|arrive|journey|train|flight|walked|reached|timeskip|next\\s+day|drove|flew|ship|gate)\\b/i;\nconst runningLocationByChar = { ...lastLocationByChar };\n\nfor (let i = 0; i < base.scenes.length; i++) {\n  const sc = base.scenes[i] || {};\n  const sceneOrder = Number(sc.scene_order || (i + 1));\n  const speaker = (sc.dialogue_speaker_id || '').toString().toUpperCase().trim();\n  const sceneLoc = (sc.location_code || '').toString().toUpperCase().trim();\n  const combinedSceneText = `${sc.visual_prompt || sc.description || ''} ${sc.action_summary || ''} ${sc.voice_text || ''}`;\n  const isFlashback = Boolean(sc.is_flashback === true || flashbackRegex.test(combinedSceneText));\n\n  if (speaker && deadCharacters.has(speaker) && !isFlashback) {\n    deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${speaker} has active dialogue/action in Scene ${sceneOrder} without an explicit flashback flag.`, entities_involved: [speaker, `SCENE_${sceneOrder}`], suggested_fix: `Mark Scene ${sceneOrder} as a flashback or remove ${speaker}.` });\n  }\n\n  for (const deadCode of deadCharacters) {\n    if (deadCode !== speaker && new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(combinedSceneText) && !isFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} appears in Scene ${sceneOrder} outside of a flashback.`, entities_involved: [deadCode, `SCENE_${sceneOrder}`], suggested_fix: `Convert Scene ${sceneOrder} to a flashback sequence.` });\n    }\n  }\n\n  if (speaker && speaker !== 'NARRATOR' && sceneLoc && !isFlashback) {\n    const prevLocObj = runningLocationByChar[speaker];\n    if (prevLocObj && prevLocObj.location && prevLocObj.location !== sceneLoc) {\n      const hasTravelCue = travelTransitionRegex.test(combinedSceneText);\n      if (!hasTravelCue) {\n        deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'WARNING', description: `Deterministic Location Guard: Character ${speaker} jumped from ${prevLocObj.location} to ${sceneLoc} without a travel transition.`, entities_involved: [speaker, prevLocObj.location, sceneLoc], suggested_fix: `Add a travel transition for ${speaker}.` });\n      }\n    }\n    runningLocationByChar[speaker] = { location: sceneLoc, episode_no: base.episode_no, event_code: sceneOrder };\n  }\n}\n\nconst textToInspect = `${base.script_text || ''}\\n${base.user_prompt || ''}`;\nif (textToInspect.trim().length > 0 && base.scenes.length === 0) {\n  const hasGlobalFlashback = flashbackRegex.test(textToInspect);\n  for (const deadCode of deadCharacters) {\n    if (new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(textToInspect) && !hasGlobalFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} referenced in script/prompt without flashback context.`, entities_involved: [deadCode], suggested_fix: `Ensure ${deadCode} is only depicted in flashbacks.` });\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...base, season_no: resolvedSeason, season_number: resolvedSeason,\n    hydrated_sources: { story_bible: storyBible, canon_facts: canonFacts, latest_snapshot: latestSnapshot, character_status: charStatuses, story_timeline: timelineEvents, story_rules: storyRules, mystery_tracker: mysteries },\n    dead_characters: Array.from(deadCharacters), last_known_locations: lastLocationByChar,\n    deterministic_violations: deterministicViolations, has_deterministic_critical: deterministicViolations.some(v => v.severity === 'CRITICAL')\n  }\n};"
-        }
-      },
-      {
-        "id": "d136d6cc-8d40-458e-93e0-6fddb74b601f",
-        "name": "Context Assembly & Continuity Prompt Constructor",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          2400,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const ctx = $input.item.json;\nconst hs = ctx.hydrated_sources;\n\nconst compiledContinuityContext = [\n  `=== EVALUATION MODE: ${ctx.evaluation_mode} | PROJECT: ${ctx.project_name} | SEASON ${ctx.season_no}, EPISODE ${ctx.episode_no} ===`,\n  `=== SOURCE 1: MASTER STORY BIBLE ===`,\n  JSON.stringify(hs.story_bible || {}),\n  `=== SOURCE 2: CANON FACTS ===`,\n  (hs.canon_facts || []).length > 0 ? hs.canon_facts.map(f => `[${f.canon_status}] (${f.fact_type || 'GENERAL'}) ${f.fact_key}: ${JSON.stringify(f.fact_value)}`).join('\\n') : 'No explicit canon_facts rows.',\n  `=== SOURCE 3: LATEST COMMITTED STORY STATE SNAPSHOT ===`,\n  hs.latest_snapshot ? JSON.stringify(hs.latest_snapshot) : 'No previous episode snapshot (Episode 1 start).',\n  `=== SOURCE 4: CHARACTER STATUS ===`,\n  (hs.character_status || []).length > 0 ? hs.character_status.map(cs => `- ${cs.character_code}: status=${cs.status} (changed_ep=${cs.status_changed_ep})`).join('\\n') : 'All characters assumed alive.',\n  `=== SOURCE 5: RECENT STORY TIMELINE ===`,\n  (hs.story_timeline || []).length > 0 ? hs.story_timeline.map(t => `- Ep ${t.episode_no} (${t.event_code || ''}): ${t.event_description} @ ${t.location || 'N/A'} (Participants: ${JSON.stringify(t.characters_involved || [])})`).join('\\n') : 'No prior timeline events.',\n  `=== SOURCE 6: STORY RULES ===`,\n  (hs.story_rules || []).length > 0 ? hs.story_rules.map(r => `- [Priority ${r.priority || 1}] ${r.rule_code}: ${r.rule_text}`).join('\\n') : 'Standard anime universe physics apply.',\n  `=== SOURCE 7: MYSTERY TRACKER ===`,\n  (hs.mystery_tracker || []).length > 0 ? hs.mystery_tracker.map(m => `- [${m.status}] ${m.mystery_id}: ${m.description} | Clues: ${JSON.stringify(m.clues || [])}`).join('\\n') : 'No active open mysteries.',\n  `=== DETERMINISTIC PRE-CHECK FLAGS ALREADY DETECTED ===`,\n  JSON.stringify(ctx.deterministic_violations || []),\n  `=== TARGET CONTENT TO VALIDATE ===`,\n  `User Prompt: ${ctx.user_prompt}`,\n  ctx.script_text ? `Script Text:\\n${ctx.script_text}` : '',\n  ctx.scenes && ctx.scenes.length > 0 ? `Scenes JSON:\\n${JSON.stringify(ctx.scenes)}` : ''\n].filter(Boolean).join('\\n\\n');\n\nreturn { json: { ...ctx, compiled_continuity_context: compiledContinuityContext } };"
-        }
-      },
-      {
-        "id": "3e7862f3-886d-4b90-a27f-cb5463954f73",
-        "name": "Primary Groq Continuity Evaluator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          2640,
-          144
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-06 Semantic Story Continuity & Canon Intelligence Engine for AI Cinematic Anime Engine (Master Blueprint v6.5.0). Analyze the 7 hydrated continuity sources and target episode content/prompt for: 1) Character Knowledge Leaks (KNOWLEDGE_LEAK: character knows unrevealed mystery/secret), 2) Canon Contradictions (CANON_CONTRADICTION: violates locked canon_facts or story_bible), 3) Character Status Violations (STATUS_VIOLATION: dead/missing character acting without flashback or impossible teleportation), 4) Power System Violations (POWER_LIMIT: violating story_rules or power limitations). Output STRICT JSON matching this exact structure: {\"continuity_score\": 0-100, \"status\": \"PASSED\"|\"WARNINGS_RESOLVED\"|\"BLOCKED_CRITICAL\", \"violations\": [{\"type\": \"CANON_CONTRADICTION\"|\"KNOWLEDGE_LEAK\"|\"STATUS_VIOLATION\"|\"POWER_LIMIT\", \"severity\": \"CRITICAL\"|\"WARNING\"|\"INFO\", \"description\": \"string\", \"entities_involved\": [\"string\"], \"suggested_fix\": \"string\"}], \"continuity_summary\": \"Clear Hinglish explanation\", \"recommended_context_patches\": {\"must_enforce_constraints\": [\"string\"], \"character_location_locks\": {}, \"auto_corrections\": [\"string\"]}}.' }, { role: 'user', content: $json.compiled_continuity_context } ] }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "115345a8-4512-4916-93a0-bc0d5ed9227f",
-        "name": "LLM Fallback Switch",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          2880,
-          144
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "79a80173-31c8-4300-bcaa-d0588305e323",
-        "name": "Fallback Gemini Continuity Evaluator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          3120,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-06 Semantic Story Continuity & Canon Intelligence Engine for AI Cinematic Anime Engine (Master Blueprint v6.5.0). Output STRICT JSON matching: {\"continuity_score\": 0-100, \"status\": \"PASSED\"|\"WARNINGS_RESOLVED\"|\"BLOCKED_CRITICAL\", \"violations\": [{\"type\": \"CANON_CONTRADICTION\"|\"KNOWLEDGE_LEAK\"|\"STATUS_VIOLATION\"|\"POWER_LIMIT\", \"severity\": \"CRITICAL\"|\"WARNING\"|\"INFO\", \"description\": \"string\", \"entities_involved\": [\"string\"], \"suggested_fix\": \"string\"}], \"continuity_summary\": \"Clear Hinglish explanation\", \"recommended_context_patches\": {\"must_enforce_constraints\": [\"string\"], \"character_location_locks\": {}, \"auto_corrections\": [\"string\"]}}.' }, { role: 'user', content: $('Context Assembly & Continuity Prompt Constructor').first().json.compiled_continuity_context } ] }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "b547a37e-67cf-4e61-8070-c1c173ef8bb3",
-        "name": "Continuity Score & Decision Engine",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3392,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const ctx = $('Context Assembly & Continuity Prompt Constructor').first().json;\nconst llmRaw = $input.item.json || {};\n\nconst VALID_TYPES = new Set(['CANON_CONTRADICTION', 'KNOWLEDGE_LEAK', 'STATUS_VIOLATION', 'POWER_LIMIT']);\nconst VALID_SEVERITIES = new Set(['CRITICAL', 'WARNING', 'INFO']);\n\nlet parsedLlm = null;\ntry {\n  const rawText = llmRaw?.choices?.[0]?.message?.content;\n  if (rawText) {\n    const cleanStr = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsedLlm = JSON.parse(cleanStr);\n  }\n} catch (e) { parsedLlm = null; }\n\nconst llmViolations = Array.isArray(parsedLlm?.violations) ? parsedLlm.violations : [];\nconst mergedViolations = [...(ctx.deterministic_violations || [])];\n\nfor (const v of llmViolations) {\n  if (!v || !v.description) continue;\n  const normType = VALID_TYPES.has(v.type) ? v.type : 'CANON_CONTRADICTION';\n  const normSeverity = VALID_SEVERITIES.has(v.severity) ? v.severity : 'WARNING';\n  const isDuplicate = mergedViolations.some(existing => existing.type === normType && existing.description.toLowerCase() === v.description.toString().toLowerCase());\n  if (!isDuplicate) {\n    mergedViolations.push({ type: normType, severity: normSeverity, description: v.description.toString(), entities_involved: Array.isArray(v.entities_involved) ? v.entities_involved : [], suggested_fix: (v.suggested_fix || 'Align scene with active Story Bible and Canon Facts.').toString() });\n  }\n}\n\nconst criticalCount = mergedViolations.filter(v => v.severity === 'CRITICAL').length;\nconst warningCount = mergedViolations.filter(v => v.severity === 'WARNING').length;\n\nlet rawScore = typeof parsedLlm?.continuity_score === 'number' ? Number(parsedLlm.continuity_score) : 100;\nconst maxAllowedByPenalties = Math.max(0, 100 - (criticalCount * 35) - (warningCount * 10));\nconst continuity_score = Math.max(0, Math.min(100, Math.min(rawScore, maxAllowedByPenalties)));\n\nlet gate_status = 'PASSED';\nif (criticalCount > 0 || continuity_score < 70) { gate_status = 'BLOCKED_CRITICAL'; }\nelse if (continuity_score >= 90) { gate_status = 'PASSED'; }\nelse { gate_status = 'WARNINGS_RESOLVED'; }\n\nconst can_proceed = gate_status !== 'BLOCKED_CRITICAL';\n\nconst recommendedPatches = {\n  ...(parsedLlm?.recommended_context_patches || {}),\n  dead_characters_prohibited_in_present: ctx.dead_characters || [],\n  last_known_locations: ctx.last_known_locations || {},\n  auto_corrections: mergedViolations.filter(v => v.severity !== 'CRITICAL').map(v => v.suggested_fix)\n};\n\nconst continuitySummary = parsedLlm?.continuity_summary || (\n  gate_status === 'PASSED' ? `Continuity check 100% clean hai (Score: ${continuity_score}/100). Koi canon ya character status violation nahi mila.` :\n  gate_status === 'WARNINGS_RESOLVED' ? `Continuity check minor warnings ke sath pass hua (Score: ${continuity_score}/100). Auto-corrections downstream WF-02 ke liye attach kar diye gaye hain.` :\n  `CRITICAL Continuity Violation detect hua hai (Score: ${continuity_score}/100)! Execution ko safely block kar diya gaya hai.`\n);\n\nreturn { json: { ...ctx, continuity_score, status: gate_status, gate_status, can_proceed, violations: mergedViolations, violations_count: { total: mergedViolations.length, critical: criticalCount, warning: warningCount }, continuity_summary: continuitySummary, recommended_context_patches: recommendedPatches } };"
-        }
-      },
-      {
-        "id": "2a3c4c76-159d-4a10-a10e-eee810abb92d",
-        "name": "Supabase: Insert Audit Log",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          3632,
-          144
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, workflow_name: 'WF-06', action: 'CONTINUITY_EVALUATION', execution_id: $execution.id, new_value: { score: $json.continuity_score, status: $json.gate_status, violations_count: $json.violations_count, evaluation_mode: $json.evaluation_mode } }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "0c857a2b-98f1-4ab0-8ba3-810dfbe0ec0f",
-        "name": "Response & Pre-Flight Formatter",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          3872,
-          144
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "let triggerCtx = {};\ntry { triggerCtx = $('When Executed by Another Workflow').first().json || {}; } catch (e) { triggerCtx = $input.first().json || {}; }\nlet state = {};\ntry { state = $('Continuity Score & Decision Engine').first().json || {}; } catch (e) { state = $input.first().json || {}; }\n\nconst badge = state.gate_status === 'PASSED' ? '✅ PASSED' : state.gate_status === 'WARNINGS_RESOLVED' ? '⚠️ WARNINGS_RESOLVED' : '🛑 BLOCKED_CRITICAL';\nconst msg = [`🛡️ **WF-06 Continuity Report**`, `📊 **Score:** ${state.continuity_score ?? 100}/100 | **Gate:** ${badge}`, `💬 **Summary:** ${state.continuity_summary || 'Continuity check completed.'}`].join('\\n');\nconst basePrompt = state.user_prompt || triggerCtx.user_prompt || triggerCtx.userPrompt || '';\nconst patchedUserPrompt = state.can_proceed && Array.isArray(state.violations) && state.violations.length > 0\n  ? `${basePrompt}\\n\\n[PATCHES]: ${JSON.stringify(state.recommended_context_patches || {})}` : basePrompt;\n\nreturn {\n  json: {\n    ...triggerCtx, user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {}, project_style: state.project_style || triggerCtx.project_style || { visual_style: 'ANIME' },\n    project_id: state.project_id || triggerCtx.project_id, project_name: state.project_name || triggerCtx.project_name || 'Active Anime Project',\n    episode_no: state.episode_no || triggerCtx.episode_no || 1, episode_number: state.episode_no || triggerCtx.episode_number || 1,\n    season_no: state.season_no || triggerCtx.season_no || 1, season_number: state.season_no || triggerCtx.season_number || 1,\n    mode: state.mode || triggerCtx.mode || 'SAVE', sessionId: state.sessionId || triggerCtx.sessionId, intent: triggerCtx.intent || state.intent || 'CHECK_CONTINUITY',\n    downstream_command: triggerCtx.downstream_command || state.downstream_command || 'CHECK_CONTINUITY', target_workflow_id: state.target_workflow_id || triggerCtx.target_workflow_id || $env.WF_02_STORY_ID || null,\n    preflight_workflow_ids: state.preflight_workflow_ids || triggerCtx.preflight_workflow_ids || {}, extracted_params: state.extracted_params || triggerCtx.extracted_params || { episode_number: state.episode_no || 1 },\n    user_prompt: patchedUserPrompt, userPrompt: patchedUserPrompt, rawText: state.rawText || patchedUserPrompt, ok: state.can_proceed !== undefined ? state.can_proceed : true,\n    workflow_name: 'WF-06', execution_id: $execution.id, continuity_score: state.continuity_score ?? 100, status: state.gate_status || 'PASSED', gate_status: state.gate_status || 'PASSED',\n    can_proceed: state.can_proceed !== undefined ? state.can_proceed : true, violations: state.violations || [], violations_count: state.violations_count || 0,\n    continuity_summary: state.continuity_summary || '', recommended_context_patches: state.recommended_context_patches || {}, output: msg, text: msg\n  }\n};\n"
-        }
-      }
-    ],
-    "connections": {
-      "When Executed by Another Workflow": {
-        "main": [
-          [
-            {
-              "node": "Input Normalizer & Scope Resolver",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Input Normalizer & Scope Resolver": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Project & Bible",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Project & Bible": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Canon Facts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Canon Facts": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Story State Snapshot",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Story State Snapshot": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Character Status",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Character Status": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Story Timeline",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Story Timeline": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Story Rules",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Story Rules": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Mystery Tracker",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Mystery Tracker": {
-        "main": [
-          [
-            {
-              "node": "Deterministic Pre-Check Engine",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Deterministic Pre-Check Engine": {
-        "main": [
-          [
-            {
-              "node": "Context Assembly & Continuity Prompt Constructor",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Context Assembly & Continuity Prompt Constructor": {
-        "main": [
-          [
-            {
-              "node": "Primary Groq Continuity Evaluator",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Primary Groq Continuity Evaluator": {
-        "main": [
-          [
-            {
-              "node": "LLM Fallback Switch",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "LLM Fallback Switch": {
-        "main": [
-          [
-            {
-              "node": "Fallback Gemini Continuity Evaluator",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Continuity Score & Decision Engine",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Fallback Gemini Continuity Evaluator": {
-        "main": [
-          [
-            {
-              "node": "Continuity Score & Decision Engine",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Continuity Score & Decision Engine": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Insert Audit Log",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Insert Audit Log": {
-        "main": [
-          [
-            {
-              "node": "Response & Pre-Flight Formatter",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "nodeGroups": [],
-    "authors": "Neeraj  Behra",
-    "name": null,
-    "description": null,
-    "autosaved": false,
-    "createdAt": "2026-10-29T22:43:45.016Z",
-    "updatedAt": "2026-10-29T22:43:45.016Z"
-  }
+  ]
 }

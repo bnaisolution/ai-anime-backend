@@ -2,11 +2,9 @@
   "id": "gT1c0Hpvrwyf9YS6",
   "name": "storywf09",
   "active": true,
-  "activeVersionId": "7957838a-7ce7-4a9f-b61e-65d45eefde1c",
   "createdAt": "2026-10-26T09:59:41.873Z",
   "updatedAt": "2026-10-29T21:21:32.930Z",
   "isArchived": false,
-  "versionId": "7957838a-7ce7-4a9f-b61e-65d45eefde1c",
   "triggerCount": 0,
   "nodes": [
     {
@@ -18,9 +16,7 @@
         0,
         80
       ],
-      "parameters": {
-        "inputSource": "passthrough"
-      }
+      "parameters": {}
     },
     {
       "id": "7d0830d4-7a66-4ea6-9e6e-ffc0f5ba70fe",
@@ -81,7 +77,7 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_knowledge?select=id,character_code,knowledge_key,knowledge_value,learned_at_ep,secret,knows&project_id=eq.{{ $('Input Normalizer & Mode Resolver').first().json.project_id }}",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_knowledge?select=id,character_code,knowledge_key,knowledge_value,learned_at_ep,secret,knows&project_id=eq.{{ $('Input Normalizer & Mode Resolver').item.json.project_id }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -113,7 +109,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Mode Resolver').first().json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) { for (const r of entry) { if (r && r[requiredField] !== undefined) rows.push(r); } }\n      else if (entry && entry[requiredField] !== undefined) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst allKnowledge = unpackRows('Supabase: Fetch Character Knowledge', 'character_code');\n\nconst involvedSet = new Set(base.characters_involved || []);\nconst relevantKnowledge = allKnowledge.filter(k => involvedSet.size === 0 || involvedSet.has((k.character_code || '').toUpperCase().trim()) || k.secret === true);\n\nconst lockedFactsMap = {};\nfor (const cf of canonFacts) {\n  const code = (cf.fact_key || '').toString().toUpperCase().trim();\n  const isLocked = (cf.canon_status || '').toString().toUpperCase() === 'LOCKED';\n  if (code && isLocked) {\n    lockedFactsMap[code] = cf.fact_value;\n  }\n}\n\nconst deterministicViolations = [];\nfor (const candidate of (base.explicit_fact_updates || [])) {\n  const code = (candidate.fact_key || '').toString().toUpperCase().trim();\n  const newVal = typeof candidate.fact_value === 'object' ? JSON.stringify(candidate.fact_value) : String(candidate.fact_value);\n  const oldVal = typeof lockedFactsMap[code] === 'object' ? JSON.stringify(lockedFactsMap[code]) : String(lockedFactsMap[code]);\n  if (code && lockedFactsMap[code] !== undefined && newVal !== oldVal) {\n    deterministicViolations.push({\n      type: 'CRITICAL_CANON_VIOLATION',\n      description: `Rule 14 & 15 Violation: Attempted to overwrite LOCKED canon fact '${code}' (\"${oldVal}\") with \"${newVal}\". Locked facts are immutable.`\n    });\n  }\n}\n\nconst llmEvaluationContext = [\n  `=== PROJECT: ${base.project_name} | EPISODE: ${base.episode_no} | MODE: ${base.operation_mode} ===`,\n  `=== 1. EXISTING CANON FACTS (Rule 14 & 15: LOCKED facts cannot be contradicted) ===`,\n  canonFacts.length > 0 ? canonFacts.map(f => `- [${f.canon_status}] ${f.fact_key} (${f.fact_type || 'LORE'}): ${JSON.stringify(f.fact_value)}`).join('\\n') : 'No existing canon_facts rows yet.',\n  `=== 2. CHARACTER KNOWLEDGE GRAPH (Section 42: Characters can ONLY act on facts they possess here) ===`,\n  relevantKnowledge.length > 0 ? relevantKnowledge.map(k => `- Character ${k.character_code} KNOWS [${k.knowledge_key}] (Learned Ep ${k.learned_at_ep ?? 0}, Secret=${Boolean(k.secret)}): ${k.knowledge_value}`).join('\\n') : 'No specialized character_knowledge rows recorded yet.',\n  `=== 3. CHARACTERS INVOLVED IN CURRENT SCENE/EVENT ===`,\n  JSON.stringify(base.characters_involved),\n  `=== 4. PROPOSED EVENTS / SCRIPT ACTIONS TO VALIDATE ===`,\n  JSON.stringify(base.proposed_events)\n].join('\\n\\n');\n\nreturn { json: { ...base, existing_canon_facts: canonFacts, existing_character_knowledge: allKnowledge, locked_facts_map: lockedFactsMap, deterministic_violations: deterministicViolations, llm_evaluation_context: llmEvaluationContext } };"
+        "jsCode": "const base = $('Input Normalizer & Mode Resolver').item.json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) { for (const r of entry) { if (r && r[requiredField] !== undefined) rows.push(r); } }\n      else if (entry && entry[requiredField] !== undefined) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst allKnowledge = unpackRows('Supabase: Fetch Character Knowledge', 'character_code');\n\nconst involvedSet = new Set(base.characters_involved || []);\nconst relevantKnowledge = allKnowledge.filter(k => involvedSet.size === 0 || involvedSet.has((k.character_code || '').toUpperCase().trim()) || k.secret === true);\n\nconst lockedFactsMap = {};\nfor (const cf of canonFacts) {\n  const code = (cf.fact_key || '').toString().toUpperCase().trim();\n  const isLocked = (cf.canon_status || '').toString().toUpperCase() === 'LOCKED';\n  if (code && isLocked) {\n    lockedFactsMap[code] = cf.fact_value;\n  }\n}\n\nconst deterministicViolations = [];\nfor (const candidate of (base.explicit_fact_updates || [])) {\n  const code = (candidate.fact_key || '').toString().toUpperCase().trim();\n  const newVal = typeof candidate.fact_value === 'object' ? JSON.stringify(candidate.fact_value) : String(candidate.fact_value);\n  const oldVal = typeof lockedFactsMap[code] === 'object' ? JSON.stringify(lockedFactsMap[code]) : String(lockedFactsMap[code]);\n  if (code && lockedFactsMap[code] !== undefined && newVal !== oldVal) {\n    deterministicViolations.push({\n      type: 'CRITICAL_CANON_VIOLATION',\n      description: `Rule 14 & 15 Violation: Attempted to overwrite LOCKED canon fact '${code}' (\"${oldVal}\") with \"${newVal}\". Locked facts are immutable.`\n    });\n  }\n}\n\nconst llmEvaluationContext = [\n  `=== PROJECT: ${base.project_name} | EPISODE: ${base.episode_no} | MODE: ${base.operation_mode} ===`,\n  `=== 1. EXISTING CANON FACTS (Rule 14 & 15: LOCKED facts cannot be contradicted) ===`,\n  canonFacts.length > 0 ? canonFacts.map(f => `- [${f.canon_status}] ${f.fact_key} (${f.fact_type || 'LORE'}): ${JSON.stringify(f.fact_value)}`).join('\\n') : 'No existing canon_facts rows yet.',\n  `=== 2. CHARACTER KNOWLEDGE GRAPH (Section 42: Characters can ONLY act on facts they possess here) ===`,\n  relevantKnowledge.length > 0 ? relevantKnowledge.map(k => `- Character ${k.character_code} KNOWS [${k.knowledge_key}] (Learned Ep ${k.learned_at_ep ?? 0}, Secret=${Boolean(k.secret)}): ${k.knowledge_value}`).join('\\n') : 'No specialized character_knowledge rows recorded yet.',\n  `=== 3. CHARACTERS INVOLVED IN CURRENT SCENE/EVENT ===`,\n  JSON.stringify(base.characters_involved),\n  `=== 4. PROPOSED EVENTS / SCRIPT ACTIONS TO VALIDATE ===`,\n  JSON.stringify(base.proposed_events)\n].join('\\n\\n');\n\nreturn { json: { ...base, existing_canon_facts: canonFacts, existing_character_knowledge: allKnowledge, locked_facts_map: lockedFactsMap, deterministic_violations: deterministicViolations, llm_evaluation_context: llmEvaluationContext } };"
       }
     },
     {
@@ -144,7 +140,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Compare proposed_events against canon_facts and character_knowledge. Enforce two strict laws: 1) Rule 14 & 15 Fact Locking: If any proposed event contradicts a LOCKED canon fact, set isValid=false and emit a violation with type=\"CRITICAL_CANON_VIOLATION\". 2) Section 42 Character Knowledge Graph (Anti-Meta-Gaming): Check if every character in characters_involved taking an action actually possesses the required knowledge in character_knowledge. If a character acts on a secret or unlearned fact they do not possess, set isValid=false and emit a violation with type=\"KNOWLEDGE_GRAPH_VIOLATION\". Output STRICT JSON matching this exact schema: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\"|\"FLEXIBLE_FACT_SHIFT\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $json.llm_evaluation_context } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Compare proposed_events against canon_facts and character_knowledge. Enforce two strict laws: 1) Rule 14 & 15 Fact Locking: If any proposed event contradicts a LOCKED canon fact, set isValid=false and emit a violation with type=\"CRITICAL_CANON_VIOLATION\". 2) Section 42 Character Knowledge Graph (Anti-Meta-Gaming): Check if every character in characters_involved taking an action actually possesses the required knowledge in character_knowledge. If a character acts on a secret or unlearned fact they do not possess, set isValid=false and emit a violation with type=\"KNOWLEDGE_GRAPH_VIOLATION\". Output STRICT JSON matching this exact schema: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\"|\"FLEXIBLE_FACT_SHIFT\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $json.llm_evaluation_context } ] }) }}",
         "options": {
           "timeout": 30000
         }
@@ -197,7 +193,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Validate proposed_events against LOCKED canon_facts (Rule 14/15) and character_knowledge (Section 42). Output STRICT JSON: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $('Deterministic Lock Guard & Prompt Builder').first().json.llm_evaluation_context } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Validate proposed_events against LOCKED canon_facts (Rule 14/15) and character_knowledge (Section 42). Output STRICT JSON: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $('Deterministic Lock Guard & Prompt Builder').item.json.llm_evaluation_context } ] }) }}",
         "options": {
           "timeout": 30000
         }
@@ -214,7 +210,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const ctx = $('Deterministic Lock Guard & Prompt Builder').first().json;\nconst llmRaw = $input.item.json || {};\nconst lockedMap = ctx.locked_facts_map || {};\n\nlet parsed = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) { parsed = JSON.parse(content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsed = null; }\n\nconst llmViolations = Array.isArray(parsed?.violations) ? parsed.violations : [];\nconst combinedViolations = [...(ctx.deterministic_violations || []), ...llmViolations];\n\nconst rawNewFacts = [...(Array.isArray(ctx.explicit_fact_updates) ? ctx.explicit_fact_updates : []), ...(Array.isArray(parsed?.new_facts_to_add) ? parsed.new_facts_to_add : [])];\nconst rawNewKnowledge = [...(Array.isArray(ctx.explicit_knowledge_updates) ? ctx.explicit_knowledge_updates : []), ...(Array.isArray(parsed?.new_knowledge_to_add) ? parsed.new_knowledge_to_add : [])];\n\nconst safeFactsToUpsert = [];\nfor (let i = 0; i < rawNewFacts.length; i++) {\n  const f = rawNewFacts[i] || {};\n  const code = (f.fact_key || `FACT_EP${ctx.episode_no}_${i + 1}`).toString().toUpperCase().trim();\n  const newVal = f.fact_value !== undefined ? f.fact_value : f.fact_statement;\n  if (!newVal) continue;\n\n  const newValStr = typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal);\n  const oldValStr = typeof lockedMap[code] === 'object' ? JSON.stringify(lockedMap[code]) : String(lockedMap[code]);\n\n  if (lockedMap[code] !== undefined && newValStr !== oldValStr) {\n    combinedViolations.push({ type: 'CRITICAL_CANON_VIOLATION', description: `Hard Lock Protection (Rule 14/15): Mutation rejected for LOCKED fact '${code}'. Existing locked truth: \"${oldValStr}\".` });\n    continue;\n  }\n\n  safeFactsToUpsert.push({\n    project_id: ctx.project_id, fact_key: code, fact_type: (f.fact_type || 'LORE').toString(),\n    fact_value: newVal, canon_status: (f.canon_status || 'FLEXIBLE').toString().toUpperCase(),\n    affected_episodes: Array.isArray(f.affected_episodes) ? f.affected_episodes : [ctx.episode_no]\n  });\n}\n\nconst safeKnowledgeToUpsert = [];\nfor (let i = 0; i < rawNewKnowledge.length; i++) {\n  const k = rawNewKnowledge[i] || {};\n  const charCode = (k.character_code || ctx.characters_involved[0] || 'CHAR_001').toString().toUpperCase().trim();\n  const knowCode = (k.knowledge_key || `KNOW_EP${ctx.episode_no}_${i + 1}`).toString().toUpperCase().trim();\n  const knowVal = k.knowledge_value !== undefined ? k.knowledge_value : k.knowledge_fact;\n  if (!knowVal) continue;\n\n  safeKnowledgeToUpsert.push({\n    project_id: ctx.project_id, character_code: charCode, knowledge_key: knowCode, knowledge_value: String(knowVal),\n    learned_at_ep: Number(k.learned_at_ep ?? ctx.episode_no), secret: Boolean(k.secret === true), knows: true\n  });\n}\n\nconst hasCriticalViolation = combinedViolations.some(v => v.type === 'CRITICAL_CANON_VIOLATION' || v.type === 'KNOWLEDGE_GRAPH_VIOLATION');\nconst isValid = Boolean((parsed?.isValid !== undefined ? Boolean(parsed.isValid) : true) && !hasCriticalViolation);\nconst shouldMutateDb = Boolean(ctx.operation_mode === 'UPDATE_CANON' && isValid === true && (safeFactsToUpsert.length > 0 || safeKnowledgeToUpsert.length > 0));\n\nreturn { json: { ...ctx, isValid, violations: combinedViolations, new_facts_to_add: safeFactsToUpsert, new_knowledge_to_add: safeKnowledgeToUpsert, should_mutate_db: shouldMutateDb } };"
+        "jsCode": "const ctx = $('Deterministic Lock Guard & Prompt Builder').item.json;\nconst llmRaw = $input.item.json || {};\nconst lockedMap = ctx.locked_facts_map || {};\n\nlet parsed = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) { parsed = JSON.parse(content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsed = null; }\n\nconst llmViolations = Array.isArray(parsed?.violations) ? parsed.violations : [];\nconst combinedViolations = [...(ctx.deterministic_violations || []), ...llmViolations];\n\nconst rawNewFacts = [...(Array.isArray(ctx.explicit_fact_updates) ? ctx.explicit_fact_updates : []), ...(Array.isArray(parsed?.new_facts_to_add) ? parsed.new_facts_to_add : [])];\nconst rawNewKnowledge = [...(Array.isArray(ctx.explicit_knowledge_updates) ? ctx.explicit_knowledge_updates : []), ...(Array.isArray(parsed?.new_knowledge_to_add) ? parsed.new_knowledge_to_add : [])];\n\nconst safeFactsToUpsert = [];\nfor (let i = 0; i < rawNewFacts.length; i++) {\n  const f = rawNewFacts[i] || {};\n  const code = (f.fact_key || `FACT_EP${ctx.episode_no}_${i + 1}`).toString().toUpperCase().trim();\n  const newVal = f.fact_value !== undefined ? f.fact_value : f.fact_statement;\n  if (!newVal) continue;\n\n  const newValStr = typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal);\n  const oldValStr = typeof lockedMap[code] === 'object' ? JSON.stringify(lockedMap[code]) : String(lockedMap[code]);\n\n  if (lockedMap[code] !== undefined && newValStr !== oldValStr) {\n    combinedViolations.push({ type: 'CRITICAL_CANON_VIOLATION', description: `Hard Lock Protection (Rule 14/15): Mutation rejected for LOCKED fact '${code}'. Existing locked truth: \"${oldValStr}\".` });\n    continue;\n  }\n\n  safeFactsToUpsert.push({\n    project_id: ctx.project_id, fact_key: code, fact_type: (f.fact_type || 'LORE').toString(),\n    fact_value: newVal, canon_status: (f.canon_status || 'FLEXIBLE').toString().toUpperCase(),\n    affected_episodes: Array.isArray(f.affected_episodes) ? f.affected_episodes : [ctx.episode_no]\n  });\n}\n\nconst safeKnowledgeToUpsert = [];\nfor (let i = 0; i < rawNewKnowledge.length; i++) {\n  const k = rawNewKnowledge[i] || {};\n  const charCode = (k.character_code || ctx.characters_involved[0] || 'CHAR_001').toString().toUpperCase().trim();\n  const knowCode = (k.knowledge_key || `KNOW_EP${ctx.episode_no}_${i + 1}`).toString().toUpperCase().trim();\n  const knowVal = k.knowledge_value !== undefined ? k.knowledge_value : k.knowledge_fact;\n  if (!knowVal) continue;\n\n  safeKnowledgeToUpsert.push({\n    project_id: ctx.project_id, character_code: charCode, knowledge_key: knowCode, knowledge_value: String(knowVal),\n    learned_at_ep: Number(k.learned_at_ep ?? ctx.episode_no), secret: Boolean(k.secret === true), knows: true\n  });\n}\n\nconst hasCriticalViolation = combinedViolations.some(v => v.type === 'CRITICAL_CANON_VIOLATION' || v.type === 'KNOWLEDGE_GRAPH_VIOLATION');\nconst isValid = Boolean((parsed?.isValid !== undefined ? Boolean(parsed.isValid) : true) && !hasCriticalViolation);\nconst shouldMutateDb = Boolean(ctx.operation_mode === 'UPDATE_CANON' && isValid === true && (safeFactsToUpsert.length > 0 || safeKnowledgeToUpsert.length > 0));\n\nreturn { json: { ...ctx, isValid, violations: combinedViolations, new_facts_to_add: safeFactsToUpsert, new_knowledge_to_add: safeKnowledgeToUpsert, should_mutate_db: shouldMutateDb } };"
       }
     },
     {
@@ -315,7 +311,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Canon Verdict & Locked Fact Protection Engine').first().json.new_knowledge_to_add) }}",
+        "jsonBody": "={{ JSON.stringify($('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add) }}",
         "options": {}
       }
     },
@@ -356,7 +352,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Canon Verdict & Locked Fact Protection Engine').first().json.project_id, episode_no: $('Canon Verdict & Locked Fact Protection Engine').first().json.episode_no, workflow_name: 'WF-09', action: $('Canon Verdict & Locked Fact Protection Engine').first().json.operation_mode, execution_id: $execution.id, new_value: { isValid: $('Canon Verdict & Locked Fact Protection Engine').first().json.isValid, violations_count: $('Canon Verdict & Locked Fact Protection Engine').first().json.violations.length, facts_added: $('Canon Verdict & Locked Fact Protection Engine').first().json.new_facts_to_add.length, knowledge_added: $('Canon Verdict & Locked Fact Protection Engine').first().json.new_knowledge_to_add.length } }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Canon Verdict & Locked Fact Protection Engine').item.json.project_id, episode_no: $('Canon Verdict & Locked Fact Protection Engine').item.json.episode_no, workflow_name: 'WF-09', action: $('Canon Verdict & Locked Fact Protection Engine').item.json.operation_mode, execution_id: $execution.id, new_value: { isValid: $('Canon Verdict & Locked Fact Protection Engine').item.json.isValid, violations_count: $('Canon Verdict & Locked Fact Protection Engine').item.json.violations.length, facts_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_facts_to_add.length, knowledge_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add.length } }) }}",
         "options": {}
       }
     },
@@ -371,7 +367,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "let triggerCtx = {};\ntry { triggerCtx = $('When Executed by Another Workflow').first().json || {}; } catch (e) { triggerCtx = $input.first().json || {}; }\nlet state = {};\ntry { state = $('Canon Verdict & Locked Fact Protection Engine').first().json || {}; } catch (e) { state = $input.first().json || {}; }\n\nconst violationsText = (state.violations || []).length > 0 ? state.violations.map((v, i) => `${i + 1}. **[${v.type}]** ${v.description}`).join('\\n') : '• Koi Canon Contradiction ya Knowledge Graph Violation nahi mila.';\nconst isValid = state.isValid !== undefined ? state.isValid : true;\nconst summaryMsg = [\n  `${isValid ? '✅' : '🛑'} **WF-09: Canon Engine Verdict (${state.operation_mode || 'CHECK_CANON'})**`,\n  `📁 **Project:** ${state.project_name || triggerCtx.project_name || 'Active'} | **Episode:** ${state.episode_no || 1} | **Valid:** \\`${isValid}\\``, violationsText\n].join('\\n');\n\nreturn {\n  json: {\n    ...triggerCtx, project_id: state.project_id || triggerCtx.project_id, project_name: state.project_name || triggerCtx.project_name,\n    episode_no: state.episode_no || triggerCtx.episode_no || 1, episode_number: state.episode_no || triggerCtx.episode_number || 1,\n    season_no: state.season_no || triggerCtx.season_no || 1, season_number: state.season_no || triggerCtx.season_number || 1,\n    mode: state.mode || triggerCtx.mode || 'SAVE', sessionId: state.sessionId || triggerCtx.sessionId, intent: state.intent || triggerCtx.intent,\n    downstream_command: state.downstream_command || state.intent || triggerCtx.intent, target_workflow_id: state.target_workflow_id || triggerCtx.target_workflow_id || $env.WF_02_STORY_ID || null,\n    preflight_workflow_ids: state.preflight_workflow_ids || triggerCtx.preflight_workflow_ids || {}, extracted_params: state.extracted_params || triggerCtx.extracted_params || { episode_number: state.episode_no || 1 },\n    user_prompt: state.user_prompt || state.userPrompt || state.rawText || triggerCtx.user_prompt, userPrompt: state.userPrompt || state.user_prompt || state.rawText || triggerCtx.userPrompt,\n    rawText: state.rawText || state.user_prompt || triggerCtx.rawText, user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {},\n    project_style: state.project_style || triggerCtx.project_style || { visual_style: 'ANIME' }, ok: isValid, workflow_name: 'WF-09', execution_id: $execution.id,\n    operation_mode: state.operation_mode || 'CHECK_CANON', isValid, violations: state.violations || [], new_facts_to_add: state.new_facts_to_add || [],\n    new_knowledge_to_add: state.new_knowledge_to_add || [], output: summaryMsg, text: summaryMsg\n  }\n};\n"
+        "jsCode": "const state = $('Canon Verdict & Locked Fact Protection Engine').item.json;\nconst violationsText = state.violations.length > 0 ? state.violations.map((v, i) => `${i + 1}. **[${v.type}]** ${v.description}`).join('\\n') : '• Koi Canon Contradiction ya Knowledge Graph Violation nahi mila.';\n\nconst summaryMsg = [\n  `${state.isValid ? '✅' : '🛑'} **WF-09: Canon Engine & Knowledge Graph Verdict (${state.operation_mode})**`,\n  `📁 **Project:** ${state.project_name} | **Episode:** ${state.episode_no} | **Valid:** \\`${state.isValid}\\``,\n  ``, `🔍 **Rule 14/15 & Section 42 Validation Findings (${state.violations.length}):**`, violationsText,\n  state.should_mutate_db ? `\\n💾 **Database Mutations Committed:**\\n• Canon Facts Upserted: ${state.new_facts_to_add.length}\\n• Character Knowledge Entries Upserted: ${state.new_knowledge_to_add.length}` : `\\n🔒 **Read-Only / Blocked Mode:** Database me koi canon mutation commit nahi kiya gaya.`\n].join('\\n');\n\nreturn {\n  json: {\n    project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, episode_number: state.episode_no,\n    season_no: state.season_no, season_number: state.season_no, mode: state.mode || 'SAVE', sessionId: state.sessionId,\n    intent: state.intent, downstream_command: state.downstream_command || state.intent,\n    target_workflow_id: state.target_workflow_id || $env.WF_02_STORY_ID || null, preflight_workflow_ids: state.preflight_workflow_ids || {},\n    extracted_params: state.extracted_params || { episode_number: state.episode_no },\n    user_prompt: state.user_prompt || state.userPrompt || state.rawText, userPrompt: state.userPrompt || state.user_prompt || state.rawText, rawText: state.rawText || state.user_prompt,\n    ok: state.isValid, workflow_name: 'WF-09', execution_id: $execution.id, operation_mode: state.operation_mode,\n    isValid: state.isValid, violations: state.violations, new_facts_to_add: state.new_facts_to_add, new_knowledge_to_add: state.new_knowledge_to_add,\n    output: summaryMsg, text: summaryMsg\n  }\n};"
       }
     }
   ],
@@ -549,551 +545,5 @@
       "createdAt": "2026-10-26T06:14:16.780Z",
       "updatedAt": "2026-10-26T06:14:16.780Z"
     }
-  ],
-  "shared": [
-    {
-      "role": "workflow:owner",
-      "workflowId": "gT1c0Hpvrwyf9YS6",
-      "projectId": "DHmXIxR6TKeJcd0d",
-      "createdAt": "2026-10-26T09:59:41.877Z",
-      "updatedAt": "2026-10-26T09:59:41.877Z"
-    }
-  ],
-  "activeVersion": {
-    "versionId": "7957838a-7ce7-4a9f-b61e-65d45eefde1c",
-    "workflowId": "gT1c0Hpvrwyf9YS6",
-    "nodes": [
-      {
-        "id": "6b3176fe-99ef-4128-a3ad-386b171d7580",
-        "name": "When Executed by Another Workflow",
-        "type": "n8n-nodes-base.executeWorkflowTrigger",
-        "typeVersion": 1,
-        "position": [
-          0,
-          80
-        ],
-        "parameters": {
-          "inputSource": "passthrough"
-        }
-      },
-      {
-        "id": "7d0830d4-7a66-4ea6-9e6e-ffc0f5ba70fe",
-        "name": "Input Normalizer & Mode Resolver",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          224,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst project_name = raw.project_name || 'Active Anime Project';\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || extracted.season_no || 1);\n\nconst rawIntent = (raw.intent || raw.downstream_command || 'CHECK_CANON').toString().toUpperCase().trim();\nconst operation_mode = (rawIntent === 'UPDATE_CANON' || rawIntent === 'APPROVE_CANON_CHANGE') ? 'UPDATE_CANON' : 'CHECK_CANON';\n\nconst proposed_events = Array.isArray(raw.proposed_events) ? raw.proposed_events : (raw.user_prompt || raw.userPrompt || raw.rawText ? [{ event_code: `EVT_EP_${episode_no}`, description: (raw.user_prompt || raw.userPrompt || raw.rawText).toString() }] : []);\nconst characters_involved = Array.isArray(raw.characters_involved) && raw.characters_involved.length > 0 ? raw.characters_involved.map(c => c.toString().toUpperCase().trim()) : ['CHAR_001'];\n\nconst explicit_fact_updates = Array.isArray(raw.new_facts_to_add) ? raw.new_facts_to_add : [];\nconst explicit_knowledge_updates = Array.isArray(raw.new_knowledge_to_add) ? raw.new_knowledge_to_add : [];\n\nif (!project_id) {\n  throw new Error('WF-09 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn {\n  json: {\n    ...raw, project_id, project_name, episode_no, episode_number: episode_no, season_no, season_number: season_no,\n    intent: rawIntent, operation_mode, proposed_events, characters_involved, explicit_fact_updates, explicit_knowledge_updates,\n    sessionId: (raw.sessionId || `sess_${$execution.id}`).toString()\n  }\n};"
-        }
-      },
-      {
-        "id": "cda5de69-3673-4243-a5a1-696b5e8c64ed",
-        "name": "Supabase: Fetch Canon Facts",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          448,
-          80
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?select=id,fact_key,fact_type,fact_value,canon_status,version,affected_episodes&project_id=eq.{{ $json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "f05d5381-6bf1-4608-83f4-635681772726",
-        "name": "Supabase: Fetch Character Knowledge",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          672,
-          80
-        ],
-        "parameters": {
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_knowledge?select=id,character_code,knowledge_key,knowledge_value,learned_at_ep,secret,knows&project_id=eq.{{ $('Input Normalizer & Mode Resolver').first().json.project_id }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Accept",
-                "value": "application/json"
-              }
-            ]
-          },
-          "options": {}
-        }
-      },
-      {
-        "id": "b129589b-9742-4b3d-8a63-6ceb1ad26255",
-        "name": "Deterministic Lock Guard & Prompt Builder",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          896,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const base = $('Input Normalizer & Mode Resolver').first().json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) { for (const r of entry) { if (r && r[requiredField] !== undefined) rows.push(r); } }\n      else if (entry && entry[requiredField] !== undefined) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst allKnowledge = unpackRows('Supabase: Fetch Character Knowledge', 'character_code');\n\nconst involvedSet = new Set(base.characters_involved || []);\nconst relevantKnowledge = allKnowledge.filter(k => involvedSet.size === 0 || involvedSet.has((k.character_code || '').toUpperCase().trim()) || k.secret === true);\n\nconst lockedFactsMap = {};\nfor (const cf of canonFacts) {\n  const code = (cf.fact_key || '').toString().toUpperCase().trim();\n  const isLocked = (cf.canon_status || '').toString().toUpperCase() === 'LOCKED';\n  if (code && isLocked) {\n    lockedFactsMap[code] = cf.fact_value;\n  }\n}\n\nconst deterministicViolations = [];\nfor (const candidate of (base.explicit_fact_updates || [])) {\n  const code = (candidate.fact_key || '').toString().toUpperCase().trim();\n  const newVal = typeof candidate.fact_value === 'object' ? JSON.stringify(candidate.fact_value) : String(candidate.fact_value);\n  const oldVal = typeof lockedFactsMap[code] === 'object' ? JSON.stringify(lockedFactsMap[code]) : String(lockedFactsMap[code]);\n  if (code && lockedFactsMap[code] !== undefined && newVal !== oldVal) {\n    deterministicViolations.push({\n      type: 'CRITICAL_CANON_VIOLATION',\n      description: `Rule 14 & 15 Violation: Attempted to overwrite LOCKED canon fact '${code}' (\"${oldVal}\") with \"${newVal}\". Locked facts are immutable.`\n    });\n  }\n}\n\nconst llmEvaluationContext = [\n  `=== PROJECT: ${base.project_name} | EPISODE: ${base.episode_no} | MODE: ${base.operation_mode} ===`,\n  `=== 1. EXISTING CANON FACTS (Rule 14 & 15: LOCKED facts cannot be contradicted) ===`,\n  canonFacts.length > 0 ? canonFacts.map(f => `- [${f.canon_status}] ${f.fact_key} (${f.fact_type || 'LORE'}): ${JSON.stringify(f.fact_value)}`).join('\\n') : 'No existing canon_facts rows yet.',\n  `=== 2. CHARACTER KNOWLEDGE GRAPH (Section 42: Characters can ONLY act on facts they possess here) ===`,\n  relevantKnowledge.length > 0 ? relevantKnowledge.map(k => `- Character ${k.character_code} KNOWS [${k.knowledge_key}] (Learned Ep ${k.learned_at_ep ?? 0}, Secret=${Boolean(k.secret)}): ${k.knowledge_value}`).join('\\n') : 'No specialized character_knowledge rows recorded yet.',\n  `=== 3. CHARACTERS INVOLVED IN CURRENT SCENE/EVENT ===`,\n  JSON.stringify(base.characters_involved),\n  `=== 4. PROPOSED EVENTS / SCRIPT ACTIONS TO VALIDATE ===`,\n  JSON.stringify(base.proposed_events)\n].join('\\n\\n');\n\nreturn { json: { ...base, existing_canon_facts: canonFacts, existing_character_knowledge: allKnowledge, locked_facts_map: lockedFactsMap, deterministic_violations: deterministicViolations, llm_evaluation_context: llmEvaluationContext } };"
-        }
-      },
-      {
-        "id": "d6fdb215-8c03-4f68-b67d-95e6eaaf2440",
-        "name": "Primary Groq Canon Evaluator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          1120,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'llama-3.3-70b-versatile', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Compare proposed_events against canon_facts and character_knowledge. Enforce two strict laws: 1) Rule 14 & 15 Fact Locking: If any proposed event contradicts a LOCKED canon fact, set isValid=false and emit a violation with type=\"CRITICAL_CANON_VIOLATION\". 2) Section 42 Character Knowledge Graph (Anti-Meta-Gaming): Check if every character in characters_involved taking an action actually possesses the required knowledge in character_knowledge. If a character acts on a secret or unlearned fact they do not possess, set isValid=false and emit a violation with type=\"KNOWLEDGE_GRAPH_VIOLATION\". Output STRICT JSON matching this exact schema: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\"|\"FLEXIBLE_FACT_SHIFT\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $json.llm_evaluation_context } ] }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "e73f7bbd-b018-4129-ad38-592023e80224",
-        "name": "If Primary Groq Failed",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          1344,
-          80
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ Boolean($json.choices && $json.choices[0] && $json.choices[0].message && $json.choices[0].message.content) }}"
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "f2576200-b3ac-4f3b-825e-0d20ba046eee",
-        "name": "Fallback Gemini Canon Evaluator",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "continueOnFail": true,
-        "position": [
-          1568,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Validate proposed_events against LOCKED canon_facts (Rule 14/15) and character_knowledge (Section 42). Output STRICT JSON: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $('Deterministic Lock Guard & Prompt Builder').first().json.llm_evaluation_context } ] }) }}",
-          "options": {
-            "timeout": 30000
-          }
-        }
-      },
-      {
-        "id": "2c32466c-2e83-4e38-86f8-8732f603ad41",
-        "name": "Canon Verdict & Locked Fact Protection Engine",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          1792,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "const ctx = $('Deterministic Lock Guard & Prompt Builder').first().json;\nconst llmRaw = $input.item.json || {};\nconst lockedMap = ctx.locked_facts_map || {};\n\nlet parsed = null;\ntry {\n  const content = llmRaw?.choices?.[0]?.message?.content;\n  if (content) { parsed = JSON.parse(content.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsed = null; }\n\nconst llmViolations = Array.isArray(parsed?.violations) ? parsed.violations : [];\nconst combinedViolations = [...(ctx.deterministic_violations || []), ...llmViolations];\n\nconst rawNewFacts = [...(Array.isArray(ctx.explicit_fact_updates) ? ctx.explicit_fact_updates : []), ...(Array.isArray(parsed?.new_facts_to_add) ? parsed.new_facts_to_add : [])];\nconst rawNewKnowledge = [...(Array.isArray(ctx.explicit_knowledge_updates) ? ctx.explicit_knowledge_updates : []), ...(Array.isArray(parsed?.new_knowledge_to_add) ? parsed.new_knowledge_to_add : [])];\n\nconst safeFactsToUpsert = [];\nfor (let i = 0; i < rawNewFacts.length; i++) {\n  const f = rawNewFacts[i] || {};\n  const code = (f.fact_key || `FACT_EP${ctx.episode_no}_${i + 1}`).toString().toUpperCase().trim();\n  const newVal = f.fact_value !== undefined ? f.fact_value : f.fact_statement;\n  if (!newVal) continue;\n\n  const newValStr = typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal);\n  const oldValStr = typeof lockedMap[code] === 'object' ? JSON.stringify(lockedMap[code]) : String(lockedMap[code]);\n\n  if (lockedMap[code] !== undefined && newValStr !== oldValStr) {\n    combinedViolations.push({ type: 'CRITICAL_CANON_VIOLATION', description: `Hard Lock Protection (Rule 14/15): Mutation rejected for LOCKED fact '${code}'. Existing locked truth: \"${oldValStr}\".` });\n    continue;\n  }\n\n  safeFactsToUpsert.push({\n    project_id: ctx.project_id, fact_key: code, fact_type: (f.fact_type || 'LORE').toString(),\n    fact_value: newVal, canon_status: (f.canon_status || 'FLEXIBLE').toString().toUpperCase(),\n    affected_episodes: Array.isArray(f.affected_episodes) ? f.affected_episodes : [ctx.episode_no]\n  });\n}\n\nconst safeKnowledgeToUpsert = [];\nfor (let i = 0; i < rawNewKnowledge.length; i++) {\n  const k = rawNewKnowledge[i] || {};\n  const charCode = (k.character_code || ctx.characters_involved[0] || 'CHAR_001').toString().toUpperCase().trim();\n  const knowCode = (k.knowledge_key || `KNOW_EP${ctx.episode_no}_${i + 1}`).toString().toUpperCase().trim();\n  const knowVal = k.knowledge_value !== undefined ? k.knowledge_value : k.knowledge_fact;\n  if (!knowVal) continue;\n\n  safeKnowledgeToUpsert.push({\n    project_id: ctx.project_id, character_code: charCode, knowledge_key: knowCode, knowledge_value: String(knowVal),\n    learned_at_ep: Number(k.learned_at_ep ?? ctx.episode_no), secret: Boolean(k.secret === true), knows: true\n  });\n}\n\nconst hasCriticalViolation = combinedViolations.some(v => v.type === 'CRITICAL_CANON_VIOLATION' || v.type === 'KNOWLEDGE_GRAPH_VIOLATION');\nconst isValid = Boolean((parsed?.isValid !== undefined ? Boolean(parsed.isValid) : true) && !hasCriticalViolation);\nconst shouldMutateDb = Boolean(ctx.operation_mode === 'UPDATE_CANON' && isValid === true && (safeFactsToUpsert.length > 0 || safeKnowledgeToUpsert.length > 0));\n\nreturn { json: { ...ctx, isValid, violations: combinedViolations, new_facts_to_add: safeFactsToUpsert, new_knowledge_to_add: safeKnowledgeToUpsert, should_mutate_db: shouldMutateDb } };"
-        }
-      },
-      {
-        "id": "b8a90b85-f8bb-46dc-a5d1-44324cb9f8e4",
-        "name": "Route Switch (CHECK_CANON vs UPDATE_CANON)",
-        "type": "n8n-nodes-base.if",
-        "typeVersion": 1,
-        "position": [
-          2016,
-          80
-        ],
-        "parameters": {
-          "conditions": {
-            "boolean": [
-              {
-                "value1": "={{ $json.should_mutate_db }}",
-                "value2": true
-              }
-            ]
-          }
-        }
-      },
-      {
-        "id": "a781b8c2-1f41-4e39-9df9-b9f3e1fcd90b",
-        "name": "Supabase: Upsert Canon Facts",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          2240,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?on_conflict=project_id,fact_key",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "resolution=merge-duplicates,return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($json.new_facts_to_add) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "cf5aa46a-8841-4451-8777-0cc356019c78",
-        "name": "Supabase: Upsert Character Knowledge",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          2464,
-          0
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_knowledge?on_conflict=project_id,character_code,knowledge_key",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "resolution=merge-duplicates,return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify($('Canon Verdict & Locked Fact Protection Engine').first().json.new_knowledge_to_add) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "ab765125-26dd-4dd1-8115-b874b1d17066",
-        "name": "Supabase: Insert Audit Log",
-        "type": "n8n-nodes-base.httpRequest",
-        "typeVersion": 4.2,
-        "alwaysOutputData": true,
-        "continueOnFail": true,
-        "position": [
-          2688,
-          80
-        ],
-        "parameters": {
-          "method": "POST",
-          "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
-          "sendHeaders": true,
-          "headerParameters": {
-            "parameters": [
-              {
-                "name": "apikey",
-                "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Authorization",
-                "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-              },
-              {
-                "name": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "name": "Prefer",
-                "value": "return=minimal"
-              }
-            ]
-          },
-          "sendBody": true,
-          "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({ project_id: $('Canon Verdict & Locked Fact Protection Engine').first().json.project_id, episode_no: $('Canon Verdict & Locked Fact Protection Engine').first().json.episode_no, workflow_name: 'WF-09', action: $('Canon Verdict & Locked Fact Protection Engine').first().json.operation_mode, execution_id: $execution.id, new_value: { isValid: $('Canon Verdict & Locked Fact Protection Engine').first().json.isValid, violations_count: $('Canon Verdict & Locked Fact Protection Engine').first().json.violations.length, facts_added: $('Canon Verdict & Locked Fact Protection Engine').first().json.new_facts_to_add.length, knowledge_added: $('Canon Verdict & Locked Fact Protection Engine').first().json.new_knowledge_to_add.length } }) }}",
-          "options": {}
-        }
-      },
-      {
-        "id": "0359850e-4444-4555-bff1-d39a0d16b8f7",
-        "name": "Final Canon Response Formatter",
-        "type": "n8n-nodes-base.code",
-        "typeVersion": 2,
-        "position": [
-          2912,
-          80
-        ],
-        "parameters": {
-          "mode": "runOnceForEachItem",
-          "jsCode": "let triggerCtx = {};\ntry { triggerCtx = $('When Executed by Another Workflow').first().json || {}; } catch (e) { triggerCtx = $input.first().json || {}; }\nlet state = {};\ntry { state = $('Canon Verdict & Locked Fact Protection Engine').first().json || {}; } catch (e) { state = $input.first().json || {}; }\n\nconst violationsText = (state.violations || []).length > 0 ? state.violations.map((v, i) => `${i + 1}. **[${v.type}]** ${v.description}`).join('\\n') : '• Koi Canon Contradiction ya Knowledge Graph Violation nahi mila.';\nconst isValid = state.isValid !== undefined ? state.isValid : true;\nconst summaryMsg = [\n  `${isValid ? '✅' : '🛑'} **WF-09: Canon Engine Verdict (${state.operation_mode || 'CHECK_CANON'})**`,\n  `📁 **Project:** ${state.project_name || triggerCtx.project_name || 'Active'} | **Episode:** ${state.episode_no || 1} | **Valid:** \\`${isValid}\\``, violationsText\n].join('\\n');\n\nreturn {\n  json: {\n    ...triggerCtx, project_id: state.project_id || triggerCtx.project_id, project_name: state.project_name || triggerCtx.project_name,\n    episode_no: state.episode_no || triggerCtx.episode_no || 1, episode_number: state.episode_no || triggerCtx.episode_number || 1,\n    season_no: state.season_no || triggerCtx.season_no || 1, season_number: state.season_no || triggerCtx.season_number || 1,\n    mode: state.mode || triggerCtx.mode || 'SAVE', sessionId: state.sessionId || triggerCtx.sessionId, intent: state.intent || triggerCtx.intent,\n    downstream_command: state.downstream_command || state.intent || triggerCtx.intent, target_workflow_id: state.target_workflow_id || triggerCtx.target_workflow_id || $env.WF_02_STORY_ID || null,\n    preflight_workflow_ids: state.preflight_workflow_ids || triggerCtx.preflight_workflow_ids || {}, extracted_params: state.extracted_params || triggerCtx.extracted_params || { episode_number: state.episode_no || 1 },\n    user_prompt: state.user_prompt || state.userPrompt || state.rawText || triggerCtx.user_prompt, userPrompt: state.userPrompt || state.user_prompt || state.rawText || triggerCtx.userPrompt,\n    rawText: state.rawText || state.user_prompt || triggerCtx.rawText, user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {},\n    project_style: state.project_style || triggerCtx.project_style || { visual_style: 'ANIME' }, ok: isValid, workflow_name: 'WF-09', execution_id: $execution.id,\n    operation_mode: state.operation_mode || 'CHECK_CANON', isValid, violations: state.violations || [], new_facts_to_add: state.new_facts_to_add || [],\n    new_knowledge_to_add: state.new_knowledge_to_add || [], output: summaryMsg, text: summaryMsg\n  }\n};\n"
-        }
-      }
-    ],
-    "connections": {
-      "When Executed by Another Workflow": {
-        "main": [
-          [
-            {
-              "node": "Input Normalizer & Mode Resolver",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Input Normalizer & Mode Resolver": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Canon Facts",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Canon Facts": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Fetch Character Knowledge",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Fetch Character Knowledge": {
-        "main": [
-          [
-            {
-              "node": "Deterministic Lock Guard & Prompt Builder",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Deterministic Lock Guard & Prompt Builder": {
-        "main": [
-          [
-            {
-              "node": "Primary Groq Canon Evaluator",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Primary Groq Canon Evaluator": {
-        "main": [
-          [
-            {
-              "node": "If Primary Groq Failed",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "If Primary Groq Failed": {
-        "main": [
-          [
-            {
-              "node": "Fallback Gemini Canon Evaluator",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Canon Verdict & Locked Fact Protection Engine",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Fallback Gemini Canon Evaluator": {
-        "main": [
-          [
-            {
-              "node": "Canon Verdict & Locked Fact Protection Engine",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Canon Verdict & Locked Fact Protection Engine": {
-        "main": [
-          [
-            {
-              "node": "Route Switch (CHECK_CANON vs UPDATE_CANON)",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Route Switch (CHECK_CANON vs UPDATE_CANON)": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Upsert Canon Facts",
-              "type": "main",
-              "index": 0
-            }
-          ],
-          [
-            {
-              "node": "Supabase: Insert Audit Log",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Upsert Canon Facts": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Upsert Character Knowledge",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Upsert Character Knowledge": {
-        "main": [
-          [
-            {
-              "node": "Supabase: Insert Audit Log",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      },
-      "Supabase: Insert Audit Log": {
-        "main": [
-          [
-            {
-              "node": "Final Canon Response Formatter",
-              "type": "main",
-              "index": 0
-            }
-          ]
-        ]
-      }
-    },
-    "nodeGroups": [],
-    "authors": "Neeraj  Behra",
-    "name": null,
-    "description": null,
-    "autosaved": false,
-    "createdAt": "2026-10-29T21:21:32.937Z",
-    "updatedAt": "2026-10-29T21:21:32.937Z"
-  }
+  ]
 }
