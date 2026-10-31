@@ -2,10 +2,6 @@
   "id": "jI39p4vr4CnWhpgw",
   "name": "storywf13",
   "active": true,
-  "createdAt": "2026-10-26T10:13:35.403Z",
-  "updatedAt": "2026-10-26T10:14:20.031Z",
-  "isArchived": false,
-  "triggerCount": 1,
   "nodes": [
     {
       "parameters": {
@@ -40,7 +36,7 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,project_id,action_type,status,retry_count,ready_at,action_payload,created_at&or=(status.eq.FAILED,and(status.eq.RETRY_SCHEDULED,ready_at.lte.{{ $now.toISOString() }}))&order=created_at.asc&limit=25",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,project_id,action_type,status,retry_count,ready_at,action_payload,created_at&or=(status.eq.FAILED,and(status.eq.RETRY_SCHEDULED,ready_at.lte.{{ $now.toISO() }}))&order=created_at.asc&limit=25",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -55,6 +51,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -152,6 +152,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -201,6 +205,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -244,6 +252,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -266,7 +278,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const calc = $('Exponential Backoff & Dead-Letter Math').item.json;\nreturn { json: calc };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst calc = __getNodeJson('Exponential Backoff & Dead-Letter Math');\nreturn { json: calc };"
       },
       "id": "e41d1d16-a2b6-42ee-819d-d3773f4aa1eb",
       "name": "Return Item to Batch Loop",
@@ -446,29 +458,8 @@
       ]
     }
   },
-  "nodeGroups": [],
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
-  },
-  "staticData": {
-    "node:Schedule Trigger (Every 15 Mins)": {
-      "recurrenceRules": [
-        null
-      ],
-      "recurrenceRuleSignatures": [
-        null
-      ]
-    }
-  },
-  "pinData": {},
-  "meta": null,
-  "tags": [
-    {
-      "id": "LuIq0zIeNa69i786",
-      "name": "Anime-Engine",
-      "createdAt": "2026-10-26T06:14:16.780Z",
-      "updatedAt": "2026-10-26T06:14:16.780Z"
-    }
-  ]
+  }
 }

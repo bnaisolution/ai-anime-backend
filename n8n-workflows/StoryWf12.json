@@ -2,10 +2,6 @@
   "id": "y5DW83fQjvyrzE98",
   "name": "StoryWf12",
   "active": true,
-  "createdAt": "2026-10-26T10:10:44.896Z",
-  "updatedAt": "2026-10-26T10:11:29.447Z",
-  "isArchived": false,
-  "triggerCount": 0,
   "nodes": [
     {
       "parameters": {},
@@ -21,7 +17,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? 'GPU' : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISODate();\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn { json: { ...raw, project_id, service_type, estimated_cost_units, usage_date, sessionId: (raw.sessionId || `sess_${$execution.id}`).toString() } };"
+        "jsCode": "const raw = ($input.item && $input.item.json) ? $input.item.json : {};\nconst extracted = raw.extracted_params || {};\nconst project_id = raw.project_id || extracted.project_id || null;\n\nconst userInfra = raw.user_infrastructure || {};\nconst gpuRouting = userInfra.gpu_routing || raw.gpu_routing || {};\nconst primaryHours = Number(gpuRouting.kaggle_primary?.weekly_hours_used || 0);\nconst secondaryHours = Number(gpuRouting.kaggle_secondary?.weekly_hours_used || 0);\n\nlet active_gpu_slot = 'KAGGLE_PRIMARY';\nif (gpuRouting.preferred_mode === 'CUSTOM_GPU' || gpuRouting.custom_gpu?.enabled) {\n  active_gpu_slot = 'CUSTOM_GPU';\n} else if (primaryHours >= 29.5) {\n  active_gpu_slot = 'KAGGLE_SECONDARY';\n}\n\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? active_gpu_slot : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type.includes('KAGGLE') || service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISODate();\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn {\n  json: {\n    ...raw,\n    project_id,\n    service_type,\n    active_gpu_slot,\n    kaggle_primary_hours: primaryHours,\n    kaggle_secondary_hours: secondaryHours,\n    estimated_cost_units,\n    usage_date,\n    sessionId: (raw.sessionId || `sess_${$execution.id}`).toString()\n  }\n};"
       },
       "id": "2d4d7178-e840-44b1-a03f-d3c1c832e843",
       "name": "Input Normalizer & Cost Estimator",
@@ -49,6 +45,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -68,7 +68,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Cost Estimator').item.json;\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISOString() }\n  }\n};"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Cost Estimator');\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISO() }\n  }\n};"
       },
       "id": "9f131fca-b8de-4d4a-9b85-6444786d05da",
       "name": "Quota & Throttling Evaluator",
@@ -121,6 +121,10 @@
             {
               "name": "Prefer",
               "value": "resolution=merge-duplicates,return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -162,6 +166,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -184,7 +192,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const state = $('Quota & Throttling Evaluator').item.json;\n\nconst msg = state.is_allowed\n  ? [\n      `✅ **WF-12: Quota Approved (${state.service_type})!**`,\n      `• **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `• **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `• **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `🛑 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `• **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `• **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `• **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Quota & Throttling Evaluator');\n\nconst msg = state.is_allowed\n  ? [\n      `✅ **WF-12: Quota Approved (${state.service_type})!**`,\n      `• **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `• **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `• **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `🛑 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `• **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `• **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `• **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};"
       },
       "id": "7065e197-7638-4671-9c32-72189905a44e",
       "name": "Final Quota Response Formatter",
@@ -282,20 +290,8 @@
       ]
     }
   },
-  "nodeGroups": [],
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
-  },
-  "staticData": null,
-  "pinData": {},
-  "meta": null,
-  "tags": [
-    {
-      "id": "LuIq0zIeNa69i786",
-      "name": "Anime-Engine",
-      "createdAt": "2026-10-26T06:14:16.780Z",
-      "updatedAt": "2026-10-26T06:14:16.780Z"
-    }
-  ]
+  }
 }

@@ -2,10 +2,6 @@
   "id": "MrWrz58aRUVTzpLr",
   "name": "Storywf08",
   "active": true,
-  "createdAt": "2026-10-26T09:55:21.702Z",
-  "updatedAt": "2026-10-29T21:21:32.590Z",
-  "isArchived": false,
-  "triggerCount": 0,
   "nodes": [
     {
       "id": "17aabf04-418a-43c6-acd2-be5910076561",
@@ -29,7 +25,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || 1);\n\nconst VALID_PLATFORMS = ['YOUTUBE', 'INSTAGRAM'];\nlet platforms = Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms.map(p => p.toString().toUpperCase().trim()).filter(p => VALID_PLATFORMS.includes(p)) : VALID_PLATFORMS;\nif (platforms.length === 0) platforms = VALID_PLATFORMS;\n\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-08 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { project_id, episode_no, season_no, platforms, sessionId, evaluated_at: $now.toISOString() } };"
+        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || 1);\n\nconst VALID_PLATFORMS = ['YOUTUBE', 'INSTAGRAM'];\nlet platforms = Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms.map(p => p.toString().toUpperCase().trim()).filter(p => VALID_PLATFORMS.includes(p)) : VALID_PLATFORMS;\nif (platforms.length === 0) platforms = VALID_PLATFORMS;\n\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-08 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { project_id, episode_no, season_no, platforms, sessionId, evaluated_at: $now.toISO() } };"
       }
     },
     {
@@ -59,6 +55,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -76,7 +76,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Target Resolver').item.json;\nconst rawEp = $input.item.json;\nconst epRow = Array.isArray(rawEp) ? rawEp[0] : (rawEp && (rawEp.youtube_url || rawEp.instagram_urls) ? rawEp : {});\n\nlet ytVideoId = null;\nif (epRow.youtube_url) {\n  const m = epRow.youtube_url.match(/(?:youtu\\.be\\/|shorts\\/|v=)([a-zA-Z0-9_-]{6,20})/i);\n  if (m) ytVideoId = m[1];\n}\n\nlet igMediaId = null;\nif (Array.isArray(epRow.instagram_urls) && epRow.instagram_urls.length > 0) {\n  const match = epRow.instagram_urls[0].match(/\\/(?:reel|p)\\/([a-zA-Z0-9_-]+)/i);\n  if (match) igMediaId = match[1];\n}\n\nreturn {\n  json: {\n    ...base, episode_title: epRow?.title || `Episode ${base.episode_no}`,\n    youtube_video_id: ytVideoId || 'DEMO_YOUTUBE_ID', instagram_media_id: igMediaId || 'DEMO_IG_ID',\n    fetch_youtube: base.platforms.includes('YOUTUBE'), fetch_instagram: base.platforms.includes('INSTAGRAM')\n  }\n};"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Target Resolver');\nconst rawEp = $input.item.json;\nconst epRow = Array.isArray(rawEp) ? rawEp[0] : (rawEp && (rawEp.youtube_url || rawEp.instagram_urls) ? rawEp : {});\n\nlet ytVideoId = null;\nif (epRow.youtube_url) {\n  const m = epRow.youtube_url.match(/(?:youtu\\.be\\/|shorts\\/|v=)([a-zA-Z0-9_-]{6,20})/i);\n  if (m) ytVideoId = m[1];\n}\n\nlet igMediaId = null;\nif (Array.isArray(epRow.instagram_urls) && epRow.instagram_urls.length > 0) {\n  const match = epRow.instagram_urls[0].match(/\\/(?:reel|p)\\/([a-zA-Z0-9_-]+)/i);\n  if (match) igMediaId = match[1];\n}\n\nreturn {\n  json: {\n    ...base, episode_title: epRow?.title || `Episode ${base.episode_no}`,\n    youtube_video_id: ytVideoId || 'DEMO_YOUTUBE_ID', instagram_media_id: igMediaId || 'DEMO_IG_ID',\n    fetch_youtube: base.platforms.includes('YOUTUBE'), fetch_instagram: base.platforms.includes('INSTAGRAM')\n  }\n};"
       }
     },
     {
@@ -118,6 +118,10 @@
             {
               "name": "Content-Type",
               "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -127,15 +131,15 @@
           "parameters": [
             {
               "name": "client_id",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_id || $env.YOUTUBE_CLIENT_ID) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_id || $env.YOUTUBE_CLIENT_ID) }}"
             },
             {
               "name": "client_secret",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
             },
             {
               "name": "refresh_token",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
             },
             {
               "name": "grant_type",
@@ -166,11 +170,15 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
+              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
             },
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -190,7 +198,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Unpack Publication IDs').item.json;\nreturn { json: base };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Unpack Publication IDs');\nreturn { json: base };"
       }
     },
     {
@@ -225,13 +233,17 @@
         0
       ],
       "parameters": {
-        "url": "=https://graph.facebook.com/v21.0/{{ $json.instagram_media_id }}/insights?metric=plays,reach,shares,saves,comments&access_token={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }}",
+        "url": "=https://graph.facebook.com/v21.0/{{ $json.instagram_media_id }}/insights?metric=plays,reach,shares,saves,comments&access_token={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -251,7 +263,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Unpack Publication IDs').item.json;\nconst ytNode = $('YouTube Analytics API: Fetch Stats').isExecuted ? $('YouTube Analytics API: Fetch Stats').item.json : {};\nconst igNode = $('Instagram Graph API: Fetch Insights').isExecuted ? $('Instagram Graph API: Fetch Insights').item.json : {};\n\nconst ytStats = ytNode?.items?.[0]?.statistics || {};\nconst ytViews = Number(ytStats.viewCount ?? 12450);\nconst ytLikes = Number(ytStats.likeCount ?? 1420);\nconst ytComments = Number(ytStats.commentCount ?? 230);\nconst ytWatchMin = Math.round(ytViews * 2.5);\nconst ytEstimatedShares = Math.round(ytViews * 0.02);\n\nconst igData = Array.isArray(igNode?.data) ? igNode.data : [];\nconst getIgVal = (name) => Number(igData.find(x => x.name === name)?.values?.[0]?.value ?? 0);\n\nconst igPlays = getIgVal('plays') || 8400;\nconst igReach = getIgVal('reach') || 6200;\nconst igShares = getIgVal('shares') || 410;\nconst igSaves = getIgVal('saves') || 780;\nconst igComments = getIgVal('comments') || 115;\n\nconst total_views = ytViews + igPlays;\nconst total_watch_time_min = ytWatchMin + Math.round(igPlays * 0.8);\nconst total_watch_time_sec = total_watch_time_min * 60;\nconst avg_retention_pct = Number(ytStats.averageViewPercentage ?? 68.5);\nconst avg_view_duration = Math.round(total_watch_time_sec / Math.max(1, total_views));\nconst total_likes = ytLikes + Math.round(igReach * 0.15);\nconst total_shares = igShares + ytEstimatedShares;\nconst total_saves = igSaves + Math.round(ytViews * 0.03);\nconst total_comments = ytComments + igComments;\n\nconst rawScore = ((total_views * 0.1) + (total_likes * 0.5) + (total_comments * 1.5) + (total_shares * 4.0) + (total_saves * 5.0)) / Math.max(1, total_views / 100);\nconst engagement_score = Number(Math.min(100, Math.max(0, rawScore)).toFixed(1));\nconst engagement_rate_pct = Number(((total_likes + total_comments + total_shares + total_saves) / Math.max(1, total_views) * 100).toFixed(2));\n\nconst unifiedReport = {\n  project_id: base.project_id, episode_no: base.episode_no, season_no: base.season_no,\n  total_views, total_watch_time_min, total_watch_time_sec, avg_retention_pct, avg_view_duration,\n  total_likes, total_shares, total_saves, total_comments, engagement_score, engagement_rate_pct,\n  platforms_measured: base.platforms, recorded_at: $now.toISOString()\n};\n\nreturn { json: { ...base, unified_report: unifiedReport } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Unpack Publication IDs');\nconst ytNode = $('YouTube Analytics API: Fetch Stats').isExecuted ? __getNodeJson('YouTube Analytics API: Fetch Stats') : {};\nconst igNode = $('Instagram Graph API: Fetch Insights').isExecuted ? __getNodeJson('Instagram Graph API: Fetch Insights') : {};\n\nconst ytStats = ytNode?.items?.[0]?.statistics || {};\nconst ytViews = Number(ytStats.viewCount ?? 12450);\nconst ytLikes = Number(ytStats.likeCount ?? 1420);\nconst ytComments = Number(ytStats.commentCount ?? 230);\nconst ytWatchMin = Math.round(ytViews * 2.5);\nconst ytEstimatedShares = Math.round(ytViews * 0.02);\n\nconst igData = Array.isArray(igNode?.data) ? igNode.data : [];\nconst getIgVal = (name) => Number(igData.find(x => x.name === name)?.values?.[0]?.value ?? 0);\n\nconst igPlays = getIgVal('plays') || 8400;\nconst igReach = getIgVal('reach') || 6200;\nconst igShares = getIgVal('shares') || 410;\nconst igSaves = getIgVal('saves') || 780;\nconst igComments = getIgVal('comments') || 115;\n\nconst total_views = ytViews + igPlays;\nconst total_watch_time_min = ytWatchMin + Math.round(igPlays * 0.8);\nconst total_watch_time_sec = total_watch_time_min * 60;\nconst avg_retention_pct = Number(ytStats.averageViewPercentage ?? 68.5);\nconst avg_view_duration = Math.round(total_watch_time_sec / Math.max(1, total_views));\nconst total_likes = ytLikes + Math.round(igReach * 0.15);\nconst total_shares = igShares + ytEstimatedShares;\nconst total_saves = igSaves + Math.round(ytViews * 0.03);\nconst total_comments = ytComments + igComments;\n\nconst rawScore = ((total_views * 0.1) + (total_likes * 0.5) + (total_comments * 1.5) + (total_shares * 4.0) + (total_saves * 5.0)) / Math.max(1, total_views / 100);\nconst engagement_score = Number(Math.min(100, Math.max(0, rawScore)).toFixed(1));\nconst engagement_rate_pct = Number(((total_likes + total_comments + total_shares + total_saves) / Math.max(1, total_views) * 100).toFixed(2));\n\nconst unifiedReport = {\n  project_id: base.project_id, episode_no: base.episode_no, season_no: base.season_no,\n  total_views, total_watch_time_min, total_watch_time_sec, avg_retention_pct, avg_view_duration,\n  total_likes, total_shares, total_saves, total_comments, engagement_score, engagement_rate_pct,\n  platforms_measured: base.platforms, recorded_at: $now.toISO()\n};\n\nreturn { json: { ...base, unified_report: unifiedReport } };"
       }
     },
     {
@@ -277,6 +289,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -330,6 +346,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -352,7 +372,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const aggregator = $('Data Aggregator & Normalizer').item.json;\nconst llmRaw = $input.item.json || {};\nlet parsedInsights = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) { parsedInsights = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsedInsights = null; }\n\nconst insights = parsedInsights || {\n  sentiment: 'positive', top_performing_elements: ['Cinematic pacing', 'Character dialogue hook'],\n  drop_off_diagnostics: 'Minor retention dip around minute 2.', script_optimization_tips: ['Increase action frequency', 'Keep cliffhangers sharper']\n};\n\nconst rep = aggregator.unified_report;\nconst isMilestoneReached = Boolean(rep.total_views >= 10000 || rep.engagement_rate_pct >= 8.0);\n\nreturn { json: { ...aggregator, ai_insights: insights, is_milestone_reached: isMilestoneReached } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst aggregator = __getNodeJson('Data Aggregator & Normalizer');\nconst llmRaw = $input.item.json || {};\nlet parsedInsights = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) { parsedInsights = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim()); }\n} catch (e) { parsedInsights = null; }\n\nconst insights = parsedInsights || {\n  sentiment: 'positive', top_performing_elements: ['Cinematic pacing', 'Character dialogue hook'],\n  drop_off_diagnostics: 'Minor retention dip around minute 2.', script_optimization_tips: ['Increase action frequency', 'Keep cliffhangers sharper']\n};\n\nconst rep = aggregator.unified_report;\nconst isMilestoneReached = Boolean(rep.total_views >= 10000 || rep.engagement_rate_pct >= 8.0);\n\nreturn { json: { ...aggregator, ai_insights: insights, is_milestone_reached: isMilestoneReached } };"
       }
     },
     {
@@ -388,19 +408,23 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🏆 <b>ANIME EPISODE PERFORMANCE MILESTONE!</b>\\n\\n📊 <b>Episode ' + $json.episode_no + ' Stats:</b>\\n• Views: <b>' + $json.unified_report.total_views.toLocaleString() + '</b>\\n• Engagement Score: <b>' + $json.unified_report.engagement_score + '/100</b>\\n• Engagement Rate: <b>' + $json.unified_report.engagement_rate_pct + '%</b>\\n• Sentiment: <i>' + $json.ai_insights.sentiment + '</i>' }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🏆 <b>ANIME EPISODE PERFORMANCE MILESTONE!</b>\\n\\n📊 <b>Episode ' + $json.episode_no + ' Stats:</b>\\n• Views: <b>' + $json.unified_report.total_views.toLocaleString() + '</b>\\n• Engagement Score: <b>' + $json.unified_report.engagement_score + '/100</b>\\n• Engagement Rate: <b>' + $json.unified_report.engagement_rate_pct + '%</b>\\n• Sentiment: <i>' + $json.ai_insights.sentiment + '</i>' }) }}",
         "options": {
           "timeout": 20000
         }
@@ -417,7 +441,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const evalNode = $('AI Insights Parser & Milestone Evaluator').item.json;\nreturn { json: evalNode };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst evalNode = __getNodeJson('AI Insights Parser & Milestone Evaluator');\nreturn { json: evalNode };"
       }
     },
     {
@@ -452,6 +476,10 @@
             {
               "name": "Prefer",
               "value": "resolution=merge-duplicates,return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -493,12 +521,16 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, sentiment: $('Restore Context After Telegram').item.json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').item.json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').item.json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').item.json.ai_insights.script_optimization_tips, created_at: $now.toISOString() }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, sentiment: $('Restore Context After Telegram').item.json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').item.json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').item.json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').item.json.ai_insights.script_optimization_tips, created_at: $now.toISO() }) }}",
         "options": {}
       }
     },
@@ -534,6 +566,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -554,7 +590,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const state = $('Restore Context After Telegram').item.json;\nconst rep = state.unified_report;\nconst ins = state.ai_insights;\nconst summaryText = [\n  `📊 **WF-08: Episode ${state.episode_no} Analytics & Performance Synchronized!**`,\n  `📁 **Project ID:** \\`${state.project_id}\\` | **Platforms:** ${rep.platforms_measured.join(', ')}`,\n  ``, `📈 **Unified Performance Metrics:**`,\n  `• **Total Views:** ${rep.total_views.toLocaleString()}`,\n  `• **Engagement Score:** \\`${rep.engagement_score}/100\\` (Rate: ${rep.engagement_rate_pct}%)`,\n  `• **Likes / Shares / Saves / Comments:** ${rep.total_likes} / ${rep.total_shares} / ${rep.total_saves} / ${rep.total_comments}`,\n  ``, `🧠 **AI Narrative Feedback Loop (Saved for WF-02):**`,\n  `• **Audience Sentiment:** \\`${ins.sentiment.toUpperCase()}\\``,\n  `• **Top Elements:** ${ins.top_performing_elements.join(', ')}`,\n  `• **Optimization Tips:** ${ins.script_optimization_tips.map(t => `\\n  - ${t}`).join('')}`\n].join('\\n');\nreturn { json: { ok: true, status: 'ANALYTICS_SYNCHRONIZED', workflow_name: 'WF-08', execution_id: $execution.id, project_id: state.project_id, episode_no: state.episode_no, engagement_score: rep.engagement_score, unified_metrics: rep, ai_insights: ins, output: summaryText, text: summaryText } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Restore Context After Telegram');\nconst rep = state.unified_report;\nconst ins = state.ai_insights;\nconst summaryText = [\n  `📊 **WF-08: Episode ${state.episode_no} Analytics & Performance Synchronized!**`,\n  `📁 **Project ID:** \\`${state.project_id}\\` | **Platforms:** ${rep.platforms_measured.join(', ')}`,\n  ``, `📈 **Unified Performance Metrics:**`,\n  `• **Total Views:** ${rep.total_views.toLocaleString()}`,\n  `• **Engagement Score:** \\`${rep.engagement_score}/100\\` (Rate: ${rep.engagement_rate_pct}%)`,\n  `• **Likes / Shares / Saves / Comments:** ${rep.total_likes} / ${rep.total_shares} / ${rep.total_saves} / ${rep.total_comments}`,\n  ``, `🧠 **AI Narrative Feedback Loop (Saved for WF-02):**`,\n  `• **Audience Sentiment:** \\`${ins.sentiment.toUpperCase()}\\``,\n  `• **Top Elements:** ${ins.top_performing_elements.join(', ')}`,\n  `• **Optimization Tips:** ${ins.script_optimization_tips.map(t => `\\n  - ${t}`).join('')}`\n].join('\\n');\nreturn { json: { ok: true, status: 'ANALYTICS_SYNCHRONIZED', workflow_name: 'WF-08', execution_id: $execution.id, project_id: state.project_id, episode_no: state.episode_no, engagement_score: rep.engagement_score, unified_metrics: rep, ai_insights: ins, output: summaryText, text: summaryText } };"
       }
     }
   ],
@@ -819,20 +855,8 @@
       ]
     }
   },
-  "nodeGroups": [],
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
-  },
-  "staticData": null,
-  "pinData": {},
-  "meta": null,
-  "tags": [
-    {
-      "id": "LuIq0zIeNa69i786",
-      "name": "Anime-Engine",
-      "createdAt": "2026-10-26T06:14:16.780Z",
-      "updatedAt": "2026-10-26T06:14:16.780Z"
-    }
-  ]
+  }
 }

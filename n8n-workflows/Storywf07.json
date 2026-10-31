@@ -2,10 +2,6 @@
   "id": "zvw63UrbObZhFUiW",
   "name": "Storywf07",
   "active": true,
-  "createdAt": "2026-10-26T09:50:49.973Z",
-  "updatedAt": "2026-10-29T21:21:32.230Z",
-  "isArchived": false,
-  "triggerCount": 0,
   "nodes": [
     {
       "id": "657d59ee-29c4-494a-bc7f-b34f4bf11d4e",
@@ -29,7 +25,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || extracted.season_no || 1);\n\nconst VALID_PLATFORMS = ['YOUTUBE', 'INSTAGRAM', 'TELEGRAM'];\nlet requestedPlatforms = Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms.map(p => p.toString().toUpperCase().trim()).filter(p => VALID_PLATFORMS.includes(p)) : VALID_PLATFORMS;\nif (requestedPlatforms.length === 0) requestedPlatforms = VALID_PLATFORMS;\n\nconst force_publish = Boolean(raw.force_publish === true || raw.force_publish === 'true' || /\\b(--force|force_publish)\\b/i.test(raw.rawText || ''));\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-07 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { project_id, episode_no, season_no, platforms: requestedPlatforms, force_publish, sessionId, requested_at: $now.toISOString() } };"
+        "jsCode": "const raw = $input.item.json || {};\nconst extracted = raw.extracted_params || {};\n\nconst project_id = raw.project_id || extracted.project_id || null;\nconst episode_no = Number(raw.episode_no || raw.episode_number || extracted.episode_number || 1);\nconst season_no = Number(raw.season_no || raw.season_number || raw.current_season || extracted.season_no || 1);\n\nconst VALID_PLATFORMS = ['YOUTUBE', 'INSTAGRAM', 'TELEGRAM'];\nlet requestedPlatforms = Array.isArray(raw.platforms) && raw.platforms.length > 0 ? raw.platforms.map(p => p.toString().toUpperCase().trim()).filter(p => VALID_PLATFORMS.includes(p)) : VALID_PLATFORMS;\nif (requestedPlatforms.length === 0) requestedPlatforms = VALID_PLATFORMS;\n\nconst force_publish = Boolean(raw.force_publish === true || raw.force_publish === 'true' || /\\b(--force|force_publish)\\b/i.test(raw.rawText || ''));\nconst sessionId = (raw.sessionId || `sess_${$execution.id}`).toString();\n\nif (!project_id) {\n  throw new Error('WF-07 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nreturn { json: { project_id, episode_no, season_no, platforms: requestedPlatforms, force_publish, sessionId, requested_at: $now.toISO() } };"
       }
     },
     {
@@ -59,6 +55,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -92,6 +92,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -109,7 +113,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Parameter Resolver').item.json;\nconst epRaw = $('Supabase: Fetch Episode & QC State').item.json;\nconst projRaw = $input.item.json;\nconst episodeRec = Array.isArray(epRaw) ? epRaw[0] : (epRaw && epRaw.episode_no !== undefined ? epRaw : null);\nconst projectRec = Array.isArray(projRaw) ? projRaw[0] : (projRaw && projRaw.id ? projRaw : {});\n\nif (!episodeRec) {\n  return {\n    json: {\n      ...base, qc_blocked: true,\n      block_reason: `Episode ${base.episode_no} record not found in episodes table for project ${base.project_id}.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'EPISODE_NOT_FOUND', action_payload: { requested_platforms: base.platforms, force_publish: base.force_publish } }\n    }\n  };\n}\n\nconst currentState = (episodeRec.current_state || '').toString().toUpperCase().trim();\nconst qcStatus = (episodeRec.qc_status || 'PENDING').toString().toUpperCase().trim();\nconst outputMedia = (episodeRec.output_media && typeof episodeRec.output_media === 'object') ? episodeRec.output_media : {};\nconst masterVideoUrl = outputMedia.final_video_url || outputMedia.master_video_url || outputMedia.video_url || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${base.project_id}/season_${base.season_no}_ep_${base.episode_no}_master.mp4`;\n\nconst scenesList = Array.isArray(episodeRec.script_json?.scenes) ? episodeRec.script_json.scenes : [];\nconst calculatedDurationSec = scenesList.reduce((acc, s) => acc + Number(s.duration_sec || 5), 0) || Number(outputMedia.duration_sec || 120);\nconst isYoutubeShort = calculatedDurationSec < 60;\n\nconst isStateReady = currentState === 'MIXED' || currentState === 'PUBLISHED';\nconst isQcApproved = qcStatus === 'APPROVED';\n\nif ((!isStateReady || !isQcApproved) && !base.force_publish) {\n  return {\n    json: {\n      ...base, project_name: projectRec.name || 'Anime Project', qc_blocked: true, current_state: currentState, qc_status: qcStatus,\n      block_reason: `Rule 18 Publishing Gate Blocked: Episode ${base.episode_no} has current_state='${currentState}' (expected 'MIXED') and qc_status='${qcStatus}' (expected 'APPROVED'). Pass force_publish=true or approve QC first.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'QC_GATE_UNAPPROVED', action_payload: { current_state: currentState, qc_status: qcStatus, requested_platforms: base.platforms, blocked_at: $now.toISOString() } }\n    }\n  };\n}\n\nconst existingPubUrls = {\n  youtube: episodeRec.youtube_url || null,\n  instagram: (Array.isArray(episodeRec.instagram_urls) && episodeRec.instagram_urls.length > 0) ? episodeRec.instagram_urls[0] : null,\n  telegram: episodeRec.telegram_file_id ? `https://t.me/c/${episodeRec.telegram_file_id}` : null\n};\n\nconst pendingPlatforms = [];\nconst skippedPlatforms = [];\n\nfor (const plat of base.platforms) {\n  const key = plat.toLowerCase();\n  if (existingPubUrls[key] && typeof existingPubUrls[key] === 'string' && existingPubUrls[key].startsWith('http')) { skippedPlatforms.push(plat); }\n  else { pendingPlatforms.push(plat); }\n}\n\nreturn {\n  json: {\n    ...base, project_name: projectRec.name || 'Anime Project', story_bible: projectRec.story_bible || {},\n    episode_title: episodeRec.title || `Episode ${base.episode_no}`,\n    episode_logline: episodeRec.logline || episodeRec.script_json?.logline || '',\n    episode_script: episodeRec.script || '',\n    scenes_summary: scenesList.map(s => ({ scene_order: s.scene_order, duration_sec: s.duration_sec || 5, summary: s.action_summary || s.description })),\n    master_video_url: masterVideoUrl, duration_sec: calculatedDurationSec, is_youtube_short: isYoutubeShort,\n    current_state: currentState, qc_status: qcStatus, qc_blocked: false, existing_publication_urls: existingPubUrls,\n    pending_platforms: pendingPlatforms, skipped_platforms: skippedPlatforms, all_already_published: pendingPlatforms.length === 0,\n    needs_youtube: pendingPlatforms.includes('YOUTUBE'), needs_instagram: pendingPlatforms.includes('INSTAGRAM'), needs_telegram: pendingPlatforms.includes('TELEGRAM')\n  }\n};"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Parameter Resolver');\nconst epRaw = __getNodeJson('Supabase: Fetch Episode & QC State');\nconst projRaw = ($input.item && $input.item.json) ? $input.item.json : {};\nconst episodeRec = Array.isArray(epRaw) ? epRaw[0] : (epRaw && epRaw.episode_no !== undefined ? epRaw : null);\nconst projectRec = Array.isArray(projRaw) ? projRaw[0] : (projRaw && projRaw.id ? projRaw : {});\n\nif (!episodeRec) {\n  return {\n    json: {\n      ...base, qc_blocked: true,\n      block_reason: `Episode ${base.episode_no} record not found in episodes table for project ${base.project_id}.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'EPISODE_NOT_FOUND', action_payload: { requested_platforms: base.platforms, force_publish: base.force_publish } }\n    }\n  };\n}\n\nconst currentState = (episodeRec.current_state || '').toString().toUpperCase().trim();\nconst qcStatus = (episodeRec.qc_status || 'PENDING').toString().toUpperCase().trim();\nconst outputMedia = (episodeRec.output_media && typeof episodeRec.output_media === 'object') ? episodeRec.output_media : {};\nconst tgFileId = episodeRec.telegram_file_id || outputMedia.telegram_file_id || null;\nconst streamBridgeBase = ($env.TELEGRAM_STREAM_BRIDGE_URL || 'https://api.bnai.dpdns.org/v1/media/telegram').replace(/\\/+$/, '');\n\nconst masterVideoUrl = (tgFileId ? `${streamBridgeBase}/${tgFileId}` : null)\n  || outputMedia.final_video_url\n  || outputMedia.master_video_url\n  || outputMedia.video_url\n  || `${$env.SUPABASE_URL}/storage/v1/object/public/episodes/${base.project_id}/season_${base.season_no}_ep_${base.episode_no}_master.mp4`;\n\nconst scenesList = Array.isArray(episodeRec.script_json?.scenes) ? episodeRec.script_json.scenes : [];\nconst calculatedDurationSec = scenesList.reduce((acc, s) => acc + Number(s.duration_sec || 5), 0) || Number(outputMedia.duration_sec || 120);\nconst isYoutubeShort = calculatedDurationSec < 60;\n\nconst isStateReady = currentState === 'MIXED' || currentState === 'PUBLISHED' || currentState === 'QC_APPROVED';\nconst isQcApproved = qcStatus === 'APPROVED';\n\nif ((!isStateReady || !isQcApproved) && !base.force_publish) {\n  return {\n    json: {\n      ...base, project_name: projectRec.name || 'Anime Project', qc_blocked: true, current_state: currentState, qc_status: qcStatus,\n      block_reason: `Rule 18 Publishing Gate Blocked: state='${currentState}', qc='${qcStatus}'.`,\n      manual_review_payload: { project_id: base.project_id, action_type: 'PUBLISH_EPISODE', status: 'MANUAL_REVIEW', review_type: 'QC_GATE_UNAPPROVED', action_payload: { current_state: currentState, qc_status: qcStatus, blocked_at: $now.toISO() } }\n    }\n  };\n}\n\nconst existingPubUrls = {\n  youtube: episodeRec.youtube_url || null,\n  instagram: (Array.isArray(episodeRec.instagram_urls) && episodeRec.instagram_urls.length > 0) ? episodeRec.instagram_urls[0] : null,\n  telegram: tgFileId ? `${streamBridgeBase}/${tgFileId}` : null\n};\n\nconst pendingPlatforms = [];\nconst skippedPlatforms = [];\nfor (const plat of base.platforms) {\n  const key = plat.toLowerCase();\n  if (key === 'youtube' && existingPubUrls.youtube && existingPubUrls.youtube.startsWith('http')) {\n    skippedPlatforms.push(plat);\n  } else {\n    pendingPlatforms.push(plat);\n  }\n}\n\nreturn {\n  json: {\n    ...base,\n    project_name: projectRec.name || 'Anime Project',\n    story_bible: projectRec.story_bible || {},\n    episode_title: episodeRec.title || `Episode ${base.episode_no}`,\n    episode_logline: episodeRec.logline || episodeRec.script_json?.logline || '',\n    episode_script: episodeRec.script || '',\n    scenes_summary: scenesList.map(s => ({ scene_order: s.scene_order, duration_sec: s.duration_sec || 5, summary: s.action_summary || s.description })),\n    master_video_url: masterVideoUrl,\n    telegram_file_id: tgFileId,\n    duration_sec: calculatedDurationSec,\n    is_youtube_short: isYoutubeShort,\n    current_state: currentState,\n    qc_status: qcStatus,\n    qc_blocked: false,\n    existing_publication_urls: existingPubUrls,\n    pending_platforms: pendingPlatforms,\n    skipped_platforms: skippedPlatforms,\n    all_already_published: pendingPlatforms.length === 0,\n    needs_youtube: pendingPlatforms.includes('YOUTUBE'),\n    needs_instagram: pendingPlatforms.includes('INSTAGRAM'),\n    needs_telegram: pendingPlatforms.includes('TELEGRAM')\n  }\n};"
       }
     },
     {
@@ -164,6 +168,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -216,6 +224,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -269,6 +281,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -291,7 +307,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const ctx = $('Gatekeeper & Idempotency Evaluator').item.json;\nconst llmRaw = $input.item.json || {};\nlet parsedMeta = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) parsedMeta = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim());\n} catch (e) { parsedMeta = null; }\n\nconst defaultTitle = `${ctx.project_name} - Ep ${ctx.episode_no}: ${ctx.episode_title}`;\nconst seoTitles = Array.isArray(parsedMeta?.seo_titles) && parsedMeta.seo_titles.length >= 3 ? parsedMeta.seo_titles.slice(0, 3).map(t => t.toString().slice(0, 100)) : [defaultTitle, `Ep ${ctx.episode_no}: ${ctx.episode_title} — Full Action Hindi Anime!`, `${ctx.episode_title} | ${ctx.project_name} Season ${ctx.season_no} Ep ${ctx.episode_no}`];\nlet primaryTitle = (parsedMeta?.primary_title || seoTitles[0] || defaultTitle).toString().trim();\nif (ctx.is_youtube_short && !/#shorts/i.test(primaryTitle)) { primaryTitle = `${primaryTitle.slice(0, 88)} #Shorts`; }\nprimaryTitle = primaryTitle.slice(0, 100);\n\nconst hashtags = Array.isArray(parsedMeta?.hashtags) && parsedMeta.hashtags.length > 0 ? parsedMeta.hashtags.map(h => h.toString().startsWith('#') ? h.toString() : `#${h}`) : ['#AnimeHindi', '#IndianAnime', '#CinematicAnime', '#AIAnime'];\nconst tags = Array.isArray(parsedMeta?.tags) && parsedMeta.tags.length > 0 ? parsedMeta.tags.map(t => t.toString()) : ['anime hindi', 'indian anime', 'hindi anime episode', ctx.project_name.toLowerCase()];\n\nconst rawDesc = (parsedMeta?.description || `${ctx.episode_logline}\\n\\n00:00 Opening Hook\\n00:30 Main Story\\n01:30 Climax & Cliffhanger`).toString().trim();\nconst youtubeDescription = `${rawDesc}\\n\\n${hashtags.join(' ')}`.slice(0, 4950);\nconst instagramCaption = `${primaryTitle}\\n\\n${ctx.episode_logline}\\n\\n${hashtags.join(' ')}`.slice(0, 2150);\nconst pinnedComment = (parsedMeta?.pinned_comment || `Bhai log, Episode ${ctx.episode_no} ka climax kaisa laga? Comment me batao! 🔥`).toString();\n\nreturn { json: { ...ctx, viral_metadata: { seo_titles: seoTitles, primary_title: primaryTitle, youtube_format: ctx.is_youtube_short ? 'YOUTUBE_SHORTS' : 'YOUTUBE_LONG_FORM', youtube_description: youtubeDescription, instagram_caption: instagramCaption, hashtags, tags, pinned_comment: pinnedComment }, live_urls: { ...ctx.existing_publication_urls } } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst ctx = __getNodeJson('Gatekeeper & Idempotency Evaluator');\nconst llmRaw = $input.item.json || {};\nlet parsedMeta = null;\ntry {\n  const rawContent = llmRaw?.choices?.[0]?.message?.content;\n  if (rawContent) parsedMeta = JSON.parse(rawContent.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim());\n} catch (e) { parsedMeta = null; }\n\nconst defaultTitle = `${ctx.project_name} - Ep ${ctx.episode_no}: ${ctx.episode_title}`;\nconst seoTitles = Array.isArray(parsedMeta?.seo_titles) && parsedMeta.seo_titles.length >= 3 ? parsedMeta.seo_titles.slice(0, 3).map(t => t.toString().slice(0, 100)) : [defaultTitle, `Ep ${ctx.episode_no}: ${ctx.episode_title} — Full Action Hindi Anime!`, `${ctx.episode_title} | ${ctx.project_name} Season ${ctx.season_no} Ep ${ctx.episode_no}`];\nlet primaryTitle = (parsedMeta?.primary_title || seoTitles[0] || defaultTitle).toString().trim();\nif (ctx.is_youtube_short && !/#shorts/i.test(primaryTitle)) { primaryTitle = `${primaryTitle.slice(0, 88)} #Shorts`; }\nprimaryTitle = primaryTitle.slice(0, 100);\n\nconst hashtags = Array.isArray(parsedMeta?.hashtags) && parsedMeta.hashtags.length > 0 ? parsedMeta.hashtags.map(h => h.toString().startsWith('#') ? h.toString() : `#${h}`) : ['#AnimeHindi', '#IndianAnime', '#CinematicAnime', '#AIAnime'];\nconst tags = Array.isArray(parsedMeta?.tags) && parsedMeta.tags.length > 0 ? parsedMeta.tags.map(t => t.toString()) : ['anime hindi', 'indian anime', 'hindi anime episode', ctx.project_name.toLowerCase()];\n\nconst rawDesc = (parsedMeta?.description || `${ctx.episode_logline}\\n\\n00:00 Opening Hook\\n00:30 Main Story\\n01:30 Climax & Cliffhanger`).toString().trim();\nconst youtubeDescription = `${rawDesc}\\n\\n${hashtags.join(' ')}`.slice(0, 4950);\nconst instagramCaption = `${primaryTitle}\\n\\n${ctx.episode_logline}\\n\\n${hashtags.join(' ')}`.slice(0, 2150);\nconst pinnedComment = (parsedMeta?.pinned_comment || `Bhai log, Episode ${ctx.episode_no} ka climax kaisa laga? Comment me batao! 🔥`).toString();\n\nreturn { json: { ...ctx, viral_metadata: { seo_titles: seoTitles, primary_title: primaryTitle, youtube_format: ctx.is_youtube_short ? 'YOUTUBE_SHORTS' : 'YOUTUBE_LONG_FORM', youtube_description: youtubeDescription, instagram_caption: instagramCaption, hashtags, tags, pinned_comment: pinnedComment }, live_urls: { ...ctx.existing_publication_urls } } };"
       }
     },
     {
@@ -333,6 +349,10 @@
             {
               "name": "Content-Type",
               "value": "application/x-www-form-urlencoded"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -342,15 +362,15 @@
           "parameters": [
             {
               "name": "client_id",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_id || $env.YOUTUBE_CLIENT_ID) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_id || $env.YOUTUBE_CLIENT_ID) }}"
             },
             {
               "name": "client_secret",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.client_secret || $env.YOUTUBE_CLIENT_SECRET) }}"
             },
             {
               "name": "refresh_token",
-              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
+              "value": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.refresh_token || $env.YOUTUBE_REFRESH_TOKEN) }}"
             },
             {
               "name": "grant_type",
@@ -375,13 +395,13 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.upload_bridge_url || $env.YOUTUBE_UPLOAD_BRIDGE_URL) || 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status' }}",
+        "url": "={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.upload_bridge_url || $env.YOUTUBE_UPLOAD_BRIDGE_URL) || 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
+              "value": "=Bearer {{ $json.access_token || ($('When Executed by Another Workflow').first().json.user_infrastructure?.youtube?.access_token || $env.YOUTUBE_ACCESS_TOKEN) }}"
             },
             {
               "name": "Content-Type",
@@ -390,6 +410,10 @@
             {
               "name": "X-Source-Stream-Url",
               "value": "={{ $('Metadata Normalizer & Limit Enforcer').item.json.master_video_url }}"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -412,7 +436,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Metadata Normalizer & Limit Enforcer').item.json;\nconst ytResp = $input.item.json || {};\nlet ytUrl = base.live_urls?.youtube || null;\nlet ytVideoId = ytResp.id || ytResp.video_id || null;\nif (base.needs_youtube) {\n  if (!ytVideoId) { ytVideoId = `yt_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  ytUrl = base.is_youtube_short ? `https://youtube.com/shorts/${ytVideoId}` : `https://youtu.be/${ytVideoId}`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(ytUrl ? { youtube: ytUrl, youtube_video_id: ytVideoId, youtube_format: base.viral_metadata.youtube_format } : {}) } } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Metadata Normalizer & Limit Enforcer');\nconst ytResp = $input.item.json || {};\nlet ytUrl = base.live_urls?.youtube || null;\nlet ytVideoId = ytResp.id || ytResp.video_id || null;\nif (base.needs_youtube) {\n  if (!ytVideoId) { ytVideoId = `yt_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  ytUrl = base.is_youtube_short ? `https://youtube.com/shorts/${ytVideoId}` : `https://youtu.be/${ytVideoId}`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(ytUrl ? { youtube: ytUrl, youtube_video_id: ytVideoId, youtube_format: base.viral_metadata.youtube_format } : {}) } } };"
       }
     },
     {
@@ -447,19 +471,23 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media",
+        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ media_type: 'REELS', video_url: $json.master_video_url, caption: $json.viral_metadata.instagram_caption, share_to_feed: true, access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
+        "jsonBody": "={{ JSON.stringify({ media_type: 'REELS', video_url: $json.master_video_url, caption: $json.viral_metadata.instagram_caption, share_to_feed: true, access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
         "options": {
           "timeout": 30000
         }
@@ -477,19 +505,23 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media_publish",
+        "url": "=https://graph.facebook.com/v21.0/{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.ig_user_id || $env.INSTAGRAM_IG_USER_ID) }}/media_publish",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ creation_id: $json.id || 'ig_container_pending', access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
+        "jsonBody": "={{ JSON.stringify({ creation_id: $json.id || 'ig_container_pending', access_token: ($('When Executed by Another Workflow').first().json.user_infrastructure?.instagram?.access_token || $env.INSTAGRAM_ACCESS_TOKEN) }) }}",
         "options": {
           "timeout": 30000
         }
@@ -506,7 +538,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Record YouTube URL & Restore Context').item.json;\nconst igResp = $input.item.json || {};\nlet igUrl = base.live_urls?.instagram || null;\nlet igMediaId = igResp.id || null;\nif (base.needs_instagram) {\n  if (!igMediaId) { igMediaId = `ig_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  igUrl = igResp.permalink || `https://www.instagram.com/reel/${igMediaId}/`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(igUrl ? { instagram: igUrl, instagram_media_id: igMediaId } : {}) } } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Record YouTube URL & Restore Context');\nconst igResp = $input.item.json || {};\nlet igUrl = base.live_urls?.instagram || null;\nlet igMediaId = igResp.id || null;\nif (base.needs_instagram) {\n  if (!igMediaId) { igMediaId = `ig_${base.project_id.slice(0, 6)}_ep${base.episode_no}`; }\n  igUrl = igResp.permalink || `https://www.instagram.com/reel/${igMediaId}/`;\n}\nreturn { json: { ...base, live_urls: { ...base.live_urls, ...(igUrl ? { instagram: igUrl, instagram_media_id: igMediaId } : {}) } } };"
       }
     },
     {
@@ -541,19 +573,23 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
+        "url": "=https://api.telegram.org/bot{{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.bot_token || $env.TELEGRAM_BOT_TOKEN) }}/sendMessage",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🔥 <b>NEW ANIME EPISODE PREMIERE!</b>\\n\\n🎬 <b>' + $json.viral_metadata.primary_title + '</b>\\n📝 ' + $json.episode_logline + '\\n\\n▶️ <b>YouTube:</b> ' + ($json.live_urls.youtube || 'Coming Soon') + '\\n📸 <b>Instagram Reel:</b> ' + ($json.live_urls.instagram || 'Coming Soon') + '\\n🎥 <b>Direct Master Stream:</b> ' + $json.master_video_url + '\\n\\n' + $json.viral_metadata.hashtags.join(' ') }) }}",
+        "jsonBody": "={{ JSON.stringify({ chat_id: ($('When Executed by Another Workflow').first().json.user_infrastructure?.telegram?.channel_id || $env.TELEGRAM_CHANNEL_ID), parse_mode: 'HTML', text: '🔥 <b>NEW ANIME EPISODE PREMIERE!</b>\\n\\n🎬 <b>' + $json.viral_metadata.primary_title + '</b>\\n📝 ' + $json.episode_logline + '\\n\\n▶️ <b>YouTube:</b> ' + ($json.live_urls.youtube || 'Coming Soon') + '\\n📸 <b>Instagram Reel:</b> ' + ($json.live_urls.instagram || 'Coming Soon') + '\\n🎥 <b>Direct Master Stream:</b> ' + $json.master_video_url + '\\n\\n' + $json.viral_metadata.hashtags.join(' ') }) }}",
         "options": {
           "timeout": 20000
         }
@@ -570,7 +606,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Record Instagram URL & Restore Context').item.json;\nconst tgResp = $input.item.json || {};\nconst publishedAtIso = $now.toISOString();\nlet tgUrl = base.live_urls?.telegram || null;\nif (base.needs_telegram) {\n  const msgId = tgResp?.result?.message_id || `msg_${base.episode_no}`;\n  const cleanChan = ($env.TELEGRAM_CHANNEL_ID || 'anime_channel').toString().replace(/^@/, '');\n  tgUrl = `https://t.me/${cleanChan}/${msgId}`;\n}\n\nconst finalInstaArray = base.live_urls.instagram ? [base.live_urls.instagram] : [];\nreturn { json: { ...base, published_at: publishedAtIso, final_yt_url: base.live_urls.youtube || null, final_ig_urls: finalInstaArray, final_tg_msg_id: tgResp?.result?.message_id || null } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Record Instagram URL & Restore Context');\nconst tgResp = $input.item.json || {};\nconst publishedAtIso = $now.toISO();\nlet tgUrl = base.live_urls?.telegram || null;\nif (base.needs_telegram) {\n  const msgId = tgResp?.result?.message_id || `msg_${base.episode_no}`;\n  const cleanChan = ($env.TELEGRAM_CHANNEL_ID || 'anime_channel').toString().replace(/^@/, '');\n  tgUrl = `https://t.me/${cleanChan}/${msgId}`;\n}\n\nconst finalInstaArray = base.live_urls.instagram ? [base.live_urls.instagram] : [];\nreturn { json: { ...base, published_at: publishedAtIso, final_yt_url: base.live_urls.youtube || null, final_ig_urls: finalInstaArray, final_tg_msg_id: tgResp?.result?.message_id || null } };"
       }
     },
     {
@@ -605,6 +641,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -646,6 +686,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -687,6 +731,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -707,7 +755,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const gate = $('Gatekeeper & Idempotency Evaluator').item.json;\n\nif (gate.qc_blocked === true) {\n  const blockMsg = [\n    `🛑 **WF-07: Publishing Blocked by Rule 18 QC Gate!**`,\n    `📁 **Project ID:** \\`${gate.project_id}\\` | **Episode:** ${gate.episode_no}`,\n    `• **Reason:** ${gate.block_reason}`,\n    `• **Action Taken:** Item queued in \\`pending_actions\\` (\\`status = MANUAL_REVIEW\\`). QC approve karne ke baad ya \\`force_publish: true\\` ke sath retry karein.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'BLOCKED_QC_UNAPPROVED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, output: blockMsg, text: blockMsg } };\n}\n\nif (gate.all_already_published === true) {\n  const idemMsg = [\n    `✅ **WF-07: Idempotency Guard — Episode ${gate.episode_no} Already Published!**`,\n    `• **Skipped Platforms (Already Live):** ${gate.skipped_platforms.join(', ')}`,\n    `• **YouTube:** ${gate.existing_publication_urls.youtube || 'N/A'}`,\n    `• **Instagram:** ${gate.existing_publication_urls.instagram || 'N/A'}`,\n    `• **Telegram:** ${gate.existing_publication_urls.telegram || 'N/A'}`\n  ].join('\\n');\n  return { json: { ok: true, status: 'ALREADY_PUBLISHED_IDEMPOTENT', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, publication_urls: gate.existing_publication_urls, output: idemMsg, text: idemMsg } };\n}\n\nconst finalState = $('Merge Results & Database Finalization').item.json;\nconst pubs = { youtube: finalState.final_yt_url, instagram: finalState.final_ig_urls?.[0] };\nconst meta = finalState.viral_metadata;\n\nconst successMsg = [\n  `🚀 **WF-07: Episode ${finalState.episode_no} Successfully Published!**`,\n  `🎬 **SEO Title:** ${meta.primary_title} (\\`${meta.youtube_format}\\`)`,\n  `📌 **Pinned Comment Draft:** ${meta.pinned_comment}`,\n  ``, `🌐 **Live Distribution Links:**`,\n  `• **YouTube:** ${pubs.youtube || 'Not Requested'}`,\n  `• **Instagram Reels:** ${pubs.instagram || 'Not Requested'}`,\n  `• **Telegram Premiere:** ${finalState.final_tg_msg_id ? 'Sent successfully' : 'Not Requested'}`,\n  finalState.skipped_platforms.length > 0 ? `• **Idempotent Skipped (Already Live):** ${finalState.skipped_platforms.join(', ')}` : ''\n].filter(Boolean).join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: 'PUBLISHED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no,\n    published_at: finalState.published_at, published_platforms: finalState.pending_platforms, skipped_platforms: finalState.skipped_platforms,\n    publication_urls: pubs, viral_metadata: meta, output: successMsg, text: successMsg\n  }\n};"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst gate = __getNodeJson('Gatekeeper & Idempotency Evaluator');\n\nif (gate.qc_blocked === true) {\n  const blockMsg = [\n    `🛑 **WF-07: Publishing Blocked by Rule 18 QC Gate!**`,\n    `📁 **Project ID:** \\`${gate.project_id}\\` | **Episode:** ${gate.episode_no}`,\n    `• **Reason:** ${gate.block_reason}`,\n    `• **Action Taken:** Item queued in \\`pending_actions\\` (\\`status = MANUAL_REVIEW\\`). QC approve karne ke baad ya \\`force_publish: true\\` ke sath retry karein.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'BLOCKED_QC_UNAPPROVED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, output: blockMsg, text: blockMsg } };\n}\n\nif (gate.all_already_published === true) {\n  const idemMsg = [\n    `✅ **WF-07: Idempotency Guard — Episode ${gate.episode_no} Already Published!**`,\n    `• **Skipped Platforms (Already Live):** ${gate.skipped_platforms.join(', ')}`,\n    `• **YouTube:** ${gate.existing_publication_urls.youtube || 'N/A'}`,\n    `• **Instagram:** ${gate.existing_publication_urls.instagram || 'N/A'}`,\n    `• **Telegram:** ${gate.existing_publication_urls.telegram || 'N/A'}`\n  ].join('\\n');\n  return { json: { ok: true, status: 'ALREADY_PUBLISHED_IDEMPOTENT', workflow_name: 'WF-07', execution_id: $execution.id, project_id: gate.project_id, episode_no: gate.episode_no, publication_urls: gate.existing_publication_urls, output: idemMsg, text: idemMsg } };\n}\n\nconst finalState = __getNodeJson('Merge Results & Database Finalization');\nconst pubs = { youtube: finalState.final_yt_url, instagram: finalState.final_ig_urls?.[0] };\nconst meta = finalState.viral_metadata;\n\nconst successMsg = [\n  `🚀 **WF-07: Episode ${finalState.episode_no} Successfully Published!**`,\n  `🎬 **SEO Title:** ${meta.primary_title} (\\`${meta.youtube_format}\\`)`,\n  `📌 **Pinned Comment Draft:** ${meta.pinned_comment}`,\n  ``, `🌐 **Live Distribution Links:**`,\n  `• **YouTube:** ${pubs.youtube || 'Not Requested'}`,\n  `• **Instagram Reels:** ${pubs.instagram || 'Not Requested'}`,\n  `• **Telegram Premiere:** ${finalState.final_tg_msg_id ? 'Sent successfully' : 'Not Requested'}`,\n  finalState.skipped_platforms.length > 0 ? `• **Idempotent Skipped (Already Live):** ${finalState.skipped_platforms.join(', ')}` : ''\n].filter(Boolean).join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: 'PUBLISHED', workflow_name: 'WF-07', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no,\n    published_at: finalState.published_at, published_platforms: finalState.pending_platforms, skipped_platforms: finalState.skipped_platforms,\n    publication_urls: pubs, viral_metadata: meta, output: successMsg, text: successMsg\n  }\n};"
       }
     }
   ],
@@ -1041,20 +1089,8 @@
       ]
     }
   },
-  "nodeGroups": [],
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
-  },
-  "staticData": null,
-  "pinData": {},
-  "meta": null,
-  "tags": [
-    {
-      "id": "LuIq0zIeNa69i786",
-      "name": "Anime-Engine",
-      "createdAt": "2026-10-26T06:14:16.780Z",
-      "updatedAt": "2026-10-26T06:14:16.780Z"
-    }
-  ]
+  }
 }

@@ -2,10 +2,6 @@
   "id": "WAB7tCTJSUilOp07",
   "name": "storywf06",
   "active": true,
-  "createdAt": "2026-10-26T09:49:01.907Z",
-  "updatedAt": "2026-10-29T22:43:45.007Z",
-  "isArchived": false,
-  "triggerCount": 0,
   "nodes": [
     {
       "id": "fa6c2cc3-9b36-4d8e-bd1d-429975890afa",
@@ -59,6 +55,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -92,6 +92,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -125,6 +129,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -158,6 +166,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -191,6 +203,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -224,6 +240,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -257,6 +277,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -274,7 +298,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Scope Resolver').item.json;\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) { if (r && (!requiredField || r[requiredField] !== undefined)) rows.push(r); }\n      } else if (entry && (!requiredField || entry[requiredField] !== undefined)) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst projectRows = unpackRows('Supabase: Fetch Project & Bible', 'id');\nconst projectRec = projectRows[0] || {};\nconst storyBible = projectRec.story_bible || {};\nconst resolvedSeason = Number(projectRec.current_season || base.season_no || 1);\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst snapshots = unpackRows('Supabase: Fetch Story State Snapshot', 'snapshot_data');\nconst latestSnapshot = snapshots[0] ? snapshots[0].snapshot_data : null;\nconst charStatuses = unpackRows('Supabase: Fetch Character Status', 'character_code');\nconst timelineEvents = unpackRows('Supabase: Fetch Story Timeline', 'event_description');\nconst storyRules = unpackRows('Supabase: Fetch Story Rules', 'rule_code');\nconst mysteries = unpackRows('Supabase: Fetch Mystery Tracker', 'description');\n\nconst deterministicViolations = [];\nconst statusByChar = {};\nconst deadCharacters = new Set();\n\nfor (const cs of charStatuses) {\n  const code = (cs.character_code || '').toString().toUpperCase().trim();\n  const st = (cs.status || 'alive').toString().toLowerCase().trim();\n  if (!code) continue;\n  statusByChar[code] = { status: st, status_changed_ep: Number(cs.status_changed_ep || 0) };\n  if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); }\n}\n\nif (latestSnapshot && latestSnapshot.world_state && typeof latestSnapshot.world_state === 'object') {\n  const wsStatuses = latestSnapshot.world_state.character_statuses || {};\n  for (const [k, v] of Object.entries(wsStatuses)) {\n    const code = k.toUpperCase().trim();\n    const st = (v || '').toString().toLowerCase().trim();\n    if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); statusByChar[code] = { status: 'dead', status_changed_ep: latestSnapshot.episode_id }; }\n  }\n}\n\nconst lastLocationByChar = {};\nfor (const ev of timelineEvents) {\n  const loc = (ev.location || '').toString().toUpperCase().trim();\n  if (!loc) continue;\n  const parts = Array.isArray(ev.characters_involved) ? ev.characters_involved : (typeof ev.characters_involved === 'string' ? ev.characters_involved.split(',') : []);\n  for (const p of parts) {\n    const code = p.toString().toUpperCase().trim();\n    if (code && !lastLocationByChar[code]) { lastLocationByChar[code] = { location: loc, episode_no: ev.episode_no, event_code: ev.event_code }; }\n  }\n}\n\nconst flashbackRegex = /\\b(flashback|memory|past\\s+vision|dream\\s+sequence|hallucination|yaad|ateet|purani\\s+yaad)\\b/i;\nconst travelTransitionRegex = /\\b(travel|portal|teleport|arrive|journey|train|flight|walked|reached|timeskip|next\\s+day|drove|flew|ship|gate)\\b/i;\nconst runningLocationByChar = { ...lastLocationByChar };\n\nfor (let i = 0; i < base.scenes.length; i++) {\n  const sc = base.scenes[i] || {};\n  const sceneOrder = Number(sc.scene_order || (i + 1));\n  const speaker = (sc.dialogue_speaker_id || '').toString().toUpperCase().trim();\n  const sceneLoc = (sc.location_code || '').toString().toUpperCase().trim();\n  const combinedSceneText = `${sc.visual_prompt || sc.description || ''} ${sc.action_summary || ''} ${sc.voice_text || ''}`;\n  const isFlashback = Boolean(sc.is_flashback === true || flashbackRegex.test(combinedSceneText));\n\n  if (speaker && deadCharacters.has(speaker) && !isFlashback) {\n    deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${speaker} has active dialogue/action in Scene ${sceneOrder} without an explicit flashback flag.`, entities_involved: [speaker, `SCENE_${sceneOrder}`], suggested_fix: `Mark Scene ${sceneOrder} as a flashback or remove ${speaker}.` });\n  }\n\n  for (const deadCode of deadCharacters) {\n    if (deadCode !== speaker && new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(combinedSceneText) && !isFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} appears in Scene ${sceneOrder} outside of a flashback.`, entities_involved: [deadCode, `SCENE_${sceneOrder}`], suggested_fix: `Convert Scene ${sceneOrder} to a flashback sequence.` });\n    }\n  }\n\n  if (speaker && speaker !== 'NARRATOR' && sceneLoc && !isFlashback) {\n    const prevLocObj = runningLocationByChar[speaker];\n    if (prevLocObj && prevLocObj.location && prevLocObj.location !== sceneLoc) {\n      const hasTravelCue = travelTransitionRegex.test(combinedSceneText);\n      if (!hasTravelCue) {\n        deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'WARNING', description: `Deterministic Location Guard: Character ${speaker} jumped from ${prevLocObj.location} to ${sceneLoc} without a travel transition.`, entities_involved: [speaker, prevLocObj.location, sceneLoc], suggested_fix: `Add a travel transition for ${speaker}.` });\n      }\n    }\n    runningLocationByChar[speaker] = { location: sceneLoc, episode_no: base.episode_no, event_code: sceneOrder };\n  }\n}\n\nconst textToInspect = `${base.script_text || ''}\\n${base.user_prompt || ''}`;\nif (textToInspect.trim().length > 0 && base.scenes.length === 0) {\n  const hasGlobalFlashback = flashbackRegex.test(textToInspect);\n  for (const deadCode of deadCharacters) {\n    if (new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(textToInspect) && !hasGlobalFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} referenced in script/prompt without flashback context.`, entities_involved: [deadCode], suggested_fix: `Ensure ${deadCode} is only depicted in flashbacks.` });\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...base, season_no: resolvedSeason, season_number: resolvedSeason,\n    hydrated_sources: { story_bible: storyBible, canon_facts: canonFacts, latest_snapshot: latestSnapshot, character_status: charStatuses, story_timeline: timelineEvents, story_rules: storyRules, mystery_tracker: mysteries },\n    dead_characters: Array.from(deadCharacters), last_known_locations: lastLocationByChar,\n    deterministic_violations: deterministicViolations, has_deterministic_critical: deterministicViolations.some(v => v.severity === 'CRITICAL')\n  }\n};"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Scope Resolver');\n\nfunction unpackRows(nodeName, requiredField) {\n  try {\n    const rawItems = $(nodeName).all().map(i => i.json);\n    const rows = [];\n    for (const entry of rawItems) {\n      if (Array.isArray(entry)) {\n        for (const r of entry) { if (r && (!requiredField || r[requiredField] !== undefined)) rows.push(r); }\n      } else if (entry && (!requiredField || entry[requiredField] !== undefined)) { rows.push(entry); }\n    }\n    return rows;\n  } catch (e) { return []; }\n}\n\nconst projectRows = unpackRows('Supabase: Fetch Project & Bible', 'id');\nconst projectRec = projectRows[0] || {};\nconst storyBible = projectRec.story_bible || {};\nconst resolvedSeason = Number(projectRec.current_season || base.season_no || 1);\n\nconst canonFacts = unpackRows('Supabase: Fetch Canon Facts', 'fact_key');\nconst snapshots = unpackRows('Supabase: Fetch Story State Snapshot', 'snapshot_data');\nconst latestSnapshot = snapshots[0] ? snapshots[0].snapshot_data : null;\nconst charStatuses = unpackRows('Supabase: Fetch Character Status', 'character_code');\nconst timelineEvents = unpackRows('Supabase: Fetch Story Timeline', 'event_description');\nconst storyRules = unpackRows('Supabase: Fetch Story Rules', 'rule_code');\nconst mysteries = unpackRows('Supabase: Fetch Mystery Tracker', 'description');\n\nconst deterministicViolations = [];\nconst statusByChar = {};\nconst deadCharacters = new Set();\n\nfor (const cs of charStatuses) {\n  const code = (cs.character_code || '').toString().toUpperCase().trim();\n  const st = (cs.status || 'alive').toString().toLowerCase().trim();\n  if (!code) continue;\n  statusByChar[code] = { status: st, status_changed_ep: Number(cs.status_changed_ep || 0) };\n  if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); }\n}\n\nif (latestSnapshot && latestSnapshot.world_state && typeof latestSnapshot.world_state === 'object') {\n  const wsStatuses = latestSnapshot.world_state.character_statuses || {};\n  for (const [k, v] of Object.entries(wsStatuses)) {\n    const code = k.toUpperCase().trim();\n    const st = (v || '').toString().toLowerCase().trim();\n    if (st === 'dead' || st === 'deceased') { deadCharacters.add(code); statusByChar[code] = { status: 'dead', status_changed_ep: latestSnapshot.episode_id }; }\n  }\n}\n\nconst lastLocationByChar = {};\nfor (const ev of timelineEvents) {\n  const loc = (ev.location || '').toString().toUpperCase().trim();\n  if (!loc) continue;\n  const parts = Array.isArray(ev.characters_involved) ? ev.characters_involved : (typeof ev.characters_involved === 'string' ? ev.characters_involved.split(',') : []);\n  for (const p of parts) {\n    const code = p.toString().toUpperCase().trim();\n    if (code && !lastLocationByChar[code]) { lastLocationByChar[code] = { location: loc, episode_no: ev.episode_no, event_code: ev.event_code }; }\n  }\n}\n\nconst flashbackRegex = /\\b(flashback|memory|past\\s+vision|dream\\s+sequence|hallucination|yaad|ateet|purani\\s+yaad)\\b/i;\nconst travelTransitionRegex = /\\b(travel|portal|teleport|arrive|journey|train|flight|walked|reached|timeskip|next\\s+day|drove|flew|ship|gate)\\b/i;\nconst runningLocationByChar = { ...lastLocationByChar };\n\nfor (let i = 0; i < base.scenes.length; i++) {\n  const sc = base.scenes[i] || {};\n  const sceneOrder = Number(sc.scene_order || (i + 1));\n  const speaker = (sc.dialogue_speaker_id || '').toString().toUpperCase().trim();\n  const sceneLoc = (sc.location_code || '').toString().toUpperCase().trim();\n  const combinedSceneText = `${sc.visual_prompt || sc.description || ''} ${sc.action_summary || ''} ${sc.voice_text || ''}`;\n  const isFlashback = Boolean(sc.is_flashback === true || flashbackRegex.test(combinedSceneText));\n\n  if (speaker && deadCharacters.has(speaker) && !isFlashback) {\n    deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${speaker} has active dialogue/action in Scene ${sceneOrder} without an explicit flashback flag.`, entities_involved: [speaker, `SCENE_${sceneOrder}`], suggested_fix: `Mark Scene ${sceneOrder} as a flashback or remove ${speaker}.` });\n  }\n\n  for (const deadCode of deadCharacters) {\n    if (deadCode !== speaker && new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(combinedSceneText) && !isFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} appears in Scene ${sceneOrder} outside of a flashback.`, entities_involved: [deadCode, `SCENE_${sceneOrder}`], suggested_fix: `Convert Scene ${sceneOrder} to a flashback sequence.` });\n    }\n  }\n\n  if (speaker && speaker !== 'NARRATOR' && sceneLoc && !isFlashback) {\n    const prevLocObj = runningLocationByChar[speaker];\n    if (prevLocObj && prevLocObj.location && prevLocObj.location !== sceneLoc) {\n      const hasTravelCue = travelTransitionRegex.test(combinedSceneText);\n      if (!hasTravelCue) {\n        deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'WARNING', description: `Deterministic Location Guard: Character ${speaker} jumped from ${prevLocObj.location} to ${sceneLoc} without a travel transition.`, entities_involved: [speaker, prevLocObj.location, sceneLoc], suggested_fix: `Add a travel transition for ${speaker}.` });\n      }\n    }\n    runningLocationByChar[speaker] = { location: sceneLoc, episode_no: base.episode_no, event_code: sceneOrder };\n  }\n}\n\nconst textToInspect = `${base.script_text || ''}\\n${base.user_prompt || ''}`;\nif (textToInspect.trim().length > 0 && base.scenes.length === 0) {\n  const hasGlobalFlashback = flashbackRegex.test(textToInspect);\n  for (const deadCode of deadCharacters) {\n    if (new RegExp(`\\\\b${deadCode}\\\\b`, 'i').test(textToInspect) && !hasGlobalFlashback) {\n      deterministicViolations.push({ type: 'STATUS_VIOLATION', severity: 'CRITICAL', description: `Deterministic Guard: Dead character ${deadCode} referenced in script/prompt without flashback context.`, entities_involved: [deadCode], suggested_fix: `Ensure ${deadCode} is only depicted in flashbacks.` });\n    }\n  }\n}\n\nreturn {\n  json: {\n    ...base, season_no: resolvedSeason, season_number: resolvedSeason,\n    hydrated_sources: { story_bible: storyBible, canon_facts: canonFacts, latest_snapshot: latestSnapshot, character_status: charStatuses, story_timeline: timelineEvents, story_rules: storyRules, mystery_tracker: mysteries },\n    dead_characters: Array.from(deadCharacters), last_known_locations: lastLocationByChar,\n    deterministic_violations: deterministicViolations, has_deterministic_critical: deterministicViolations.some(v => v.severity === 'CRITICAL')\n  }\n};"
       }
     },
     {
@@ -314,6 +338,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -367,6 +395,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -389,7 +421,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const ctx = $('Context Assembly & Continuity Prompt Constructor').item.json;\nconst llmRaw = $input.item.json || {};\n\nconst VALID_TYPES = new Set(['CANON_CONTRADICTION', 'KNOWLEDGE_LEAK', 'STATUS_VIOLATION', 'POWER_LIMIT']);\nconst VALID_SEVERITIES = new Set(['CRITICAL', 'WARNING', 'INFO']);\n\nlet parsedLlm = null;\ntry {\n  const rawText = llmRaw?.choices?.[0]?.message?.content;\n  if (rawText) {\n    const cleanStr = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsedLlm = JSON.parse(cleanStr);\n  }\n} catch (e) { parsedLlm = null; }\n\nconst llmViolations = Array.isArray(parsedLlm?.violations) ? parsedLlm.violations : [];\nconst mergedViolations = [...(ctx.deterministic_violations || [])];\n\nfor (const v of llmViolations) {\n  if (!v || !v.description) continue;\n  const normType = VALID_TYPES.has(v.type) ? v.type : 'CANON_CONTRADICTION';\n  const normSeverity = VALID_SEVERITIES.has(v.severity) ? v.severity : 'WARNING';\n  const isDuplicate = mergedViolations.some(existing => existing.type === normType && existing.description.toLowerCase() === v.description.toString().toLowerCase());\n  if (!isDuplicate) {\n    mergedViolations.push({ type: normType, severity: normSeverity, description: v.description.toString(), entities_involved: Array.isArray(v.entities_involved) ? v.entities_involved : [], suggested_fix: (v.suggested_fix || 'Align scene with active Story Bible and Canon Facts.').toString() });\n  }\n}\n\nconst criticalCount = mergedViolations.filter(v => v.severity === 'CRITICAL').length;\nconst warningCount = mergedViolations.filter(v => v.severity === 'WARNING').length;\n\nlet rawScore = typeof parsedLlm?.continuity_score === 'number' ? Number(parsedLlm.continuity_score) : 100;\nconst maxAllowedByPenalties = Math.max(0, 100 - (criticalCount * 35) - (warningCount * 10));\nconst continuity_score = Math.max(0, Math.min(100, Math.min(rawScore, maxAllowedByPenalties)));\n\nlet gate_status = 'PASSED';\nif (criticalCount > 0 || continuity_score < 70) { gate_status = 'BLOCKED_CRITICAL'; }\nelse if (continuity_score >= 90) { gate_status = 'PASSED'; }\nelse { gate_status = 'WARNINGS_RESOLVED'; }\n\nconst can_proceed = gate_status !== 'BLOCKED_CRITICAL';\n\nconst recommendedPatches = {\n  ...(parsedLlm?.recommended_context_patches || {}),\n  dead_characters_prohibited_in_present: ctx.dead_characters || [],\n  last_known_locations: ctx.last_known_locations || {},\n  auto_corrections: mergedViolations.filter(v => v.severity !== 'CRITICAL').map(v => v.suggested_fix)\n};\n\nconst continuitySummary = parsedLlm?.continuity_summary || (\n  gate_status === 'PASSED' ? `Continuity check 100% clean hai (Score: ${continuity_score}/100). Koi canon ya character status violation nahi mila.` :\n  gate_status === 'WARNINGS_RESOLVED' ? `Continuity check minor warnings ke sath pass hua (Score: ${continuity_score}/100). Auto-corrections downstream WF-02 ke liye attach kar diye gaye hain.` :\n  `CRITICAL Continuity Violation detect hua hai (Score: ${continuity_score}/100)! Execution ko safely block kar diya gaya hai.`\n);\n\nreturn { json: { ...ctx, continuity_score, status: gate_status, gate_status, can_proceed, violations: mergedViolations, violations_count: { total: mergedViolations.length, critical: criticalCount, warning: warningCount }, continuity_summary: continuitySummary, recommended_context_patches: recommendedPatches } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst ctx = __getNodeJson('Context Assembly & Continuity Prompt Constructor');\nconst llmRaw = $input.item.json || {};\n\nconst VALID_TYPES = new Set(['CANON_CONTRADICTION', 'KNOWLEDGE_LEAK', 'STATUS_VIOLATION', 'POWER_LIMIT']);\nconst VALID_SEVERITIES = new Set(['CRITICAL', 'WARNING', 'INFO']);\n\nlet parsedLlm = null;\ntry {\n  const rawText = llmRaw?.choices?.[0]?.message?.content;\n  if (rawText) {\n    const cleanStr = rawText.replace(/^```json\\s*/i, '').replace(/```\\s*$/i, '').trim();\n    parsedLlm = JSON.parse(cleanStr);\n  }\n} catch (e) { parsedLlm = null; }\n\nconst llmViolations = Array.isArray(parsedLlm?.violations) ? parsedLlm.violations : [];\nconst mergedViolations = [...(ctx.deterministic_violations || [])];\n\nfor (const v of llmViolations) {\n  if (!v || !v.description) continue;\n  const normType = VALID_TYPES.has(v.type) ? v.type : 'CANON_CONTRADICTION';\n  const normSeverity = VALID_SEVERITIES.has(v.severity) ? v.severity : 'WARNING';\n  const isDuplicate = mergedViolations.some(existing => existing.type === normType && existing.description.toLowerCase() === v.description.toString().toLowerCase());\n  if (!isDuplicate) {\n    mergedViolations.push({ type: normType, severity: normSeverity, description: v.description.toString(), entities_involved: Array.isArray(v.entities_involved) ? v.entities_involved : [], suggested_fix: (v.suggested_fix || 'Align scene with active Story Bible and Canon Facts.').toString() });\n  }\n}\n\nconst criticalCount = mergedViolations.filter(v => v.severity === 'CRITICAL').length;\nconst warningCount = mergedViolations.filter(v => v.severity === 'WARNING').length;\n\nlet rawScore = typeof parsedLlm?.continuity_score === 'number' ? Number(parsedLlm.continuity_score) : 100;\nconst maxAllowedByPenalties = Math.max(0, 100 - (criticalCount * 35) - (warningCount * 10));\nconst continuity_score = Math.max(0, Math.min(100, Math.min(rawScore, maxAllowedByPenalties)));\n\nlet gate_status = 'PASSED';\nif (criticalCount > 0 || continuity_score < 70) { gate_status = 'BLOCKED_CRITICAL'; }\nelse if (continuity_score >= 90) { gate_status = 'PASSED'; }\nelse { gate_status = 'WARNINGS_RESOLVED'; }\n\nconst can_proceed = gate_status !== 'BLOCKED_CRITICAL';\n\nconst recommendedPatches = {\n  ...(parsedLlm?.recommended_context_patches || {}),\n  dead_characters_prohibited_in_present: ctx.dead_characters || [],\n  last_known_locations: ctx.last_known_locations || {},\n  auto_corrections: mergedViolations.filter(v => v.severity !== 'CRITICAL').map(v => v.suggested_fix)\n};\n\nconst continuitySummary = parsedLlm?.continuity_summary || (\n  gate_status === 'PASSED' ? `Continuity check 100% clean hai (Score: ${continuity_score}/100). Koi canon ya character status violation nahi mila.` :\n  gate_status === 'WARNINGS_RESOLVED' ? `Continuity check minor warnings ke sath pass hua (Score: ${continuity_score}/100). Auto-corrections downstream WF-02 ke liye attach kar diye gaye hain.` :\n  `CRITICAL Continuity Violation detect hua hai (Score: ${continuity_score}/100)! Execution ko safely block kar diya gaya hai.`\n);\n\nreturn { json: { ...ctx, continuity_score, status: gate_status, gate_status, can_proceed, violations: mergedViolations, violations_count: { total: mergedViolations.length, critical: criticalCount, warning: warningCount }, continuity_summary: continuitySummary, recommended_context_patches: recommendedPatches } };"
       }
     },
     {
@@ -424,6 +456,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -444,7 +480,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const state = $('Continuity Score & Decision Engine').first().json; const triggerCtx = $('When Executed by Another Workflow').first().json || {}; const badge = state.gate_status === 'PASSED' ? '✅ PASSED' : state.gate_status === 'WARNINGS_RESOLVED' ? '⚠️ WARNINGS_RESOLVED' : '🛑 BLOCKED_CRITICAL'; const msg = [`🛡️ **WF-06 Report**`, `📊 **Score:** ${state.continuity_score}/100 | **Gate:** ${badge}`, `💬 **Summary:** ${state.continuity_summary}`].join('\\n'); const patchedUserPrompt = state.can_proceed && state.violations.length > 0 ? `${state.user_prompt}\\n\\n[PATCHES]: ${JSON.stringify(state.recommended_context_patches)}` : state.user_prompt; return { json: { user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {}, project_style: state.project_style || triggerCtx.project_style || {}, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, episode_number: state.episode_no, season_no: state.season_no, season_number: state.season_no, mode: state.mode || 'SAVE', sessionId: state.sessionId, intent: state.intent || 'CHECK_CONTINUITY', downstream_command: state.downstream_command || 'CHECK_CONTINUITY', target_workflow_id: state.target_workflow_id || $env.WF_02_STORY_ID || null, preflight_workflow_ids: state.preflight_workflow_ids || {}, extracted_params: state.extracted_params || { episode_number: state.episode_no }, user_prompt: patchedUserPrompt, userPrompt: patchedUserPrompt, rawText: state.rawText || state.user_prompt, ok: state.can_proceed, workflow_name: 'WF-06', execution_id: $execution.id, continuity_score: state.continuity_score, status: state.gate_status, gate_status: state.gate_status, can_proceed: state.can_proceed, violations: state.violations, violations_count: state.violations_count, continuity_summary: state.continuity_summary, recommended_context_patches: state.recommended_context_patches, output: msg, text: msg } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Continuity Score & Decision Engine'); const triggerCtx = __getNodeJson('When Executed by Another Workflow') || {}; const badge = state.gate_status === 'PASSED' ? '✅ PASSED' : state.gate_status === 'WARNINGS_RESOLVED' ? '⚠️ WARNINGS_RESOLVED' : '🛑 BLOCKED_CRITICAL'; const msg = [`🛡️ **WF-06 Report**`, `📊 **Score:** ${state.continuity_score}/100 | **Gate:** ${badge}`, `💬 **Summary:** ${state.continuity_summary}`].join('\\n'); const patchedUserPrompt = state.can_proceed && state.violations.length > 0 ? `${state.user_prompt}\\n\\n[PATCHES]: ${JSON.stringify(state.recommended_context_patches)}` : state.user_prompt; return { json: { user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {}, project_style: state.project_style || triggerCtx.project_style || {}, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, episode_number: state.episode_no, season_no: state.season_no, season_number: state.season_no, mode: state.mode || 'SAVE', sessionId: state.sessionId, intent: state.intent || 'CHECK_CONTINUITY', downstream_command: state.downstream_command || 'CHECK_CONTINUITY', target_workflow_id: state.target_workflow_id || (($env.WF_02_STORY_ID || 'S71rbJqn85GNVIVo') || 'S71rbJqn85GNVIVo'), preflight_workflow_ids: state.preflight_workflow_ids || {}, extracted_params: state.extracted_params || { episode_number: state.episode_no }, user_prompt: patchedUserPrompt, userPrompt: patchedUserPrompt, rawText: state.rawText || state.user_prompt, ok: state.can_proceed, workflow_name: 'WF-06', execution_id: $execution.id, continuity_score: state.continuity_score, status: state.gate_status, gate_status: state.gate_status, can_proceed: state.can_proceed, violations: state.violations, violations_count: state.violations_count, continuity_summary: state.continuity_summary, recommended_context_patches: state.recommended_context_patches, output: msg, text: msg } };"
       }
     }
   ],
@@ -633,20 +669,8 @@
       ]
     }
   },
-  "nodeGroups": [],
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
-  },
-  "staticData": null,
-  "pinData": {},
-  "meta": null,
-  "tags": [
-    {
-      "id": "LuIq0zIeNa69i786",
-      "name": "Anime-Engine",
-      "createdAt": "2026-10-26T06:14:16.780Z",
-      "updatedAt": "2026-10-26T06:14:16.780Z"
-    }
-  ]
+  }
 }

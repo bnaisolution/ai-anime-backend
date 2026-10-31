@@ -2,10 +2,6 @@
   "id": "swOEbQV3iNUNmMwu",
   "name": "StoryWf10",
   "active": true,
-  "createdAt": "2026-10-26T10:05:11.836Z",
-  "updatedAt": "2026-10-26T10:05:58.512Z",
-  "isArchived": false,
-  "triggerCount": 0,
   "nodes": [
     {
       "parameters": {},
@@ -114,6 +110,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -133,7 +133,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Timeout Resolver').item.json;\nconst resp = $input.item.json;\nconst existingRecord = Array.isArray(resp) ? resp[0] : (resp && resp.current_state ? resp : null);\nconst current_state = (existingRecord?.current_state || 'PENDING').toString().toUpperCase().trim();\nconst target_state = base.target_state;\n\nconst TRANSITION_MATRIX = {\n  PENDING: ['GENERATING'],\n  QUEUED: ['GENERATING'],\n  GENERATING: ['SCENE_PLAN_READY', 'FAILED'],\n  SCENE_PLAN_READY: ['PRODUCTION', 'FAILED'],\n  PRODUCTION: ['MIXED', 'FAILED'],\n  MIXED: ['QC_APPROVED', 'FAILED'],\n  QC_APPROVED: ['PUBLISHED', 'FAILED'],\n  PUBLISHED: [],\n  FAILED: ['PENDING', 'QUEUED', 'GENERATING']\n};\n\nconst allowedNextStates = TRANSITION_MATRIX[current_state] || [];\nconst isSameStateIdempotent = current_state === target_state;\nconst isTransitionAllowed = allowedNextStates.includes(target_state) || isSameStateIdempotent;\n\nif (!isTransitionAllowed) {\n  return {\n    json: {\n      ...base, previous_state: current_state, transition_valid: false, error_code: 'ERR_RULE_50_INVALID_STATE_TRANSITION',\n      error_message: `Rule 50 State Machine Violation: Invalid jump from '${current_state}' to '${target_state}' for Episode ${base.episode_no}. Allowed next states from '${current_state}': [${allowedNextStates.join(', ') || 'NONE (Terminal)'}].`\n    }\n  };\n}\n\nconst nowIso = $now.toISOString();\nreturn {\n  json: {\n    ...base, previous_state: current_state, transition_valid: true, updated_at: nowIso,\n    state_patch_payload: { project_id: base.project_id, episode_no: base.episode_no, current_state: target_state, last_state_change_at: nowIso, updated_at: nowIso }\n  }\n};"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Timeout Resolver');\nconst resp = $input.item.json;\nconst existingRecord = Array.isArray(resp) ? resp[0] : (resp && resp.current_state ? resp : null);\nconst current_state = (existingRecord?.current_state || 'PENDING').toString().toUpperCase().trim();\nconst target_state = base.target_state;\n\nconst TRANSITION_MATRIX = {\n  PENDING: ['GENERATING'],\n  QUEUED: ['GENERATING'],\n  GENERATING: ['SCENE_PLAN_READY', 'FAILED'],\n  SCENE_PLAN_READY: ['PRODUCTION', 'FAILED'],\n  PRODUCTION: ['MIXED', 'FAILED'],\n  MIXED: ['QC_APPROVED', 'FAILED'],\n  QC_APPROVED: ['PUBLISHED', 'FAILED'],\n  PUBLISHED: [],\n  FAILED: ['PENDING', 'QUEUED', 'GENERATING']\n};\n\nconst allowedNextStates = TRANSITION_MATRIX[current_state] || [];\nconst isSameStateIdempotent = current_state === target_state;\nconst isTransitionAllowed = allowedNextStates.includes(target_state) || isSameStateIdempotent;\n\nif (!isTransitionAllowed) {\n  return {\n    json: {\n      ...base, previous_state: current_state, transition_valid: false, error_code: 'ERR_RULE_50_INVALID_STATE_TRANSITION',\n      error_message: `Rule 50 State Machine Violation: Invalid jump from '${current_state}' to '${target_state}' for Episode ${base.episode_no}. Allowed next states from '${current_state}': [${allowedNextStates.join(', ') || 'NONE (Terminal)'}].`\n    }\n  };\n}\n\nconst nowIso = $now.toISO();\nreturn {\n  json: {\n    ...base, previous_state: current_state, transition_valid: true, updated_at: nowIso,\n    state_patch_payload: { project_id: base.project_id, episode_no: base.episode_no, current_state: target_state, last_state_change_at: nowIso, updated_at: nowIso }\n  }\n};"
       },
       "id": "920b4350-7dfc-4c71-b499-9dbc4c28db31",
       "name": "Transactional Matrix Guard (Rule 50)",
@@ -186,6 +186,10 @@
             {
               "name": "Prefer",
               "value": "resolution=merge-duplicates,return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -222,6 +226,10 @@
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -241,7 +249,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Timeout Resolver').item.json;\nconst rawItems = $input.all().map(i => i.json);\nconst nowMs = Date.now();\nconst timeoutMs = Number(base.timeout_hours || 3) * 3600 * 1000;\nconst zombieRows = [];\n\nfor (const entry of rawItems) {\n  if (Array.isArray(entry)) { for (const r of entry) { if (r && r.current_state) zombieRows.push(r); } }\n  else if (entry && entry.current_state) { zombieRows.push(entry); }\n}\n\nconst verifiedZombies = zombieRows.filter(z => {\n  if (!z.updated_at) return true;\n  const deltaMs = nowMs - new Date(z.updated_at).getTime();\n  return deltaMs > timeoutMs;\n});\n\nconst unlockTargetState = ($env.DEADLOCK_UNLOCK_STATE || 'FAILED').toString().toUpperCase().trim();\nconst nowIso = $now.toISOString();\n\nconst pendingActionNotifications = verifiedZombies.map(z => ({\n  project_id: z.project_id || base.project_id, action_type: 'DEADLOCK_SWEEPER_UNLOCK', review_type: 'ZOMBIE_JOB_REVERTED', status: 'MANUAL_REVIEW',\n  action_payload: { episode_no: z.episode_no, stuck_state: z.current_state, last_updated_at: z.updated_at, reverted_to: unlockTargetState, swept_at: nowIso }\n}));\n\nreturn { json: { ...base, zombie_count: verifiedZombies.length, verified_zombies: verifiedZombies, unlock_target_state: unlockTargetState, swept_at: nowIso, pending_notifications_batch: pendingActionNotifications } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Timeout Resolver');\nconst rawItems = [($input.item || { json: {} })].map(i => i.json);\nconst nowMs = Date.now();\nconst timeoutMs = Number(base.timeout_hours || 3) * 3600 * 1000;\nconst zombieRows = [];\n\nfor (const entry of rawItems) {\n  if (Array.isArray(entry)) { for (const r of entry) { if (r && r.current_state) zombieRows.push(r); } }\n  else if (entry && entry.current_state) { zombieRows.push(entry); }\n}\n\nconst verifiedZombies = zombieRows.filter(z => {\n  if (!z.updated_at) return true;\n  const deltaMs = nowMs - new Date(z.updated_at).getTime();\n  return deltaMs > timeoutMs;\n});\n\nconst unlockTargetState = ($env.DEADLOCK_UNLOCK_STATE || 'FAILED').toString().toUpperCase().trim();\nconst nowIso = $now.toISO();\n\nconst pendingActionNotifications = verifiedZombies.map(z => ({\n  project_id: z.project_id || base.project_id, action_type: 'DEADLOCK_SWEEPER_UNLOCK', review_type: 'ZOMBIE_JOB_REVERTED', status: 'MANUAL_REVIEW',\n  action_payload: { episode_no: z.episode_no, stuck_state: z.current_state, last_updated_at: z.updated_at, reverted_to: unlockTargetState, swept_at: nowIso }\n}));\n\nreturn { json: { ...base, zombie_count: verifiedZombies.length, verified_zombies: verifiedZombies, unlock_target_state: unlockTargetState, swept_at: nowIso, pending_notifications_batch: pendingActionNotifications } };"
       },
       "id": "3661eb5f-8135-42c8-92d3-35b8f6446a58",
       "name": "Zombie Job Sweeper Evaluator",
@@ -294,6 +302,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -335,6 +347,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -376,6 +392,10 @@
             {
               "name": "Prefer",
               "value": "return=minimal"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
             }
           ]
         },
@@ -398,7 +418,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const base = $('Input Normalizer & Timeout Resolver').item.json;\n\nif (base.fsm_intent === 'RESOLVE_DEADLOCKS') {\n  const sweep = $('Zombie Job Sweeper Evaluator').item.json;\n  const zombieList = sweep.verified_zombies.length > 0 ? sweep.verified_zombies.map(z => `• Project \\`${z.project_id}\\` Ep ${z.episode_no}: Stuck in \\`${z.current_state}\\` since \\`${z.updated_at}\\` -> Reverted to \\`${sweep.unlock_target_state}\\``).join('\\n') : `• Koi bhi zombie job (> ${sweep.timeout_hours} hours stuck in GENERATING/PRODUCTION) nahi mila.`;\n\n  const sweepMsg = [\n    `🧹 **WF-10: Section 62 Deadlock / Zombie Sweeper Complete!**`,\n    `• **Timeout Threshold:** > ${sweep.timeout_hours} Hours (\\`cutoff: ${sweep.cutoff_timestamp_iso}\\`)`,\n    `• **Zombie Jobs Unlocked:** ${sweep.zombie_count}`, zombieList\n  ].join('\\n');\n\n  return { json: { ...base, ok: true, status: 'DEADLOCK_SWEEP_COMPLETED', workflow_name: 'WF-10', execution_id: $execution.id, zombie_count: sweep.zombie_count, unlocked_jobs: sweep.verified_zombies, output: sweepMsg, text: sweepMsg } };\n}\n\nconst guard = $('Transactional Matrix Guard (Rule 50)').item.json;\n\nif (guard.transition_valid === false) {\n  const errMsg = [\n    `🛑 **WF-10: Rule 50 State Transition Blocked!**`,\n    `• **Episode:** ${guard.episode_no} | **Attempted Jump:** \\`${guard.previous_state} -> ${guard.target_state}\\``,\n    `• **Error:** ${guard.error_message}`\n  ].join('\\n');\n  return { json: { ...base, ok: false, status: 'ERR_INVALID_STATE_TRANSITION', workflow_name: 'WF-10', execution_id: $execution.id, previous_state: guard.previous_state, target_state: guard.target_state, error_code: guard.error_code, output: errMsg, text: errMsg } };\n}\n\nconst okMsg = [\n  `⚙️ **WF-10: Rule 50 State Transition Committed!**`,\n  `• **Project ID:** \\`${guard.project_id}\\` | **Episode:** ${guard.episode_no}`,\n  `• **Transition:** \\`${guard.previous_state} -> ${guard.target_state}\\` (\\`${guard.updated_at}\\`)`\n].join('\\n');\n\nreturn { json: { ...base, ok: true, status: 'STATE_TRANSITION_COMMITTED', workflow_name: 'WF-10', execution_id: $execution.id, previous_state: guard.previous_state, current_state: guard.target_state, updated_at: guard.updated_at, output: okMsg, text: okMsg } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Timeout Resolver');\n\nif (base.fsm_intent === 'RESOLVE_DEADLOCKS') {\n  const sweep = __getNodeJson('Zombie Job Sweeper Evaluator');\n  const zombieList = sweep.verified_zombies.length > 0 ? sweep.verified_zombies.map(z => `• Project \\`${z.project_id}\\` Ep ${z.episode_no}: Stuck in \\`${z.current_state}\\` since \\`${z.updated_at}\\` -> Reverted to \\`${sweep.unlock_target_state}\\``).join('\\n') : `• Koi bhi zombie job (> ${sweep.timeout_hours} hours stuck in GENERATING/PRODUCTION) nahi mila.`;\n\n  const sweepMsg = [\n    `🧹 **WF-10: Section 62 Deadlock / Zombie Sweeper Complete!**`,\n    `• **Timeout Threshold:** > ${sweep.timeout_hours} Hours (\\`cutoff: ${sweep.cutoff_timestamp_iso}\\`)`,\n    `• **Zombie Jobs Unlocked:** ${sweep.zombie_count}`, zombieList\n  ].join('\\n');\n\n  return { json: { ...base, ok: true, status: 'DEADLOCK_SWEEP_COMPLETED', workflow_name: 'WF-10', execution_id: $execution.id, zombie_count: sweep.zombie_count, unlocked_jobs: sweep.verified_zombies, output: sweepMsg, text: sweepMsg } };\n}\n\nconst guard = __getNodeJson('Transactional Matrix Guard (Rule 50)');\n\nif (guard.transition_valid === false) {\n  const errMsg = [\n    `🛑 **WF-10: Rule 50 State Transition Blocked!**`,\n    `• **Episode:** ${guard.episode_no} | **Attempted Jump:** \\`${guard.previous_state} -> ${guard.target_state}\\``,\n    `• **Error:** ${guard.error_message}`\n  ].join('\\n');\n  return { json: { ...base, ok: false, status: 'ERR_INVALID_STATE_TRANSITION', workflow_name: 'WF-10', execution_id: $execution.id, previous_state: guard.previous_state, target_state: guard.target_state, error_code: guard.error_code, output: errMsg, text: errMsg } };\n}\n\nconst okMsg = [\n  `⚙️ **WF-10: Rule 50 State Transition Committed!**`,\n  `• **Project ID:** \\`${guard.project_id}\\` | **Episode:** ${guard.episode_no}`,\n  `• **Transition:** \\`${guard.previous_state} -> ${guard.target_state}\\` (\\`${guard.updated_at}\\`)`\n].join('\\n');\n\nreturn { json: { ...base, ok: true, status: 'STATE_TRANSITION_COMMITTED', workflow_name: 'WF-10', execution_id: $execution.id, previous_state: guard.previous_state, current_state: guard.target_state, updated_at: guard.updated_at, output: okMsg, text: okMsg } };"
       },
       "id": "368398c6-88d2-4230-b493-5a788b16fd70",
       "name": "Final State Machine Response Formatter",
@@ -583,20 +603,8 @@
       ]
     }
   },
-  "nodeGroups": [],
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
-  },
-  "staticData": null,
-  "pinData": {},
-  "meta": null,
-  "tags": [
-    {
-      "id": "LuIq0zIeNa69i786",
-      "name": "Anime-Engine",
-      "createdAt": "2026-10-26T06:14:16.780Z",
-      "updatedAt": "2026-10-26T06:14:16.780Z"
-    }
-  ]
+  }
 }
