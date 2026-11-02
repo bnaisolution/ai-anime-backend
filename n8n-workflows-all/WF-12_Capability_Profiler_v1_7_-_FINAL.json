@@ -1,0 +1,418 @@
+{
+  "name": "WF-12 Capability Profiler v1.7 - FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf12-capability-profiler",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "467a52cc-6ecd-431a-bdf6-b3fab8d75561",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        224
+      ],
+      "webhookId": "wf12-capability-profiler",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$input.first()?.json.body??$input.first()?.json;const h=$input.first()?.json.headers??{};const r=b.request_id?.trim();const u=b.user_id;const w=b.workspace_id;if(!r||!u||!w)return[{json:{ok:false,error:'Missing fields',cat:'INVALID_INPUT',code:400}}];const ev=$env.WF12_AUTHENTICATED_USER_ID||'e95248f1-c614-4e42-9c3b-cdafc703673c';if(ev!==u)return[{json:{ok:false,error:'Identity spoofing',cat:'FORBIDDEN',code:403}}];const tk=$env.WF12_SERVICE_TOKEN||'Neeraj@923456789';const pk=Object.keys(h).find(k=>k.toLowerCase()==='x-service-token');if(h[pk]!==tk)return[{json:{ok:false,error:'Invalid token',cat:'UNAUTHORIZED',code:401}}];if(!b.workflow_json||typeof b.workflow_json!=='object')return[{json:{ok:false,error:'workflow_json object required',cat:'INVALID_INPUT',code:400}}];return[{json:{ok:true,request_id:r,user_id:u,workspace_id:w,project_id:b.project_id,workflow_json:b.workflow_json,workflow_name:b.workflow_name||'Unnamed'}}];"
+      },
+      "id": "6e512184-0dfe-4307-92dc-04475178a874",
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "v",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ba243b1c-77e8-467f-9a9d-64ec1609e17f",
+      "name": "Is Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "workflow_audits",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "request_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.request_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            },
+            {
+              "keyName": "analysis_mode",
+              "condition": "eq",
+              "keyValue": "capability_profile"
+            }
+          ]
+        }
+      },
+      "id": "8e581ca1-581a-4d17-a77b-64e85ef623c7",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        720,
+        128
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "dup",
+              "leftValue": "={{ $input.all().filter(i => i.json && i.json.id).length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8a664d34-dd5a-4f38-b49f-e38eafbcc4f0",
+      "name": "Is Duplicate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "try{const wf=$('Validate').first().json.workflow_json;const nodes=Array.isArray(wf.nodes)?wf.nodes:[];const nodeTypes=[...new Set(nodes.map(n=>n.type).filter(Boolean))];const triggers=nodes.filter(n=>/webhook|trigger|schedule/i.test(n.type||'')).map(n=>({name:n.name,type:n.type,path:n.parameters?.path||null}));const creds=[...new Set(nodes.flatMap(n=>n.credentials?Object.keys(n.credentials):[]))];const sideEff=nodeTypes.some(t=>/supabase|httpRequest|postgres|telegram/i.test(t))?'external_or_db_write':'read_only';return[{json:{...$('Validate').first().json,profile:{name:wf.name||$('Validate').first().json.workflow_name,node_count:nodes.length,triggers,node_types:nodeTypes,credentials:creds,side_effect:sideEff}}}];}catch(e){return[{json:{_error:true,msg:e.message}}];}"
+      },
+      "id": "b777a2f9-6a10-46bf-903f-7f998bdd377c",
+      "name": "Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_audits",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "request_id",
+              "fieldValue": "={{ $json.request_id }}"
+            },
+            {
+              "fieldId": "audit_id",
+              "fieldValue": "={{ 'PROF-' + $json.request_id }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json.user_id }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json.workspace_id }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json.project_id || undefined }}"
+            },
+            {
+              "fieldId": "workflow_name",
+              "fieldValue": "={{ $json.workflow_name }}"
+            },
+            {
+              "fieldId": "source_type",
+              "fieldValue": "uploaded"
+            },
+            {
+              "fieldId": "analysis_mode",
+              "fieldValue": "capability_profile"
+            },
+            {
+              "fieldId": "audit_status",
+              "fieldValue": "completed"
+            },
+            {
+              "fieldId": "node_count",
+              "fieldValue": "={{ $json.profile.node_count || 0 }}"
+            },
+            {
+              "fieldId": "workflow_summary",
+              "fieldValue": "={{ JSON.stringify($json.profile) }}"
+            }
+          ]
+        }
+      },
+      "id": "83b98745-55bd-46fc-a667-57a2c2c5b787",
+      "name": "Save Audit",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const s=$('Validate').first().json;const p=$input.first()?.json||{};const isErr=p._error||p.error;const isSaved=!!(p&&p.id);const errMsg=p.error?.message||p.error||p.msg||'DB Error';return[{json:{request_id:s.request_id,status:isErr?'failed':(isSaved?'completed':'partial'),_http_status:isErr?500:200,result:isErr?null:{audit_id:'PROF-'+s.request_id,capability_profile:$('Profile').first().json.profile},errors:isErr?[{category:'INTERNAL_ERROR',message:String(errMsg)}]:[],warnings:[],verification:{status:(isSaved&&!isErr)?'verified':'not_verified',persisted:isSaved}}}];"
+      },
+      "id": "5fb30278-f025-44e3-846b-41265edf2716",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const s=$('Validate').first().json;const p=$input.first()?.json||{};return[{json:{request_id:s.request_id,status:'completed',_http_status:200,result:{audit_id:'PROF-'+s.request_id,message:'Replay detected. Profile exists.',artifact_id:p.id},errors:[],warnings:[{message:'Replay prevented'}],verification:{status:'verified',persisted:true}}}];"
+      },
+      "id": "4b6d1d14-cfea-419e-8fe9-16eb9d83cc4d",
+      "name": "Build Replay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const s=$('Validate').first().json;return[{json:{request_id:null,status:'failed',_http_status:s.code,result:null,errors:[{category:s.cat||'INVALID_INPUT',message:s.error}],warnings:[],verification:{status:'not_verified'}}}];"
+      },
+      "id": "5b23a669-ca5d-4b1b-94cc-a9748fbe3c21",
+      "name": "Build Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { request_id: $json.request_id, task_id: $json.task_id, status: $json.status, result: $json.result, errors: $json.errors, warnings: $json.warnings, verification: $json.verification } }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "3fcf7d4b-06dd-46f5-aedc-80de3c69c03d",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        128
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Is Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Build Replay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile": {
+      "main": [
+        [
+          {
+            "node": "Save Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Audit": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Replay": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

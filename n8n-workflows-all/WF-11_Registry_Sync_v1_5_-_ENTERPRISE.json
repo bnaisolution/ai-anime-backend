@@ -1,0 +1,510 @@
+{
+  "name": "WF-11 Registry Sync v1.5 - ENTERPRISE",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf11-registry-sync",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "8cb10b68-d15b-4434-902a-de422e3aa79a",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        -272
+      ],
+      "webhookId": "wf11-registry-sync",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const b=$input.first()?.json.body??$input.first()?.json;const h=$input.first()?.json.headers??{};const r=b.request_id?.trim();const u=b.user_id;const w=b.workspace_id;if(!r||!u||!w)return[{json:{ok:false,error:'Missing fields',cat:'INVALID_INPUT',code:400}}];const ev=$env.WF11_AUTHENTICATED_USER_ID||'11111111-1111-1111-1111-111111111111';if(ev!==u)return[{json:{ok:false,error:'Identity spoofing prevented',cat:'FORBIDDEN',code:403}}];const tk=$env.WF11_SERVICE_TOKEN||'Neeraj@923456789';const pk=Object.keys(h).find(k=>k.toLowerCase()==='x-service-token');if(h[pk]!==tk)return[{json:{ok:false,error:'Invalid token',cat:'UNAUTHORIZED',code:401}}];return[{json:{ok:true,request_id:r,user_id:u,workspace_id:w,project_id:b.project_id}}];"
+      },
+      "id": "0e4b498e-bb93-4fac-93bb-41da41af8aae",
+      "name": "Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "v",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1eafafda-65b6-41d7-a9ea-86c43139e560",
+      "name": "Is Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://n8n:5678/api/v1/workflows",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "={{ $env.WF11_N8N_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwZDc2ZjhhNi0wZmE5LTRlNDktOGU3OC1jMmUyM2FhZDQxMGYiLCJpc3MiOiJuOG4iLCJqdGkiOiIwMDcwZjVmNi0xMjc4LTRkNjktODAyYy0xMDg2YmM2NzY3N2EiLCJpYXQiOjE3OTI2MDY3MTgsImF1ZCI6InB1YmxpYy1hcGkifQ.64rbV68mnPpgk8MiGZnxyyMHh5pUIQiil1JPyExsE6Y' }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c9a1e800-2908-413e-81ee-619a33cae969",
+      "name": "Fetch Live WFs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        624,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp=$input.first()?.json;if(!resp||resp.statusCode!==200||!Array.isArray(resp.body?.data))return[{json:{_error:true,msg:'Invalid API response: '+(resp.statusCode||'unknown')}}];const s=$('Validate').first().json;const reg=resp.body.data.map(w=>({wf_id:(w.name&&typeof w.name==='string')?w.name.split(' ')[0]:'UNKNOWN',name:w.name||'Unnamed',active:w.active||false,id:w.id}));return[{json:{...s,registry:reg}}];"
+      },
+      "id": "38378062-ba16-4b7a-b401-3af3442e66a9",
+      "name": "Parse WFs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "versioned_artifacts",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "name",
+              "condition": "eq",
+              "keyValue": "={{ 'n8n_registry_snapshot_' + $json.request_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "3685b3a1-29b5-4225-b25d-aa0a9f1828a6",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        -400
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "dup",
+              "leftValue": "={{ $input.all().filter(i => i.json && i.json.id).length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "69f0ea8f-e668-4832-8040-b13e8b5193e3",
+      "name": "Is Duplicate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p=$input.first()?.json||{};const s=$('Validate').first().json;return[{json:{request_id:s.request_id,status:'completed',_http_status:200,result:{audit_id:'REG-'+s.request_id,message:'Replay detected. Snapshot exists.',artifact_id:p.id},errors:[],warnings:[{message:'Replay prevented'}],verification:{status:'verified',persisted:true,evidence:['Idempotency check passed']}}}];"
+      },
+      "id": "066668c2-92c3-42ce-a624-a6629e029f0f",
+      "name": "Build Replay",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        -496
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "versioned_artifacts",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            },
+            {
+              "keyName": "artifact_type",
+              "condition": "eq",
+              "keyValue": "workflow_registry"
+            },
+            {
+              "keyName": "is_active",
+              "condition": "eq",
+              "keyValue": true
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "is_active",
+              "fieldValue": false
+            }
+          ]
+        }
+      },
+      "id": "bea520da-d1ac-4c0d-bce6-7ac88e492700",
+      "name": "Deactivate Old",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        -304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "versioned_artifacts",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $('Parse WFs').first().json.workspace_id }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $('Parse WFs').first().json.project_id || undefined }}"
+            },
+            {
+              "fieldId": "created_by",
+              "fieldValue": "={{ $('Parse WFs').first().json.user_id }}"
+            },
+            {
+              "fieldId": "name",
+              "fieldValue": "={{ 'n8n_registry_snapshot_' + $('Parse WFs').first().json.request_id }}"
+            },
+            {
+              "fieldId": "artifact_type",
+              "fieldValue": "workflow_registry"
+            },
+            {
+              "fieldId": "version",
+              "fieldValue": "2.0"
+            },
+            {
+              "fieldId": "source_type",
+              "fieldValue": "live"
+            },
+            {
+              "fieldId": "is_active",
+              "fieldValue": "true"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ { workflows: $('Parse WFs').first().json.registry, synced_at: new Date().toISOString() } }}"
+            }
+          ]
+        }
+      },
+      "id": "1b162c06-ce37-4e29-9bff-abe7bc8ffffe",
+      "name": "Save Registry",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        -304
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const s=$('Validate').first().json;if(!s.ok)return[{json:{request_id:null,status:'failed',_http_status:s.code,result:null,errors:[{category:s.cat||'INVALID_INPUT',message:s.error}],warnings:[],verification:{status:'not_verified',evidence:[]}}}];const p=$input.first()?.json||{};const isErr=p._error;const isSaved=!!(p&&p.id);return[{json:{request_id:s.request_id,task_id:null,status:isErr?'failed':(isSaved?'completed':'partial'),_http_status:isErr?502:200,result:isErr?null:{audit_id:'REG-'+s.request_id,total_workflows:$('Parse WFs').first().json.registry.length,artifact_id:isSaved?p.id:null},errors:isErr?[{category:'INTEGRATION_UNAVAILABLE',message:p.msg}]:[],warnings:[],verification:{status:(isSaved&&!isErr)?'verified':'not_verified',persisted:isSaved,evidence:isErr?['Failed to fetch']:[isSaved?'Saved to DB':'DB failed']}}}];"
+      },
+      "id": "0a83408d-3cf1-43b9-83c8-eed422ac2314",
+      "name": "Build Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2064,
+        -304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const s=$('Validate').first().json;const e=s.error;return[{json:{request_id:null,status:'failed',_http_status:s.code,result:null,errors:[{category:s.cat||'INVALID_INPUT',message:e}],warnings:[],verification:{status:'not_verified',evidence:[]}}}];"
+      },
+      "id": "868acf20-6146-4f60-863f-31ce932fca0b",
+      "name": "Build Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { request_id: $json.request_id, task_id: $json.task_id, status: $json.status, result: $json.result, errors: $json.errors, warnings: $json.warnings, verification: $json.verification } }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "c30ae758-d79b-4faf-956b-e5bccc11daa2",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2304,
+        -272
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate": {
+      "main": [
+        [
+          {
+            "node": "Is Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid": {
+      "main": [
+        [
+          {
+            "node": "Fetch Live WFs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Live WFs": {
+      "main": [
+        [
+          {
+            "node": "Parse WFs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse WFs": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Build Replay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deactivate Old",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Replay": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deactivate Old": {
+      "main": [
+        [
+          {
+            "node": "Save Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Registry": {
+      "main": [
+        [
+          {
+            "node": "Build Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Success": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

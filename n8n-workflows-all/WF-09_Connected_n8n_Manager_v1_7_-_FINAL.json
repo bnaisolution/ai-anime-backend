@@ -1,0 +1,2257 @@
+{
+  "name": "WF-09 Connected n8n Manager v1.7 - FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf09-n8n",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a8f906f1-f062-4ecf-ba46-cf414cdf1b6a",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        1232
+      ],
+      "webhookId": "wf09-n8n",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()?.json??{};const headers=(input.headers&&typeof input.headers==='object')?input.headers:((input.body&&typeof input.body==='object'&&input.body.headers&&typeof input.body.headers==='object')?input.body.headers:{});let b=input.body??input;if(typeof b==='string'){try{b=JSON.parse(b);}catch(e){}}const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);const fail=(category,message,httpStatus)=>[{json:{ok:false,request_id:typeof b?.request_id==='string'?b.request_id.trim()||null:null,user_id:isUuid(b?.user_id)?b.user_id:null,workspace_id:isUuid(b?.workspace_id)?b.workspace_id:null,project_id:isUuid(b?.project_id)?b.project_id:null,conversation_id:isUuid(b?.conversation_id)?b.conversation_id:null,category,message,http_status:httpStatus||400}}];if(!b||typeof b!=='object'||Array.isArray(b))return fail('INVALID_INPUT','Expected JSON object body');if(typeof b.request_id!=='string'||!b.request_id.trim()||b.request_id.trim().length>100)return fail('INVALID_INPUT','request_id required, <=100 chars');const requestId=b.request_id.trim();const userId=typeof b.user_id==='string'?b.user_id.trim().slice(0,100):null;const workspaceId=typeof b.workspace_id==='string'?b.workspace_id.trim().slice(0,100):null;const projectId=typeof b.project_id==='string'?b.project_id.trim().slice(0,100):null;const conversationId=typeof b.conversation_id==='string'?b.conversation_id.trim().slice(0,200):null;if(!userId)return fail('UNAUTHORIZED','user_id required',401);if(!workspaceId)return fail('UNAUTHORIZED','workspace_id required',401);if(!isUuid(userId))return fail('INVALID_INPUT','user_id must be UUID');if(!isUuid(workspaceId))return fail('INVALID_INPUT','workspace_id must be UUID');if(projectId&&!isUuid(projectId))return fail('INVALID_INPUT','project_id must be UUID');if(conversationId&&!isUuid(conversationId))return fail('INVALID_INPUT','conversation_id must be UUID');let envToken,requireToken=true,envAccessible=true;try{envToken=$env?.WF09_SERVICE_TOKEN;const rt=$env?.WF09_REQUIRE_TOKEN;requireToken=(rt===undefined||rt===null)?true:(String(rt).toLowerCase()!=='false');}catch(e){envAccessible=false;}if(!envAccessible&&requireToken)return fail('INTERNAL_ERROR','token_required_but_env_unavailable',503);if(requireToken&&(typeof envToken!=='string'||envToken===''))return fail('INTERNAL_ERROR','token_required_but_not_configured',503);let tokenCheckStatus='disabled_empty';if(!envAccessible){tokenCheckStatus='disabled_env_blocked';}else if(typeof envToken==='string'&&envToken!==''){tokenCheckStatus='enforced';const hdrKey=Object.keys(headers).find(k=>k.toLowerCase()==='x-service-token');const provided=hdrKey?headers[hdrKey]:null;if(!provided||provided!==envToken)return fail('UNAUTHORIZED','service_token_invalid',401);}else{tokenCheckStatus='disabled_by_flag';}let envUserId=null,envUserAccessible=true;try{envUserId=$env?.WF09_AUTHENTICATED_USER_ID||null;}catch(e){envUserAccessible=false;}if(requireToken){if(!envUserAccessible)return fail('INTERNAL_ERROR','auth_env_unavailable_fail_closed',503);if(!envUserId)return fail('INTERNAL_ERROR','WF09_AUTHENTICATED_USER_ID_not_configured_fail_closed',503);if(envUserId!==userId)return fail('FORBIDDEN','user_id does not match authenticated identity',403);}else{if(envUserId&&envUserId!==userId)return fail('FORBIDDEN','user_id does not match authenticated identity',403);}let baseUrlEnv=null,apiKeyPresent=false,testEndpoint=null,requireApproval=false;try{baseUrlEnv=$env?.WF09_N8N_BASE_URL||null;apiKeyPresent=!!($env?.WF09_N8N_API_KEY);testEndpoint=$env?.WF09_TEST_ENDPOINT||null;requireApproval=$env?.WF09_REQUIRE_APPROVAL!=='false';}catch(e){}const validOps=['LIST_LIVE_WORKFLOWS','GET_LIVE_WORKFLOW','GET_EXECUTION_INFO','COMPARE_LIVE_VS_UPLOADED','UPDATE_LIVE_WORKFLOW','ACTIVATE_WORKFLOW','DEACTIVATE_WORKFLOW','TEST_WORKFLOW'];const operation=typeof b.operation==='string'?b.operation.trim().toUpperCase():null;if(!operation||!validOps.includes(operation))return fail('INVALID_INPUT','Invalid operation');const writeOps=['UPDATE_LIVE_WORKFLOW','ACTIVATE_WORKFLOW','DEACTIVATE_WORKFLOW','TEST_WORKFLOW'];const isWrite=writeOps.includes(operation);const workflowId=(typeof b.workflow_id==='string'&&b.workflow_id.trim())?b.workflow_id.trim().slice(0,100):null;const executionId=(typeof b.execution_id==='string'&&b.execution_id.trim())?b.execution_id.trim().slice(0,100):null;const approvalToken=(typeof b.approval_token==='string'&&b.approval_token.trim())?b.approval_token.trim().slice(0,200):null;if(workflowId&&!/^[A-Za-z0-9_-]{1,100}$/.test(workflowId))return fail('INVALID_INPUT','workflow_id has invalid format');if(['GET_LIVE_WORKFLOW','COMPARE_LIVE_VS_UPLOADED','UPDATE_LIVE_WORKFLOW','ACTIVATE_WORKFLOW','DEACTIVATE_WORKFLOW','TEST_WORKFLOW'].includes(operation)&&!workflowId)return fail('INVALID_INPUT','workflow_id required for '+operation);if(operation==='GET_EXECUTION_INFO'&&!executionId)return fail('INVALID_INPUT','execution_id required');if(isWrite&&requireApproval&&!approvalToken)return fail('APPROVAL_REQUIRED','approval_token required for '+operation,409);if(isWrite&&!apiKeyPresent&&operation!=='TEST_WORKFLOW')return fail('INTEGRATION_UNAVAILABLE','n8n API key not configured (WF09_N8N_API_KEY)',503);let uploadedJson=null;if(operation==='COMPARE_LIVE_VS_UPLOADED'||operation==='UPDATE_LIVE_WORKFLOW'){if(b.uploaded_workflow_json===undefined||b.uploaded_workflow_json===null)return fail('INVALID_INPUT','uploaded_workflow_json required for '+operation);let up;try{up=typeof b.uploaded_workflow_json==='string'?b.uploaded_workflow_json:JSON.stringify(b.uploaded_workflow_json);}catch(e){return fail('INVALID_INPUT','uploaded_workflow_json not serializable');}const byteLen=(s)=>{try{return new TextEncoder().encode(s).length}catch(e){return s.length*2}};if(byteLen(up)>200000)return fail('INVALID_INPUT','uploaded_workflow_json exceeds 200000 bytes');let parsedUp=null;try{parsedUp=JSON.parse(up);}catch(e){return fail('INVALID_JSON','uploaded_workflow_json is not valid JSON');}if(!parsedUp||typeof parsedUp!=='object'||Array.isArray(parsedUp))return fail('INVALID_INPUT','uploaded_workflow_json root must be object');if(!Array.isArray(parsedUp.nodes)||parsedUp.nodes.length===0)return fail('INVALID_INPUT','uploaded_workflow_json.nodes must be a non-empty array');if(!parsedUp.connections||typeof parsedUp.connections!=='object')return fail('INVALID_INPUT','uploaded_workflow_json.connections required');uploadedJson=up;}let requestedChanges=null;if(operation==='UPDATE_LIVE_WORKFLOW'){if(typeof b.requested_changes!=='string'||!b.requested_changes.trim())return fail('INVALID_INPUT','requested_changes required for UPDATE_LIVE_WORKFLOW');if(b.requested_changes.length>10000)return fail('INVALID_INPUT','requested_changes exceeds 10000 chars');requestedChanges=b.requested_changes.trim();}return [{json:{ok:true,request_id:requestId,user_id:userId,workspace_id:workspaceId,project_id:projectId,conversation_id:conversationId,operation,is_write:isWrite,workflow_id:workflowId,execution_id:executionId,approval_token:approvalToken,uploaded_workflow_json:uploadedJson,requested_changes:requestedChanges,require_approval:requireApproval,base_url:baseUrlEnv,test_endpoint:testEndpoint,token_check_status:tokenCheckStatus,_auth_identity_source:envUserId?'env-pinned':'body-trusted-dev'}}];"
+      },
+      "id": "c8064908-6a57-41a8-b2cd-6742d361e87d",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1232
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f97d82f2-5b13-4496-855e-4a287a312d43",
+      "name": "Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        1232
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$input.first()?.json??{};const rid=a.request_id??null;const auditId='N8NOP-'+(rid||('rejected-'+Date.now()));const msg=a.message||'Invalid request';const VALID=['INVALID_INPUT','INVALID_JSON','UNAUTHORIZED','FORBIDDEN','NOT_FOUND','MODEL_ERROR','PROVIDER_RATE_LIMIT','PROVIDER_TIMEOUT','VALIDATION_FAILED','TEST_FAILED','APPROVAL_REQUIRED','VERSION_CONFLICT','INTEGRATION_UNAVAILABLE','INTERNAL_ERROR'];const cat=VALID.includes(a.category||'')?a.category:'INVALID_INPUT';const httpMap={INVALID_INPUT:400,INVALID_JSON:400,UNAUTHORIZED:401,FORBIDDEN:403,NOT_FOUND:404,APPROVAL_REQUIRED:409,VERSION_CONFLICT:409,VALIDATION_FAILED:422,TEST_FAILED:422,PROVIDER_RATE_LIMIT:429,PROVIDER_TIMEOUT:504,MODEL_ERROR:502,INTEGRATION_UNAVAILABLE:503,INTERNAL_ERROR:500};let httpStatus=(typeof a.http_status==='number')?a.http_status:(httpMap[cat]||400);if(httpStatus<100||httpStatus>599)httpStatus=httpMap[cat]||400;const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);const result={audit_id:auditId,audit_status:'failed',operation:null,workflow_id:null,workflow_name:null,n8n_version:null,fingerprint_before:null,fingerprint_after:null,diff:null,list:null,workflow:null,execution:null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:['No n8n operation performed due to input validation failure.'],recommended_fixes:[{finding_id:'V001',fix:'Address: '+msg}]};return [{json:{request_id:rid,task_id:null,status:'failed',_http_status:httpStatus,result,errors:[{category:cat,message:msg}],warnings:[],verification:result.verification_summary,_persist:{project_id:isUuid(a.project_id)?a.project_id:null,user_id:isUuid(a.user_id)?a.user_id:null,claimed_user_id:isUuid(a.user_id)?a.user_id:null,workspace_id:isUuid(a.workspace_id)?a.workspace_id:null,conversation_id:isUuid(a.conversation_id)?a.conversation_id:null}}}];"
+      },
+      "id": "de80d6e8-1ff7-4c09-bf72-a0ffb58a702f",
+      "name": "Format Request Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        672
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "integrations",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "keyName": "integration_type",
+              "condition": "eq",
+              "keyValue": "n8n"
+            }
+          ]
+        }
+      },
+      "id": "cf6cb8df-2ac5-4cc7-82e1-e8ce59286e68",
+      "name": "Prefetch Integration Config",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        1152
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "projects",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.project_id || '00000000-0000-0000-0000-000000000000' }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "a4b5c34d-4c62-4611-ad35-0426ba065135",
+      "name": "Prefetch Project Context",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        1152
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "workflow_audits",
+        "limit": 3,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "project_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.project_id || '00000000-0000-0000-0000-000000000000' }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "keyName": "workflow_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workflow_id || '__no_wf__' }}"
+            }
+          ]
+        }
+      },
+      "id": "4d61f2ab-d666-4285-85d6-d5c75084bda8",
+      "name": "Prefetch Prior Audit",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        1152
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseCfg(c){if(!c)return {};if(typeof c==='object'&&!Array.isArray(c))return c;if(typeof c==='string'){try{const p=JSON.parse(c);if(p&&typeof p==='object'&&!Array.isArray(p))return p;}catch(e){}}return {};}\nconst meta=$('Validate Request').first().json;\nconst intRows=$('Prefetch Integration Config').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst projRows=$('Prefetch Project Context').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst auditRows=$('Prefetch Prior Audit').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst integration=intRows.length>0?intRows[0]:null;\nconst project=projRows.length>0?projRows[0]:null;\nconst priorAudit=auditRows.length>0?auditRows[0]:null;\nconst intStatus=integration?String(integration.status||'').toLowerCase():'missing';\nconst WRITABLE=['connected','active','enabled','ready','operational'];\nconst intCfg=parseCfg(integration&&integration.config);\nlet effectiveBaseUrl=null;\nif(typeof intCfg.base_url==='string'&&intCfg.base_url.trim()){effectiveBaseUrl=intCfg.base_url.trim().replace(/\\/+$/,'');}\nelse if(meta.base_url&&typeof meta.base_url==='string'){effectiveBaseUrl=meta.base_url.trim().replace(/\\/+$/,'');}\nlet effectiveApiPath=(typeof intCfg.api_path==='string'&&intCfg.api_path.trim())?intCfg.api_path.trim():'/api/v1';\nif(!effectiveApiPath.startsWith('/'))effectiveApiPath='/'+effectiveApiPath;\neffectiveApiPath=effectiveApiPath.replace(/\\/+$/,'');\nif(effectiveApiPath==='')effectiveApiPath='/api/v1';\nconst effectiveAuthHeader=(typeof intCfg.auth_header_name==='string'&&intCfg.auth_header_name.trim())?intCfg.auth_header_name.trim():'X-N8N-API-KEY';\nconst effectiveTimeout=(typeof intCfg.timeout_ms==='number'&&intCfg.timeout_ms>0)?intCfg.timeout_ms:30000;\nif(!effectiveBaseUrl){return [{json:{...meta,_integration:integration,_project:project,_prior_audit:priorAudit,_context_error:true,_context_error_category:'INTEGRATION_UNAVAILABLE',_context_error_message:'No n8n base_url resolved (integration.config.base_url and WF09_N8N_BASE_URL both unset)'}}];}\nif(meta.is_write&&!WRITABLE.includes(intStatus)){return [{json:{...meta,_integration:integration,_project:project,_prior_audit:priorAudit,_context_error:true,_context_error_category:'INTEGRATION_UNAVAILABLE',_context_error_message:'Integration status is '+intStatus+'; must be one of: '+WRITABLE.join('/')}}];}\nreturn [{json:{...meta,_integration:integration,_project:project,_prior_audit:priorAudit,_context_error:false,_effective_base_url:effectiveBaseUrl,_effective_api_path:effectiveApiPath,_effective_auth_header:effectiveAuthHeader,_effective_timeout:effectiveTimeout}}];"
+      },
+      "id": "40f95da0-4af8-474d-883c-985c39fb04d3",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        1152
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "no-ctx-err",
+              "leftValue": "={{ $json._context_error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "31a1c30a-c6f5-4a0b-9b44-142e6550bf14",
+      "name": "Context OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        1152
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;const cat=x._context_error_category||'INTERNAL_ERROR';const msg=x._context_error_message||'Context error';const res={audit_id:x.request_id?('N8NOP-'+x.request_id):null,audit_status:'failed',operation:null,workflow_id:null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:[msg],recommended_fixes:[]};return [{json:{ok:false,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'failed',_http_status:503,result:res,errors:[{category:cat,message:msg}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,claimed_user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "88fb9c53-f163-4280-8bbc-2e2d2815f157",
+      "name": "Context Error Wrapper",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6048,
+        1952
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "LIST_LIVE_WORKFLOWS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "LIST_LIVE_WORKFLOWS"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "GET_LIVE_WORKFLOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "GET_LIVE_WORKFLOW"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "GET_EXECUTION_INFO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "GET_EXECUTION_INFO"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "COMPARE_LIVE_VS_UPLOADED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "COMPARE_LIVE_VS_UPLOADED"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r5",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "UPDATE_LIVE_WORKFLOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "UPDATE_LIVE_WORKFLOW"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r6",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "ACTIVATE_WORKFLOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ACTIVATE_WORKFLOW"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r7",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "DEACTIVATE_WORKFLOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "DEACTIVATE_WORKFLOW"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r8",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "TEST_WORKFLOW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "TEST_WORKFLOW"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "d4706e07-5ffa-4eb3-a501-d28b292a6370",
+      "name": "Operation Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1792,
+        352
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.WF09_N8N_BASE_URL }}/api/v1/workflows",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "=X-N8N-API-KEY",
+              "value": "={{ $env.WF09_N8N_API_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "4718346f-51b9-49b8-b02e-ebf436f7851b",
+      "name": "Call n8n - List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        0
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json._effective_base_url }}{{ $json._effective_api_path }}/workflows/{{ $json.workflow_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json._effective_auth_header || 'X-N8N-API-KEY' }}",
+              "value": "={{ $env.WF09_N8N_API_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "6daf3b76-fd2e-47ff-a7de-739e74884528",
+      "name": "Call n8n - Get Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        192
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json._effective_base_url }}{{ $json._effective_api_path }}/executions/{{ $json.execution_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json._effective_auth_header || 'X-N8N-API-KEY' }}",
+              "value": "={{ $env.WF09_N8N_API_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "eca57c55-daa0-4ce8-a7a6-4ac9c4670c3f",
+      "name": "Call n8n - Get Execution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2016,
+        384
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json._effective_base_url }}{{ $json._effective_api_path }}/workflows/{{ $json.workflow_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json._effective_auth_header || 'X-N8N-API-KEY' }}",
+              "value": "={{ $env.WF09_N8N_API_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "beaca95b-6002-490d-bfaf-3dda05594fdd",
+      "name": "Call n8n - Compare Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5600,
+        528
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function canon(o){if(Array.isArray(o))return o.map(canon);if(o&&typeof o==='object'){const s={};for(const k of Object.keys(o).sort())s[k]=canon(o[k]);return s}return o}\nconst x=$('Merge Context').first().json;const resp=$input.first()?.json||{};const body=resp.body??resp;let liveWf=null;if(resp.statusCode&&resp.statusCode>=200&&resp.statusCode<300&&body&&typeof body==='object'&&!Array.isArray(body)){liveWf=body;}const uploadedStr=x.uploaded_workflow_json;let up=null;try{up=JSON.parse(uploadedStr);}catch(e){}const diff={equal:false,nodes_added:[],nodes_removed:[],nodes_modified:[],connections_added:0,connections_removed:0,note:null};if(!liveWf){diff.note='Live workflow not retrieved (HTTP status '+((resp&&resp.statusCode)||'unknown')+')';}else if(!up||typeof up!=='object'){diff.note='Uploaded workflow not parseable';}else{const ln=new Map();for(const n of (liveWf.nodes||[])){if(n&&typeof n.name==='string')ln.set(n.name,n);}const un=new Map();for(const n of (up.nodes||[])){if(n&&typeof n.name==='string')un.set(n.name,n);}for(const name of un.keys()){if(!ln.has(name))diff.nodes_added.push(name);}for(const name of ln.keys()){if(!un.has(name))diff.nodes_removed.push(name);}for(const [name,unNode] of un.entries()){const lnNode=ln.get(name);if(!lnNode)continue;const changes=[];if(JSON.stringify(canon(lnNode.parameters||{}))!==JSON.stringify(canon(unNode.parameters||{})))changes.push('parameters');if(lnNode.type!==unNode.type)changes.push('type');if(lnNode.typeVersion!==unNode.typeVersion)changes.push('typeVersion');if(changes.length>0)diff.nodes_modified.push({node_name:name,fields_changed:changes});}function ce(wf){let c=0;if(!wf||!wf.connections)return 0;for(const g of Object.values(wf.connections)){if(!g)continue;for(const outs of Object.values(g)){if(!Array.isArray(outs))continue;for(const o of outs)if(Array.isArray(o))c+=o.length;}}return c;}const le=ce(liveWf),ue=ce(up);diff.connections_added=Math.max(0,ue-le);diff.connections_removed=Math.max(0,le-ue);diff.equal=(diff.nodes_added.length===0&&diff.nodes_removed.length===0&&diff.nodes_modified.length===0&&diff.connections_added===0&&diff.connections_removed===0);}\nconst errors=[];let httpStatus=200;\nif(resp.statusCode===401){errors.push({category:'UNAUTHORIZED',message:'n8n API returned 401'});httpStatus=401;}\nelse if(resp.statusCode===403){errors.push({category:'FORBIDDEN',message:'n8n API returned 403'});httpStatus=403;}\nelse if(resp.statusCode===404){errors.push({category:'NOT_FOUND',message:'n8n API returned 404'});httpStatus=404;}\nelse if(resp.statusCode===429){errors.push({category:'PROVIDER_RATE_LIMIT',message:'n8n API rate limit'});httpStatus=429;}\nelse if(resp.statusCode&&resp.statusCode>=500){errors.push({category:'INTERNAL_ERROR',message:'n8n server error '+resp.statusCode});httpStatus=resp.statusCode;}\nconst isHardFail=errors.length>0&&['UNAUTHORIZED','FORBIDDEN','NOT_FOUND','INTERNAL_ERROR'].includes(errors[0].category);\nconst ok=!!liveWf;\nconst status=ok?'completed':(isHardFail?'failed':'partial');\nconst finalHttpStatus=ok?200:httpStatus;\nconst srcType=ok?'live':'manual';\nconst auditId='N8NOP-'+x.request_id;\nconst warnings=ok?[]:[{message:'Live workflow not retrieved (HTTP '+((resp&&resp.statusCode)||'unknown')+')'}];\nconst verification={status:ok?'verified':'not_verified',evidence:[ok?'n8n HTTP '+(resp.statusCode||'?')+' returned workflow':'live fetch failed'],live_verified:ok};\nconst priorRef=x._prior_audit?(x._prior_audit.audit_id||null):null;\nconst result={audit_id:auditId,audit_status:ok?'completed':(status==='failed'?'failed':'partial'),operation:'COMPARE_LIVE_VS_UPLOADED',workflow_id:x.workflow_id||null,workflow_name:(liveWf&&liveWf.name)||null,diff:diff,live_workflow_present:!!liveWf,uploaded_workflow_present:!!up,node_count:(liveWf&&Array.isArray(liveWf.nodes))?liveWf.nodes.length:0,source_type:srcType,prior_audit_reference:priorRef,verification_summary:verification,limitations:['Compare based on node name set + param/type diff; not deep semantic.'],recommended_fixes:[]};\nreturn [{json:{...x,status,_http_status:finalHttpStatus,source_type:srcType,errors,warnings,verification,result}}];"
+      },
+      "id": "5f1a2ac3-5588-41c3-a071-e3bc994c7f1b",
+      "name": "Compare Analyze",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5824,
+        528
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;const resp=$input.first()?.json||{};const body=resp.body??resp;const op=x.operation;let data=null;let validShape=false;if(resp.statusCode&&resp.statusCode>=200&&resp.statusCode<300){data=body;if(op==='LIST_LIVE_WORKFLOWS'){validShape=Array.isArray(data)||(data&&Array.isArray(data.data));}else if(op==='GET_LIVE_WORKFLOW'){validShape=!!(data&&typeof data==='object'&&!Array.isArray(data)&&(data.id||data.name));}else if(op==='GET_EXECUTION_INFO'){validShape=!!(data&&typeof data==='object'&&!Array.isArray(data)&&(data.id||data.workflowId));}}const ok=validShape;const errors=[];let httpStatus=200;if(resp.statusCode===401){errors.push({category:'UNAUTHORIZED',message:'n8n API returned 401'});httpStatus=401;}else if(resp.statusCode===403){errors.push({category:'FORBIDDEN',message:'n8n API returned 403'});httpStatus=403;}else if(resp.statusCode===404){errors.push({category:'NOT_FOUND',message:'n8n API returned 404'});httpStatus=404;}else if(resp.statusCode===429){errors.push({category:'PROVIDER_RATE_LIMIT',message:'n8n API rate limit'});httpStatus=429;}else if(resp.statusCode&&resp.statusCode>=500){errors.push({category:'INTERNAL_ERROR',message:'n8n server error '+resp.statusCode});httpStatus=resp.statusCode;}else if(!ok){errors.push({category:'VALIDATION_FAILED',message:'n8n response body shape unexpected'});httpStatus=resp.statusCode||200;}const isHardFail=errors.length>0&&['UNAUTHORIZED','FORBIDDEN','NOT_FOUND','INTERNAL_ERROR'].includes(errors[0].category);const status=ok?'completed':(isHardFail?'failed':'partial');const finalHttpStatus=ok?200:httpStatus;let listType='unknown';if(op==='LIST_LIVE_WORKFLOWS')listType='list';else if(op==='GET_LIVE_WORKFLOW')listType='workflow';else if(op==='GET_EXECUTION_INFO')listType='execution';const warnings=ok?[]:[{message:'n8n HTTP '+(resp.statusCode||'?')+' returned but body shape unexpected'}];const srcType=ok?'live':'manual';const auditId='N8NOP-'+x.request_id;let nodeCount=0;if(listType==='workflow'&&data&&Array.isArray(data.nodes))nodeCount=data.nodes.length;else if(listType==='list'){const arr=Array.isArray(data)?data:(data&&Array.isArray(data.data)?data.data:[]);nodeCount=arr.length;}const verification={status:ok?'verified':'not_verified',evidence:[ok?'n8n HTTP '+(resp.statusCode||'?')+' valid shape':'shape invalid'],live_verified:ok};const result={audit_id:auditId,audit_status:ok?'completed':(status==='failed'?'failed':'partial'),operation:op,workflow_id:x.workflow_id||null,execution_id:x.execution_id||null,read_data:data,read_result_type:listType,node_count:nodeCount,source_type:srcType,verification_summary:verification,limitations:['Read result shape-validated, not semantically analyzed by WF-09.'],recommended_fixes:[]};return [{json:{...x,status,_http_status:finalHttpStatus,source_type:srcType,warnings,errors,verification,result}}];"
+      },
+      "id": "0782dde6-9056-47b1-b852-456f5a62dcc0",
+      "name": "Read Analyze",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        160
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;const op=x.operation;if(!x.workflow_id)return [{json:{...x,_preflight_error:true,_preflight_category:'INVALID_INPUT',_preflight_message:'workflow_id missing'}}];if(x.require_approval&&!x.approval_token)return [{json:{...x,_preflight_error:true,_preflight_category:'APPROVAL_REQUIRED',_preflight_message:'approval_token required'}}];if(op==='TEST_WORKFLOW'&&!x.test_endpoint)return [{json:{...x,_preflight_error:true,_preflight_category:'INTEGRATION_UNAVAILABLE',_preflight_message:'WF09_TEST_ENDPOINT not configured; TEST_WORKFLOW not available'}}];if(op==='UPDATE_LIVE_WORKFLOW'&&!x.uploaded_workflow_json)return [{json:{...x,_preflight_error:true,_preflight_category:'INVALID_INPUT',_preflight_message:'uploaded_workflow_json required for UPDATE_LIVE_WORKFLOW'}}];return [{json:{...x,_preflight_error:false}}];"
+      },
+      "id": "b3923956-c8d9-46be-9381-acdafebb9c18",
+      "name": "Preflight Write Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        1264
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._preflight_error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b38efceb-8766-4366-8812-2544bc8dafad",
+      "name": "Preflight OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        1264
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Preflight Write Check').first().json;const cat=x._preflight_category||'VALIDATION_FAILED';const msg=x._preflight_message||'Preflight failed';const httpMap={INVALID_INPUT:400,APPROVAL_REQUIRED:409,INTEGRATION_UNAVAILABLE:503,VALIDATION_FAILED:422};const httpStatus=httpMap[cat]||422;const res={audit_id:x.request_id?('N8NOP-'+x.request_id):null,audit_status:'failed',operation:x.operation||null,workflow_id:x.workflow_id||null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:[msg],recommended_fixes:[]};return [{json:{ok:false,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'failed',_http_status:httpStatus,result:res,errors:[{category:cat,message:msg}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,claimed_user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "8a58b4da-6086-4aee-97df-6a30dfe8f9b7",
+      "name": "Preflight Error Wrapper",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6048,
+        1760
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "approval_records",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "resource_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Preflight Write Check').first().json.workflow_id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "approved"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Preflight Write Check').first().json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "b4d9242f-aff9-492b-b276-e3c4024542f2",
+      "name": "Approval Lookup",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2464,
+        1168
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseMd(m){if(!m)return {};if(typeof m==='object'&&!Array.isArray(m))return m;if(typeof m==='string'){try{const p=JSON.parse(m);if(p&&typeof p==='object'&&!Array.isArray(p))return p;}catch(e){}}return {};}\nconst x=$('Preflight Write Check').first().json;\nconst rows=$input.all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nif(!x.require_approval){return [{json:{...x,_approval_ok:true,_approval_row:null,_approval_skipped:true}}];}\nconst token=x.approval_token;\nif(!token){return [{json:{...x,_approval_ok:false,_approval_row:null,_approval_reason:'token missing'}}];}\nlet tokenHash=null;\ntry{const c=require('crypto');if(c&&typeof c.createHash==='function'){tokenHash=c.createHash('sha256').update(token).digest('hex');}}catch(e){}\nif(!tokenHash){return [{json:{...x,_approval_ok:false,_approval_row:null,_approval_reason:'crypto unavailable'}}];}\nconst opNorm=String(x.operation||'').toUpperCase();\nconst opAliasMap={'UPDATE_LIVE_WORKFLOW':['UPDATE_LIVE_WORKFLOW','N8N_UPDATE_LIVE_WORKFLOW','APPLY_UPDATE'],'ACTIVATE_WORKFLOW':['ACTIVATE_WORKFLOW','N8N_ACTIVATE_WORKFLOW','ACTIVATE_LIVE_WORKFLOW'],'DEACTIVATE_WORKFLOW':['DEACTIVATE_WORKFLOW','N8N_DEACTIVATE_WORKFLOW','DEACTIVATE_LIVE_WORKFLOW'],'TEST_WORKFLOW':['TEST_WORKFLOW','N8N_TEST_WORKFLOW']};\nconst allowedActions=new Set(opAliasMap[opNorm]||[opNorm]);\nconst now=Date.now();\nconst candidates=rows.filter(r=>{\n  if(!r||!r.token_hash)return false;\n  if(r.token_hash!==tokenHash)return false;\n  if(!r.user_id)return false;\n  if(r.user_id!==x.user_id)return false;\n  if(!r.workspace_id)return false;\n  if(r.workspace_id!==x.workspace_id)return false;\n  const at=String(r.action_type||'').toUpperCase();\n  if(!at)return false;\n  if(!allowedActions.has(at))return false;\n  if(!r.expires_at)return false;\n  const exp=new Date(r.expires_at).getTime();\n  if(!isFinite(exp)||exp<=now)return false;\n  if(r.resource_id&&r.resource_id!==x.workflow_id)return false;\n  const md=parseMd(r.metadata);\n  if(md.consumed_at)return false;\n  return true;\n});\nif(candidates.length===0){return [{json:{...x,_approval_ok:false,_approval_row:null,_approval_reason:'no valid non-consumed approval (token/user/workspace/action/expiry/consumption mismatch)'}}];}\nconst match=candidates[0];\nmatch.metadata=parseMd(match.metadata);\nreturn [{json:{...x,_approval_ok:true,_approval_row:match,_token_hash:tokenHash,_approval_action_type:match.action_type||null}}];"
+      },
+      "id": "f9111d39-dc37-47f5-91a7-a98534aca8ad",
+      "name": "Verify Approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        1168
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._approval_ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "125af11d-663d-4bf3-9e79-c15f1aa23d07",
+      "name": "Approval OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        1168
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let x=null;\ntry{x=$('Verify Approval').first()?.json;}catch(e){}\nif(!x){x={request_id:null,_approval_reason:'unknown',user_id:null,workspace_id:null,project_id:null,conversation_id:null};}\nconst reason=x._approval_reason||'approval check failed';\nconst cat='APPROVAL_REQUIRED';\nconst msg='Approval check failed: '+reason;\nconst res={audit_id:x.request_id?('N8NOP-'+x.request_id):null,audit_status:'failed',operation:x.operation||null,workflow_id:x.workflow_id||null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:[msg],recommended_fixes:[]};\nreturn [{json:{ok:false,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'failed',_http_status:409,result:res,errors:[{category:cat,message:msg}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,claimed_user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "081ebbe4-b5ba-4967-a7bb-7c0ce1647d02",
+      "name": "Approval Error Wrapper",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6048,
+        1568
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Verify Approval').first().json._effective_base_url }}{{ $('Verify Approval').first().json._effective_api_path }}/workflows/{{ $('Verify Approval').first().json.workflow_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{ $('Verify Approval').first().json._effective_auth_header || 'X-N8N-API-KEY' }}",
+              "value": "={{ $env.WF09_N8N_API_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $('Verify Approval').first().json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "551bedce-45fa-41c0-9bf3-345604abeae0",
+      "name": "Fetch Current for Write",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3136,
+        1072
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function canon(o){if(Array.isArray(o))return o.map(canon);if(o&&typeof o==='object'){const s={};for(const k of Object.keys(o).sort())s[k]=canon(o[k]);return s}return o}\nfunction parseMd(m){if(!m)return {};if(typeof m==='object'&&!Array.isArray(m))return m;if(typeof m==='string'){try{const p=JSON.parse(m);if(p&&typeof p==='object'&&!Array.isArray(p))return p;}catch(e){}}return {};}\nconst x=$('Verify Approval').first().json;const resp=$input.first()?.json||{};const body=resp.body??resp;let current=null;if(resp.statusCode&&resp.statusCode>=200&&resp.statusCode<300&&body&&typeof body==='object'&&!Array.isArray(body)){current=body;}let fingerprint=null;try{const c=require('crypto');if(c&&typeof c.createHash==='function'&&current){fingerprint=c.createHash('sha256').update(JSON.stringify(canon(current))).digest('hex');}}catch(e){}const row=x._approval_row||null;let approval_still_valid=true;let reason=null;if(x.require_approval&&row){if(row.resource_id&&row.resource_id!==x.workflow_id){approval_still_valid=false;reason='approval resource_id mismatch';}if(row.status&&row.status!=='approved'){approval_still_valid=false;reason='approval status not approved';}if(row.workspace_id&&x.workspace_id&&row.workspace_id!==x.workspace_id){approval_still_valid=false;reason='approval workspace mismatch';}const md=parseMd(row.metadata);const priorFp=md.fingerprint_at_approval_time||null;if(!priorFp){approval_still_valid=false;reason='TOCTOU: approval metadata missing fingerprint_at_approval_time (cannot confirm no drift)';}else if(fingerprint&&priorFp!==fingerprint){approval_still_valid=false;reason='TOCTOU: workflow fingerprint changed since approval ('+priorFp.slice(0,12)+'→'+fingerprint.slice(0,12)+')';}}return [{json:{...x,_live_current:current,_fingerprint_before:fingerprint,_current_fetch_ok:!!current,_approval_still_valid:approval_still_valid,_approval_invalid_reason:reason,warnings:x.warnings||[]}}];"
+      },
+      "id": "1ba91de6-ea9e-493d-94f3-0cec74d9af0f",
+      "name": "Fingerprint + Continue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        1072
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Fingerprint + Continue').first().json;if(!x._current_fetch_ok){return [{json:{...x,_prepare_error:true,_prepare_error_category:'INTEGRATION_UNAVAILABLE',_prepare_error_message:'Could not fetch current workflow state from n8n'}}];}if(!x._approval_still_valid){return [{json:{...x,_prepare_error:true,_prepare_error_category:'VERSION_CONFLICT',_prepare_error_message:x._approval_invalid_reason||'Approval no longer valid'}}];}const op=x.operation;const base=x._effective_base_url;const apiPath=x._effective_api_path;const id=x.workflow_id;let method='GET';let url=base+apiPath+'/workflows/'+id;let payload=null;if(op==='UPDATE_LIVE_WORKFLOW'){method='PUT';let body=null;try{body=JSON.parse(x.uploaded_workflow_json);}catch(e){}if(!body||typeof body!=='object'){return [{json:{...x,_prepare_error:true,_prepare_error_category:'INVALID_JSON',_prepare_error_message:'uploaded_workflow_json not parseable as object'}}];}const live=x._live_current||{};if(body.name===undefined)body.name=live.name||('Workflow '+id);if(body.active===undefined)body.active=live.active===true;if(body.tags===undefined)body.tags=Array.isArray(live.tags)?live.tags:[];if(body.settings===undefined)body.settings=(live.settings&&typeof live.settings==='object')?live.settings:{};if(body.staticData===undefined)body.staticData=live.staticData!==undefined?live.staticData:null;payload=body;}else if(op==='ACTIVATE_WORKFLOW'){method='POST';url=base+apiPath+'/workflows/'+id+'/activate';}else if(op==='DEACTIVATE_WORKFLOW'){method='POST';url=base+apiPath+'/workflows/'+id+'/deactivate';}else if(op==='TEST_WORKFLOW'){method='POST';payload={workflow_id:id,test_payload:{}};}return [{json:{...x,_prepare_error:false,_http_method:method,_http_url:url,_http_payload:payload}}];"
+      },
+      "id": "6dc0d474-1b88-4c11-9ac3-938e827f11c1",
+      "name": "Prepare Write Call",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        1072
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "prep-ok",
+              "leftValue": "={{ $json._prepare_error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "54b8690c-e440-4a14-98f1-ec354787829c",
+      "name": "Prepare OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3808,
+        1072
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Prepare Write Call').first().json;const cat=x._prepare_error_category||'INTERNAL_ERROR';const msg=x._prepare_error_message||'Prepare failed';const httpMap={INVALID_JSON:400,INVALID_INPUT:400,INTEGRATION_UNAVAILABLE:503,VERSION_CONFLICT:409,APPROVAL_REQUIRED:409,VALIDATION_FAILED:422};const httpStatus=httpMap[cat]||422;const res={audit_id:x.request_id?('N8NOP-'+x.request_id):null,audit_status:'failed',operation:x.operation||null,workflow_id:x.workflow_id||null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:[msg],recommended_fixes:[]};return [{json:{ok:false,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'failed',_http_status:httpStatus,result:res,errors:[{category:cat,message:msg}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,claimed_user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "d7aea62b-5d30-4045-aa93-2b10f8264cea",
+      "name": "Prepare Error Wrapper",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6048,
+        1376
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "need",
+              "leftValue": "={{ $json.require_approval === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8a4590c0-97ea-4a56-9700-607e4ffb1e54",
+      "name": "Consume Required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4032,
+        976
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "approval_records",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Prepare Write Call').first().json._approval_row.id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "approved"
+            },
+            {
+              "keyName": "metadata",
+              "condition": "eq",
+              "keyValue": "={{ JSON.stringify($('Prepare Write Call').first().json._approval_row.metadata || {}) }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ { ...($('Prepare Write Call').first().json._approval_row.metadata || {}), consumed_at: new Date().toISOString(), consumed_by_request: $('Prepare Write Call').first().json.request_id, consumed_by_operation: $('Prepare Write Call').first().json.operation, consume_timing: 'before_write' } }}"
+            }
+          ]
+        }
+      },
+      "id": "66834194-34a3-477d-9e51-2363a9c6c5ed",
+      "name": "Consume Approval",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4256,
+        848
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function extractId(raw){if(!raw)return null;if(Array.isArray(raw)){return (raw[0]&&raw[0].id)?raw[0].id:null;}if(raw.data&&Array.isArray(raw.data)){return (raw.data[0]&&raw.data[0].id)?raw.data[0].id:null;}if(raw.id)return raw.id;if(typeof raw.affected==='number'&&raw.affected>0)return 'affected-'+raw.affected;return null;}\nlet src=null;try{src=$('Prepare Write Call').first().json;}catch(e){}\nif(!src){return [{json:{_fatal:true,_fatal_msg:'Prepare Write Call data missing',request_id:null,_consume_ok:false,_consume_conflict:true,_consume_conflict_reason:'no prep data'}}];}\nlet consumeRan=false;try{consumeRan=$('Consume Approval').isExecuted===true;}catch(e){}\nlet consumeRaw=null;let consumeOk=false;let consumeSkipped=false;\nif(src.require_approval===true){if(!consumeRan){consumeOk=false;}else{try{consumeRaw=$('Consume Approval').first()?.json||null;}catch(e){}const id=extractId(consumeRaw);consumeOk=!!id;}}\nelse{consumeSkipped=true;consumeOk=true;}\nreturn [{json:{...src,_consume_ok:consumeOk,_consume_skipped:consumeSkipped,_consume_response:consumeRaw,_consume_conflict:!consumeOk,_consume_conflict_reason:consumeOk?'':(consumeSkipped?'':'CAS filter rejected — approval already consumed or metadata changed (race lost)')}}];"
+      },
+      "id": "4ce67401-b9a5-47dd-8d76-488f0be1d67e",
+      "name": "Merge Consume Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4480,
+        976
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._consume_ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "411c832f-1475-4ea7-966d-6f3298741f54",
+      "name": "Consume Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4704,
+        976
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Consume Result').first().json;const reason=x._consume_conflict_reason||'consume conflict';const cat='VERSION_CONFLICT';const msg='Approval consumption conflict: '+reason;const res={audit_id:x.request_id?('N8NOP-'+x.request_id):null,audit_status:'failed',operation:x.operation||null,workflow_id:x.workflow_id||null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:[msg],recommended_fixes:[]};return [{json:{ok:false,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'failed',_http_status:409,_consume_conflict:true,_consume_conflict_reason:reason,result:res,errors:[{category:cat,message:msg}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,claimed_user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "434eb074-1ab1-4885-b488-4580c71b59f5",
+      "name": "Consume Conflict Marker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6048,
+        1184
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-test",
+              "leftValue": "={{ $json.operation === 'TEST_WORKFLOW' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "34600727-6de1-4212-bd5e-f10624df9408",
+      "name": "Is Test Op?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4928,
+        912
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.test_endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({workflow_id: $json.workflow_id, test_payload: {}}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "e451069b-ea5d-4845-8ee6-50bc122e2fb4",
+      "name": "Call Test Endpoint",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5376,
+        848
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "={{ $json._http_method }}",
+        "url": "={{ $json._http_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{ $json._effective_auth_header || 'X-N8N-API-KEY' }}",
+              "value": "={{ $env.WF09_N8N_API_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json._http_payload || {}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "3d21e37a-cf75-4679-9863-f5b64a8903fc",
+      "name": "Call n8n - Write",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5152,
+        1040
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Merge Consume Result').first().json._effective_base_url }}{{ $('Merge Consume Result').first().json._effective_api_path }}/workflows/{{ $('Merge Consume Result').first().json.workflow_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{ $('Merge Consume Result').first().json._effective_auth_header || 'X-N8N-API-KEY' }}",
+              "value": "={{ $env.WF09_N8N_API_KEY }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $('Merge Consume Result').first().json._effective_timeout || 30000 }}"
+        }
+      },
+      "id": "22c2da4c-a7f8-4fc1-8c0b-8e5ec7a13492",
+      "name": "Fetch Result State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5376,
+        1040
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function canon(o){if(Array.isArray(o))return o.map(canon);if(o&&typeof o==='object'){const s={};for(const k of Object.keys(o).sort())s[k]=canon(o[k]);return s}return o}\nconst x=$('Merge Consume Result').first().json;\nlet writeResp=null;\ntry{if($('Call n8n - Write').isExecuted)writeResp=$('Call n8n - Write').first()?.json||{};}catch(e){}\ntry{if(!writeResp&&$('Call Test Endpoint').isExecuted)writeResp=$('Call Test Endpoint').first()?.json||{};}catch(e){}\nwriteResp=writeResp||{};\nlet resultResp=null;\ntry{if($('Fetch Result State').isExecuted)resultResp=$('Fetch Result State').first()?.json||{};}catch(e){}\nresultResp=resultResp||{};\nconst writeOk=writeResp.statusCode&&writeResp.statusCode>=200&&writeResp.statusCode<300;\nconst resultBody=resultResp.body??resultResp;\nconst resultOk=resultResp.statusCode&&resultResp.statusCode>=200&&resultResp.statusCode<300;\nlet fingerprintAfter=null;try{const c=require('crypto');if(c&&typeof c.createHash==='function'&&resultOk&&resultBody){fingerprintAfter=c.createHash('sha256').update(JSON.stringify(canon(resultBody))).digest('hex');}}catch(e){}\nlet verification='not_verified';\nconst evidence=[];\nconst op=x.operation;\nif(op==='TEST_WORKFLOW'){if(writeOk){evidence.push('n8n test endpoint returned HTTP '+writeResp.statusCode);}else{evidence.push('n8n test endpoint returned HTTP '+(writeResp.statusCode||'unknown'));}}\nelse{if(writeOk){evidence.push('n8n write API returned HTTP '+writeResp.statusCode);}else{evidence.push('n8n write API returned HTTP '+(writeResp.statusCode||'unknown'));}if(resultOk){evidence.push('n8n state fetch returned HTTP '+resultResp.statusCode);}}\nlet semantic_ok=false;let semantic_reason=null;\nif(op==='TEST_WORKFLOW'){\n  if(writeOk){\n    const tb=writeResp.body??writeResp;\n    const checkBool=(obj)=>{if(!obj||typeof obj!=='object')return null;const boolKeys=['passed','success','ok'];for(const k of boolKeys){if(typeof obj[k]==='boolean')return obj[k];}const strKeys=['result','status'];const positives=['pass','passed','success','ok','true','1'];const negatives=['fail','failed','error','false','0'];for(const k of strKeys){if(typeof obj[k]==='string'){const v=obj[k].toLowerCase().trim();if(positives.includes(v))return true;if(negatives.includes(v))return false;}}return null;};\n    let passed=checkBool(tb);\n    if(passed===null&&tb&&tb.data&&typeof tb.data==='object'){passed=checkBool(tb.data);}\n    if(passed===true){semantic_ok=true;verification='verified';evidence.push('Test endpoint reported pass=true');}\n    else if(passed===false){semantic_ok=false;semantic_reason='Test endpoint reported fail';verification='failed';}\n    else{semantic_ok=false;semantic_reason='Test endpoint did not return an explicit pass/fail flag (checked passed/success/ok/result/status)';verification='partial';}\n  }else{verification='failed';semantic_reason='Test endpoint HTTP '+(writeResp.statusCode||'unknown');}\n}\nelse if(writeOk&&resultOk&&resultBody&&typeof resultBody==='object'){\n  if(op==='UPDATE_LIVE_WORKFLOW'){\n    let expected=null;try{expected=JSON.parse(x.uploaded_workflow_json);}catch(e){}\n    if(expected&&typeof expected==='object'){\n      const expNodes=Array.isArray(expected.nodes)?expected.nodes:[];\n      const actNodes=Array.isArray(resultBody.nodes)?resultBody.nodes:[];\n      const expNames=new Set(expNodes.map(n=>n.name));\n      const actNames=new Set(actNodes.map(n=>n.name));\n      const missing=[...expNames].filter(n=>!actNames.has(n));\n      const extra=[...actNames].filter(n=>!expNames.has(n));\n      if(missing.length===0&&extra.length===0){semantic_ok=true;}else{semantic_reason='node name set mismatch (missing='+missing.slice(0,3).join(',')+' extra='+extra.slice(0,3).join(','));}\n    }else{semantic_reason='uploaded_workflow_json unparseable at verify time';}\n  }else if(op==='ACTIVATE_WORKFLOW'){if(resultBody.active===true){semantic_ok=true;}else{semantic_reason='workflow.active is '+resultBody.active+' after activate';}}\n  else if(op==='DEACTIVATE_WORKFLOW'){if(resultBody.active===false){semantic_ok=true;}else{semantic_reason='workflow.active is '+resultBody.active+' after deactivate';}}\n}else if(op!=='TEST_WORKFLOW'){semantic_reason='HTTP not OK';}\nif(op!=='TEST_WORKFLOW'){if(writeOk&&resultOk&&semantic_ok){verification='verified';}else if(writeOk){verification='partial';}else{verification='failed';}}\nconst changes_expected=(op==='UPDATE_LIVE_WORKFLOW');\nlet change_applied=null;if(changes_expected&&resultOk&&resultBody){change_applied=(x._fingerprint_before===fingerprintAfter)?false:true;}\nconst auditId='N8NOP-'+x.request_id;\nconst approval_consumed_flag = (x._consume_ok === true && x._consume_skipped !== true);\nconst verification_summary={status:verification,evidence:evidence,live_verified:writeOk&&((op==='TEST_WORKFLOW')?(verification==='verified'):(resultOk&&semantic_ok)),approval_consumed:approval_consumed_flag,consume_skipped:!!x._consume_skipped,consume_timing:'before_write'};\nconst result={audit_id:auditId,audit_status:(verification==='verified'?'completed':(verification==='partial'?'partial':'failed')),operation:op,workflow_id:x.workflow_id,workflow_name:(resultBody&&resultBody.name)||null,fingerprint_before:x._fingerprint_before,fingerprint_after:fingerprintAfter,change_applied:change_applied,write_status_code:writeResp.statusCode||null,result_status_code:resultResp.statusCode||null,result_state:resultBody||null,semantic_ok:semantic_ok,semantic_reason:semantic_reason,node_count:(resultBody&&Array.isArray(resultBody.nodes))?resultBody.nodes.length:0,source_type:(writeOk?'live':'manual'),verification_summary:verification_summary,limitations:['Live n8n operation executed; semantic verify checks node name set (UPDATE) / active flag (ACT/DEACT) / pass flag (TEST).','Approval consumed before write (replay-safe via CAS metadata filter).'],recommended_fixes:[]};\nlet topStatus='completed';if(verification==='failed')topStatus='failed';else if(verification==='partial')topStatus='partial';\nconst mapCode=(c)=>{if(c===400)return'INVALID_INPUT';if(c===401)return'UNAUTHORIZED';if(c===403)return'FORBIDDEN';if(c===404)return'NOT_FOUND';if(c===409)return'VERSION_CONFLICT';if(c===422)return'VALIDATION_FAILED';if(c===429)return'PROVIDER_RATE_LIMIT';if(c===503)return'INTEGRATION_UNAVAILABLE';if(c===504)return'PROVIDER_TIMEOUT';if(c>=500)return'INTERNAL_ERROR';return'INTERNAL_ERROR';};\nconst wsc=writeResp.statusCode||0;const httpStatus=writeOk?200:(wsc>=400&&wsc<600?wsc:500);\nconst errors=[];if(!writeOk)errors.push({category:mapCode(wsc),message:'n8n write API returned HTTP '+(wsc||'unknown')});\nconst warnings=Array.isArray(x.warnings)?[...x.warnings]:[];if(verification==='partial')warnings.push({message:'Write succeeded but semantic verification failed: '+(semantic_reason||'unknown')});\nreturn [{json:{request_id:x.request_id,task_id:null,status:topStatus,_http_status:httpStatus,result,errors,warnings,verification:verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,claimed_user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id},_approval_row:x._approval_row||null}}];"
+      },
+      "id": "156c7a5c-f726-42e7-8fcc-9e2c3d0fffc6",
+      "name": "Verify Write Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5600,
+        912
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Verify Write Result').first().json;\nreturn [{json:{...x}}];"
+      },
+      "id": "32e787db-2e24-4039-91b9-8094ce4e7eb9",
+      "name": "Pass After Consume",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5824,
+        912
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;\nconst kinds=['Pass After Consume','Verify Write Result','Compare Analyze','Read Analyze','Context Error Wrapper','Preflight Error Wrapper','Approval Error Wrapper','Prepare Error Wrapper'];\nfor(const k of kinds){try{if($(k).isExecuted){const v=$(k).first()?.json;if(v&&v.result){src=v;break;}}}catch(e){}}\nif(src&&!src.result&&src.category){src={request_id:src.request_id,status:'failed',_http_status:src._http_status||500,result:{audit_id:src.request_id?('N8NOP-'+src.request_id):null,audit_status:'failed',operation:null,workflow_id:null,node_count:0,source_type:'manual',verification_summary:src.verification||{status:'not_verified',evidence:[],live_verified:false},limitations:[src.message||'Error'],recommended_fixes:[]},verification:src.verification||{status:'not_verified',evidence:[]},errors:src.errors||[{category:src.category,message:src.message}],task_id:null,warnings:src.warnings||[],_persist:src._persist||{}};}\nif(!src){let rid=null;try{rid=$('Validate Request').first()?.json?.request_id||null;}catch(e){}src={request_id:rid,status:'failed',_http_status:500,result:{audit_id:rid?('N8NOP-'+rid):null,audit_status:'failed',operation:null,workflow_id:null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:['No upstream result produced'],recommended_fixes:[]},verification:{status:'not_verified',evidence:[]},errors:[{category:'INTERNAL_ERROR',message:'No upstream result produced'}],task_id:null,warnings:[],_persist:{}};}\nreturn [{json:src}];"
+      },
+      "id": "33270a68-3891-4601-a5dc-69e2d792af46",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6048,
+        496
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const rid=x.request_id||null;const auditId=(x.result&&x.result.audit_id)||('N8NOP-'+((rid||'unknown')+'-'+Date.now()));const result={...(x.result||{}),audit_id:auditId};if(!result.audit_status){const st=x.status||'failed';result.audit_status=(st==='completed')?'completed':(st==='partial'?'partial':'failed');}if(result.operation===undefined)result.operation=null;if(result.workflow_id===undefined)result.workflow_id=null;if(result.fingerprint_before===undefined)result.fingerprint_before=null;if(result.fingerprint_after===undefined)result.fingerprint_after=null;if(!Array.isArray(result.limitations))result.limitations=[];if(!Array.isArray(result.recommended_fixes))result.recommended_fixes=[];if(!result.verification_summary||typeof result.verification_summary!=='object')result.verification_summary={status:'not_verified',evidence:[],live_verified:false};if(typeof result.node_count!=='number'||!isFinite(result.node_count)){let nc=0;if(result.result_state&&Array.isArray(result.result_state.nodes))nc=result.result_state.nodes.length;else if(result.read_data&&Array.isArray(result.read_data.nodes))nc=result.read_data.nodes.length;result.node_count=nc;}if(!result.source_type){const st=x.status||'failed';result.source_type=(st==='completed'&&result.operation)?'live':'manual';}const httpStatusRaw=(typeof x._http_status==='number'&&x._http_status>0)?x._http_status:((typeof x.http_status==='number'&&x.http_status>0)?x.http_status:null);const httpStatus=(httpStatusRaw!==null)?httpStatusRaw:(x.status==='failed'?500:200);let errors=Array.isArray(x.errors)?[...x.errors]:[];if(errors.length===0&&x.category&&x.message){errors.push({category:x.category,message:x.message});}const warnings=Array.isArray(x.warnings)?[...x.warnings]:[];const p=x._persist||{};return [{json:{request_id:rid,task_id:x.task_id||null,status:x.status||'failed',_http_status:httpStatus,result,errors,warnings,verification:result.verification_summary,_persist:{project_id:p.project_id||null,user_id:p.user_id||null,claimed_user_id:p.claimed_user_id||p.user_id||null,workspace_id:p.workspace_id||null,conversation_id:p.conversation_id||null}}}];"
+      },
+      "id": "ac532d95-c3dc-4304-87b5-961ca787c249",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6272,
+        1344
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_audits",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "request_id",
+              "fieldValue": "={{ $json.request_id || undefined }}"
+            },
+            {
+              "fieldId": "audit_id",
+              "fieldValue": "={{ $json.result.audit_id }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._persist.user_id || undefined }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json._persist.workspace_id || undefined }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json._persist.project_id || undefined }}"
+            },
+            {
+              "fieldId": "workflow_id",
+              "fieldValue": "={{ $json.result.workflow_id || undefined }}"
+            },
+            {
+              "fieldId": "workflow_name",
+              "fieldValue": "={{ $json.result.workflow_name || undefined }}"
+            },
+            {
+              "fieldId": "source_type",
+              "fieldValue": "={{ $json.result.source_type || 'live' }}"
+            },
+            {
+              "fieldId": "analysis_mode",
+              "fieldValue": "n8n_operation"
+            },
+            {
+              "fieldId": "audit_status",
+              "fieldValue": "={{ $json.result.audit_status === 'completed' ? 'completed' : ($json.result.audit_status === 'failed' ? 'failed' : 'partial') }}"
+            },
+            {
+              "fieldId": "workflow_summary",
+              "fieldValue": "={{ 'n8n op ' + ($json.result.operation||'unknown') + ': ' + ($json.status||'unknown') + ' | semantic=' + ($json.result.semantic_ok===true?'ok':($json.result.semantic_ok===false?'fail':'n/a')) }}"
+            },
+            {
+              "fieldId": "node_count",
+              "fieldValue": "={{ $json.result.node_count || 0 }}"
+            },
+            {
+              "fieldId": "recommended_fixes",
+              "fieldValue": "={{ $json.result.recommended_fixes }}"
+            },
+            {
+              "fieldId": "limitations",
+              "fieldValue": "={{ $json.result.limitations }}"
+            },
+            {
+              "fieldId": "verification_summary",
+              "fieldValue": "={{ $json.result.verification_summary }}"
+            }
+          ]
+        }
+      },
+      "id": "e82b02f0-67bf-4e54-bf79-70bc41a84486",
+      "name": "Persist Audit Header",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        6496,
+        1344
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const src=$('Build Result').first().json;const r=src.result||{};const rows=[];if(r.fingerprint_before||r.fingerprint_after){rows.push({finding_id:'F-FP',severity:'info',category:'N8N_FINGERPRINT',description:'before='+String(r.fingerprint_before||'null').slice(0,64)+' after='+String(r.fingerprint_after||'null').slice(0,64)});}if(r.change_applied!==undefined&&r.change_applied!==null){rows.push({finding_id:'F-CHG',severity:r.change_applied?'info':'medium',category:'N8N_CHANGE',description:'change_applied='+String(r.change_applied)});}if(r.semantic_ok!==undefined&&r.semantic_ok!==null){rows.push({finding_id:'F-SEM',severity:r.semantic_ok?'info':'high',category:'N8N_SEMANTIC',description:'semantic_ok='+String(r.semantic_ok)+(r.semantic_reason?' reason='+r.semantic_reason:'')});}if(r.diff){rows.push({finding_id:'F-DIFF',severity:r.diff.equal?'info':'low',category:'N8N_DIFF',description:'equal='+String(r.diff.equal)+' added='+(r.diff.nodes_added||[]).length+' removed='+(r.diff.nodes_removed||[]).length+' modified='+(r.diff.nodes_modified||[]).length});}if(rows.length===0)return [{json:{_empty:true,audit_id:r.audit_id,request_id:src.request_id}}];return rows.map((x,i)=>({json:{audit_id:r.audit_id,finding_id:x.finding_id||('F-'+String(i+1).padStart(3,'0')),severity:x.severity||'info',category:x.category||'N8N_OPERATION',node_id:null,node_name:null,description:String(x.description||'').slice(0,2000),evidence:null,suggested_fix:null,confidence:null,knowledge_status:'Observed',check_type:'n8n_operation'}}));"
+      },
+      "id": "9b3dcc1d-a16e-4ee1-8aa1-3713ec8d4bea",
+      "name": "Split Findings to Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6720,
+        1248
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has",
+              "leftValue": "={{ $json._empty !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f5bc5f55-8b1b-4299-9668-44602b6812ae",
+      "name": "Has Rows?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6944,
+        1248
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_audit_findings",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "audit_id",
+              "fieldValue": "={{ $json.audit_id }}"
+            },
+            {
+              "fieldId": "finding_id",
+              "fieldValue": "={{ $json.finding_id }}"
+            },
+            {
+              "fieldId": "severity",
+              "fieldValue": "={{ $json.severity }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json.category }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json.description }}"
+            },
+            {
+              "fieldId": "evidence",
+              "fieldValue": "={{ $json.evidence || undefined }}"
+            },
+            {
+              "fieldId": "knowledge_status",
+              "fieldValue": "={{ $json.knowledge_status }}"
+            },
+            {
+              "fieldId": "check_type",
+              "fieldValue": "={{ $json.check_type }}"
+            }
+          ]
+        }
+      },
+      "id": "9fd63f41-d2f8-4552-bc99-b35ceaa6919b",
+      "name": "Persist Findings Batch",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        7168,
+        1168
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{if($('Build Result').isExecuted){const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}}catch(e){}if(!src){try{if($('Format Request Error').isExecuted){const b=$('Format Request Error').first()?.json;if(b&&b.result)src=b;}}catch(e){}}if(!src){let rid=null;try{rid=$('Validate Request').first()?.json?.request_id||null;}catch(e){}src={request_id:rid,status:'failed',_http_status:500,result:{audit_id:null,audit_status:'failed',operation:null,workflow_id:null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:[],recommended_fixes:[]},verification:{status:'not_verified',evidence:[]},errors:[{category:'INTERNAL_ERROR',message:'No upstream source'}],task_id:null,warnings:[],_persist:{}};}let headerRow={};try{headerRow=$('Persist Audit Header').first()?.json||{};}catch(e){}const id=headerRow.id||headerRow.audit_id||null;const idOk=typeof id==='string'?id.trim().length>0:(typeof id==='number'&&isFinite(id));const checks=[];if(!idOk)checks.push('no valid header record id');let batchRan=false;try{batchRan=$('Persist Findings Batch').isExecuted===true;}catch(e){}if(batchRan){const rows=$input.all().map(i=>i.json).filter(r=>r&&!r._empty&&(r.id||r.finding_id||r.audit_id));if(rows.length===0)checks.push('findings batch persist unconfirmed');}const ok=idOk&&checks.length===0;const verification={...(src.verification||{}),persisted:ok,persist_record_id:idOk?id:null,persist_checks:checks};const result={...(src.result||{}),verification_summary:verification};const srcStatus=src.status||'failed';const httpStatus=(srcStatus==='failed')?((src._http_status&&src._http_status>=400)?src._http_status:500):(ok?(src._http_status||200):500);return [{json:{...src,status:ok?srcStatus:(srcStatus==='failed'?'failed':'partial'),_http_status:httpStatus,result,verification,errors:ok?(src.errors||[]):[...(src.errors||[]),{category:'INTERNAL_ERROR',message:'Persistence unconfirmed: '+checks.join('; ')}]}}];"
+      },
+      "id": "0e54c941-3863-45b8-a73d-38e85d106f4a",
+      "name": "Verify Persist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7392,
+        1248
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{if($('Build Result').isExecuted){const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}}catch(e){}if(!src){let rid=null;try{rid=$('Validate Request').first()?.json?.request_id||null;}catch(e){}src={request_id:rid,status:'failed',_http_status:500,result:{audit_id:null,audit_status:'failed',operation:null,workflow_id:null,node_count:0,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],live_verified:false},limitations:[],recommended_fixes:[]},verification:{status:'not_verified',evidence:[]},errors:[],task_id:null,warnings:[],_persist:{}};}const raw=$input.first()?.json||{};const rawStr=JSON.stringify(raw).toLowerCase();const isDup=/23505|duplicate key|unique constraint/.test(rawStr);if(isDup){const verification={...(src.verification||{}),persisted:true,idempotent_retry:true,persist_note:'Duplicate audit_id already persisted (idempotent replay)'};const result={...(src.result||{}),audit_status:'completed',verification_summary:verification};return [{json:{...src,status:'completed',_http_status:200,result,verification,warnings:[...(src.warnings||[]),{message:'Idempotent retry — audit_id already exists'}],errors:src.errors||[]}}];}const cat='INTERNAL_ERROR';const msg='Persistence failed: '+String((raw.error&&raw.error.message)||raw.message||'unknown').slice(0,200);const origStatus=typeof src._http_status==='number'?src._http_status:200;const httpStatus=(origStatus>=400?origStatus:500);const verification={...(src.verification||{}),persisted:false,persist_record_id:null,persist_note:msg,idempotent_retry:false};const result={...(src.result||{}),verification_summary:verification};return [{json:{...src,status:'failed',_http_status:httpStatus,result,verification,errors:[...(src.errors||[]),{category:cat,message:msg}]}}];"
+      },
+      "id": "6702e80b-152e-4cea-8cb9-6af8431d6362",
+      "name": "Persist Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7392,
+        1440
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { request_id: $json.request_id, task_id: $json.task_id, status: $json.status, result: $json.result, errors: $json.errors, warnings: $json.warnings, verification: $json.verification } }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "4027de48-68e3-40e0-bd7e-0dd1a1be9a1d",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        7616,
+        1344
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Integration Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Request Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Integration Config": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Project Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Project Context": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Prior Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Prior Audit": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context": {
+      "main": [
+        [
+          {
+            "node": "Context OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context OK?": {
+      "main": [
+        [
+          {
+            "node": "Operation Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Context Error Wrapper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context Error Wrapper": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Operation Router": {
+      "main": [
+        [
+          {
+            "node": "Call n8n - List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call n8n - Get Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call n8n - Get Execution",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call n8n - Compare Fetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preflight Write Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preflight Write Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preflight Write Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preflight Write Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call n8n - List": {
+      "main": [
+        [
+          {
+            "node": "Read Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call n8n - Get Workflow": {
+      "main": [
+        [
+          {
+            "node": "Read Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call n8n - Get Execution": {
+      "main": [
+        [
+          {
+            "node": "Read Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call n8n - Compare Fetch": {
+      "main": [
+        [
+          {
+            "node": "Compare Analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Analyze": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Analyze": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preflight Write Check": {
+      "main": [
+        [
+          {
+            "node": "Preflight OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preflight OK?": {
+      "main": [
+        [
+          {
+            "node": "Approval Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Preflight Error Wrapper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preflight Error Wrapper": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Lookup": {
+      "main": [
+        [
+          {
+            "node": "Verify Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Approval": {
+      "main": [
+        [
+          {
+            "node": "Approval OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval OK?": {
+      "main": [
+        [
+          {
+            "node": "Fetch Current for Write",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Approval Error Wrapper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Error Wrapper": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Current for Write": {
+      "main": [
+        [
+          {
+            "node": "Fingerprint + Continue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fingerprint + Continue": {
+      "main": [
+        [
+          {
+            "node": "Prepare Write Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Write Call": {
+      "main": [
+        [
+          {
+            "node": "Prepare OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare OK?": {
+      "main": [
+        [
+          {
+            "node": "Consume Required?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Error Wrapper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Error Wrapper": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume Required?": {
+      "main": [
+        [
+          {
+            "node": "Consume Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Consume Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume Approval": {
+      "main": [
+        [
+          {
+            "node": "Merge Consume Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Consume Result": {
+      "main": [
+        [
+          {
+            "node": "Consume Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume Check": {
+      "main": [
+        [
+          {
+            "node": "Is Test Op?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consume Conflict Marker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume Conflict Marker": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Test Op?": {
+      "main": [
+        [
+          {
+            "node": "Call Test Endpoint",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call n8n - Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Test Endpoint": {
+      "main": [
+        [
+          {
+            "node": "Verify Write Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call n8n - Write": {
+      "main": [
+        [
+          {
+            "node": "Fetch Result State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Result State": {
+      "main": [
+        [
+          {
+            "node": "Verify Write Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Write Result": {
+      "main": [
+        [
+          {
+            "node": "Pass After Consume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pass After Consume": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Audit Header": {
+      "main": [
+        [
+          {
+            "node": "Split Findings to Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Findings to Rows": {
+      "main": [
+        [
+          {
+            "node": "Has Rows?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Rows?": {
+      "main": [
+        [
+          {
+            "node": "Persist Findings Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify Persist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Findings Batch": {
+      "main": [
+        [
+          {
+            "node": "Verify Persist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Persist": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Failed": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

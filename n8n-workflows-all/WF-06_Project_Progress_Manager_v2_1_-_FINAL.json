@@ -1,0 +1,771 @@
+{
+  "name": "WF-06 Project Progress Manager v2.1 - FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf06-progress",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "85058587-ecfb-4223-b3a9-fbf7f1a641b3",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        176
+      ],
+      "webhookId": "wf06-progress",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()?.json??{};const headers=(input.headers&&typeof input.headers==='object')?input.headers:((input.body&&typeof input.body==='object'&&input.body.headers&&typeof input.body.headers==='object')?input.body.headers:{});let b=input.body??input;if(typeof b==='string'){try{b=JSON.parse(b);}catch(e){}}const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);const fail=(category,message,httpStatus)=>[{json:{ok:false,request_id:typeof b?.request_id==='string'?b.request_id.trim()||null:null,user_id:isUuid(b?.user_id)?b.user_id:null,workspace_id:isUuid(b?.workspace_id)?b.workspace_id:null,project_id:isUuid(b?.project_id)?b.project_id:null,conversation_id:isUuid(b?.conversation_id)?b.conversation_id:null,category,message,http_status:httpStatus||400}}];if(!b||typeof b!=='object'||Array.isArray(b))return fail('INVALID_INPUT','Expected JSON object body');if(typeof b.request_id!=='string'||!b.request_id.trim()||b.request_id.trim().length>100)return fail('INVALID_INPUT','request_id required, <=100 chars');const requestId=b.request_id.trim();const userId=typeof b.user_id==='string'?b.user_id.trim().slice(0,100):null;const workspaceId=typeof b.workspace_id==='string'?b.workspace_id.trim().slice(0,100):null;const projectId=typeof b.project_id==='string'?b.project_id.trim().slice(0,100):null;const conversationId=typeof b.conversation_id==='string'?b.conversation_id.trim().slice(0,200):null;if(!userId)return fail('UNAUTHORIZED','user_id required',401);if(!workspaceId)return fail('UNAUTHORIZED','workspace_id required',401);if(!isUuid(userId))return fail('INVALID_INPUT','user_id must be UUID');if(!isUuid(workspaceId))return fail('INVALID_INPUT','workspace_id must be UUID');if(projectId&&!isUuid(projectId))return fail('INVALID_INPUT','project_id must be UUID');if(conversationId&&!isUuid(conversationId))return fail('INVALID_INPUT','conversation_id must be UUID');let envToken,requireToken=false,envAccessible=true;try{envToken=$env?.WF06_SERVICE_TOKEN;requireToken=$env?.WF06_REQUIRE_TOKEN==='true';}catch(e){envAccessible=false;}if(!envAccessible&&requireToken)return fail('INTERNAL_ERROR','token_required_but_env_unavailable',503);if(requireToken&&(typeof envToken!=='string'||envToken===''))return fail('INTERNAL_ERROR','token_required_but_not_configured',503);let tokenCheckStatus='disabled_empty';if(!envAccessible){tokenCheckStatus='disabled_env_blocked';}else if(typeof envToken==='string'&&envToken!==''){tokenCheckStatus='enforced';const hdrKey=Object.keys(headers).find(k=>k.toLowerCase()==='x-service-token');const provided=hdrKey?headers[hdrKey]:null;if(!provided||provided!==envToken)return fail('UNAUTHORIZED','service_token_invalid',401);}const hasProject=!!projectId;const sinceDate=(typeof b.since_date==='string'&&b.since_date.trim())?b.since_date.trim().slice(0,30):null;let sinceValid=null;if(sinceDate){const d=new Date(sinceDate);if(!isFinite(d.getTime()))return fail('INVALID_INPUT','since_date must be ISO date string');sinceValid=d.toISOString();}return [{json:{ok:true,request_id:requestId,user_id:userId,workspace_id:workspaceId,project_id:projectId,has_project:hasProject,conversation_id:conversationId,since_date:sinceValid,token_check_status:tokenCheckStatus}}];"
+      },
+      "id": "42d11ebf-019c-4205-afe7-b500bb4664ed",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        176
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e497069c-9df8-4ea4-9a6f-ef6d9ec1702d",
+      "name": "Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        176
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$input.first()?.json??{};const rid=a.request_id??null;const auditId='PROG-'+(rid||('rejected-'+Date.now()));const msg=a.message||'Invalid request';const VALID=['INVALID_INPUT','INVALID_JSON','UNAUTHORIZED','FORBIDDEN','NOT_FOUND','MODEL_ERROR','PROVIDER_RATE_LIMIT','PROVIDER_TIMEOUT','VALIDATION_FAILED','TEST_FAILED','APPROVAL_REQUIRED','VERSION_CONFLICT','INTEGRATION_UNAVAILABLE','INTERNAL_ERROR'];const cat=VALID.includes(a.category||'')?a.category:'INVALID_INPUT';const httpMap={INVALID_INPUT:400,INVALID_JSON:400,UNAUTHORIZED:401,FORBIDDEN:403,NOT_FOUND:404,APPROVAL_REQUIRED:409,VERSION_CONFLICT:409,VALIDATION_FAILED:422,TEST_FAILED:422,PROVIDER_RATE_LIMIT:429,PROVIDER_TIMEOUT:504,MODEL_ERROR:502,INTEGRATION_UNAVAILABLE:503,INTERNAL_ERROR:500};const httpStatus=(typeof a.http_status==='number')?a.http_status:(httpMap[cat]||400);const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);const result={audit_id:auditId,audit_status:'failed',cache_hit:false,project_id:isUuid(a.project_id)?a.project_id:null,project_name:null,project_summary:'',total_tasks:0,completed_count:0,pending_count:0,blocked_count:0,failed_count:0,completed_tasks:[],pending_tasks:[],blocked_tasks:[],failed_tasks:[],pending_approvals:0,workflow_audits_count:0,recommended_next_steps:[],limitations:['No progress computed due to input validation failure.'],recommended_fixes:[{finding_id:'V001',fix:'Address: '+msg}],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}};return [{json:{request_id:rid,task_id:null,status:'failed',_http_status:httpStatus,result,errors:[{category:cat,message:msg}],warnings:[],verification:result.verification_summary,_persist:{project_id:isUuid(a.project_id)?a.project_id:null,user_id:isUuid(a.user_id)?a.user_id:null,claimed_user_id:isUuid(a.user_id)?a.user_id:null,workspace_id:isUuid(a.workspace_id)?a.workspace_id:null,conversation_id:isUuid(a.conversation_id)?a.conversation_id:null}}}];"
+      },
+      "id": "27b11b40-8479-4f66-a814-016adc158820",
+      "name": "Format Request Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        272
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "projects",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.project_id || '00000000-0000-0000-0000-000000000000' }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "7a7b2443-8345-419d-bb09-dd56cf8869f7",
+      "name": "Prefetch Project Info",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        80
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "tasks",
+        "limit": 1000,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "project_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.project_id || '00000000-0000-0000-0000-000000000000' }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "88be58f5-64de-4f03-a888-87fe6bf7e773",
+      "name": "Prefetch Tasks",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        80
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "approval_records",
+        "limit": 500,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "pending"
+            }
+          ]
+        }
+      },
+      "id": "643ea1a0-53d2-40b8-8c4b-0c83fb912576",
+      "name": "Prefetch Approvals",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        80
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "workflow_audits",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "project_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.project_id || '00000000-0000-0000-0000-000000000000' }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "93d8b45d-5fc7-49a3-a6fa-42ef237dfa27",
+      "name": "Prefetch Workflow Audits",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        80
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;\nconst projRows=$('Prefetch Project Info').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst taskRows=$('Prefetch Tasks').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst apprRows=$('Prefetch Approvals').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst wfRows=$('Prefetch Workflow Audits').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst project=projRows.length>0?projRows[0]:null;\nlet tasks=taskRows;\nlet approvals=apprRows;\nif(meta.since_date){const cutoff=new Date(meta.since_date).getTime();tasks=taskRows.filter(t=>{const ts=t.updated_at?new Date(t.updated_at).getTime():(t.created_at?new Date(t.created_at).getTime():0);return ts>=cutoff;});approvals=apprRows.filter(a=>{const ts=a.created_at?new Date(a.created_at).getTime():0;return ts>=cutoff;});}\nconst taskIds=new Set(tasks.map(t=>t.id).filter(Boolean));\nconst relevantApprovals=approvals.filter(a=>taskIds.has(a.task_id));\nreturn [{json:{...meta,_project:project,_tasks:tasks,_approvals:relevantApprovals,_workflow_audits:wfRows}}];"
+      },
+      "id": "337ed573-e5f6-482f-9a86-c320e4b21a93",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const meta={request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,has_project:x.has_project,since_date:x.since_date,token_check_status:x.token_check_status};const project=x._project||null;const tasks=x._tasks||[];const approvals=x._approvals||[];const workflowAudits=x._workflow_audits||[];\nconst completed=[],pending=[],blocked=[],failed=[];\nfor(const t of tasks){const s=String(t.status||'').toLowerCase();if(s==='completed'){completed.push(t);}else if(s==='failed'||s==='cancelled'){failed.push(t);}else if(s==='paused'||s==='blocked'||t.blocked_reason){blocked.push(t);}else{pending.push(t);}}\nconst total=tasks.length;const projectName=project?(project.name||project.title||project.slug||project.id):null;\nlet projectSummary='';\nif(!meta.has_project){projectSummary='No specific project selected. Please provide project_id to view project progress.';}\nelse if(!project){projectSummary='Project '+meta.project_id+' not found. '+total+' orphaned task record(s) referenced.';}\nelse if(total===0){projectSummary='Project \"'+(projectName||meta.project_id)+'\": No tasks recorded yet.';}\nelse{const pct=Math.round((completed.length/total)*100);projectSummary='Project \"'+(projectName||meta.project_id)+'\": '+total+' task(s) total, '+completed.length+' completed ('+pct+'%), '+pending.length+' pending, '+blocked.length+' blocked, '+failed.length+' failed.';}\nconst verifyCount={completed:0,partial:0,failed:0,pending:0,other:0};\nfor(const w of workflowAudits){const s=String(w.audit_status||'').toLowerCase();if(s==='completed')verifyCount.completed++;else if(s==='partial')verifyCount.partial++;else if(s==='failed')verifyCount.failed++;else if(s==='pending')verifyCount.pending++;else verifyCount.other++;}\nconst mapTask=(t)=>({id:t.id||null,title:t.title||t.goal||null,status:t.status||null,priority:t.priority||null,due_date:t.due_date||null,blocked_reason:t.blocked_reason||null,updated_at:t.updated_at||t.created_at||null});\nreturn [{json:{...meta,total_tasks:total,completed_count:completed.length,pending_count:pending.length,blocked_count:blocked.length,failed_count:failed.length,completed_tasks:completed.slice(0,50).map(mapTask),pending_tasks:pending.slice(0,50).map(mapTask),blocked_tasks:blocked.slice(0,50).map(mapTask),failed_tasks:failed.slice(0,50).map(mapTask),pending_approvals:approvals.length,workflow_audits_count:workflowAudits.length,workflow_audit_status_breakdown:verifyCount,project_name:projectName,project_summary:projectSummary}}];"
+      },
+      "id": "5e8a5a47-b88d-4de7-a671-b2f3593d6457",
+      "name": "Compute Progress",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const steps=[];\nif(!x.has_project){steps.push({priority:'high',action:'Provide project_id',reason:'No project selected; cannot compute project-specific progress'});return [{json:{...x,recommended_next_steps:steps}}];}\nif(!x.project_name){steps.push({priority:'high',action:'Verify project_id',reason:'Project record not found in database'});return [{json:{...x,recommended_next_steps:steps}}];}\nif(x.total_tasks===0){steps.push({priority:'high',action:'Create initial tasks for this project',reason:'No tasks recorded yet'});return [{json:{...x,recommended_next_steps:steps}}];}\nif(x.blocked_count>0)steps.push({priority:'critical',action:'Resolve '+x.blocked_count+' blocked task(s)',reason:'Blocked tasks halt project progress'});\nif(x.failed_count>0)steps.push({priority:'important',action:'Review '+x.failed_count+' failed/cancelled task(s)',reason:'Failed tasks may indicate issues to address'});\nif(x.pending_approvals>0)steps.push({priority:'important',action:'Process '+x.pending_approvals+' pending approval(s)',reason:'Approvals blocking task transitions'});\nif(x.pending_count>0)steps.push({priority:'normal',action:'Continue '+x.pending_count+' pending task(s)',reason:'Work in progress'});\nif(x.completed_count===x.total_tasks)steps.push({priority:'info',action:'Project appears complete',reason:'All tasks marked completed'});\nreturn [{json:{...x,recommended_next_steps:steps}}];"
+      },
+      "id": "b5cbd71e-716e-40cb-b1b8-f5542466d770",
+      "name": "Compute Next Steps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x = $input.first()?.json || {};\nlet valReq = {};\ntry {\n  valReq = $('Validate Request').first()?.json || {};\n} catch (e) {}\n\nconst reqId = valReq.request_id || x.request_id || 'fallback-id';\nconst userId = valReq.user_id || x.user_id || null;\nconst workspaceId = valReq.workspace_id || x.workspace_id || null;\nconst projectId = valReq.project_id ?? x.project_id ?? null;\nconst conversationId = valReq.conversation_id ?? x.conversation_id ?? null;\nconst hasProject = x.has_project ?? valReq.has_project ?? !!projectId;\nconst sinceDate = x.since_date ?? valReq.since_date ?? null;\n\nconst status = hasProject ? (x.project_name ? 'success' : 'partial') : 'failed';\nconst auditId = 'PROG-' + reqId;\n\nconst evidence = [];\nif (sinceDate) evidence.push('since_date=' + sinceDate);\nevidence.push('task_records=' + (x.total_tasks ?? 0) + ' completed=' + (x.completed_count ?? 0) + ' pending=' + (x.pending_count ?? 0) + ' blocked=' + (x.blocked_count ?? 0) + ' failed=' + (x.failed_count ?? 0));\nevidence.push('pending_approvals=' + (x.pending_approvals ?? 0) + ' workflow_audits=' + (x.workflow_audits_count ?? 0));\nevidence.push('Source: Supabase tables (tasks, approval_records, workflow_audits, projects); AI not used');\n\nconst limitations = [\n  'Progress computed from persisted task records only; no AI estimation used (blueprint §17).',\n  'Task records fetched from Supabase tasks table filtered by project_id + workspace_id; ordered by updated_at desc.',\n  'Approvals filtered by task_ids derived from project tasks; workspace-scoped approvals fetched up to 500.',\n  'Workflow audit status breakdown included as informational field.',\n  'Cross-project aggregation not supported; single project_id per request.',\n  'Recommended next steps are rule-based; not AI-generated.',\n  'Webhook authentication required (Header Auth).',\n  'Idempotency: audit_id=PROG-<request_id>; repeated request_id → 409 VERSION_CONFLICT.'\n];\n\nconst verificationSummary = {\n  status: 'verified',\n  evidence,\n  source: 'database_task_records',\n  ai_used: false\n};\n\nconst recommendedFixes = [];\nif (!hasProject) recommendedFixes.push({ finding_id: 'V001', fix: 'Provide project_id to compute progress' });\n\nconst result = {\n  audit_id: auditId,\n  audit_status: status,\n  cache_hit: false,\n  project_id: projectId,\n  project_name: x.project_name || null,\n  project_summary: x.project_summary || '',\n  total_tasks: x.total_tasks ?? 0,\n  completed_count: x.completed_count ?? 0,\n  pending_count: x.pending_count ?? 0,\n  blocked_count: x.blocked_count ?? 0,\n  failed_count: x.failed_count ?? 0,\n  completed_tasks: x.completed_tasks || [],\n  pending_tasks: x.pending_tasks || [],\n  blocked_tasks: x.blocked_tasks || [],\n  failed_tasks: x.failed_tasks || [],\n  pending_approvals: x.pending_approvals ?? 0,\n  workflow_audits_count: x.workflow_audits_count ?? 0,\n  workflow_audit_status_breakdown: x.workflow_audit_status_breakdown || { completed: 0, partial: 0, failed: 0, pending: 0, other: 0 },\n  recommended_next_steps: x.recommended_next_steps || [],\n  limitations,\n  recommended_fixes: recommendedFixes,\n  verification_summary: verificationSummary\n};\n\nconst httpStatus = status === 'failed' ? 422 : 200;\nconst errors = [];\nif (!hasProject) errors.push({ category: 'INVALID_INPUT', message: 'project_id required to compute project progress' });\n\nconst warnings = [];\nif (hasProject && !x.project_name) warnings.push({ message: 'Project record not found; showing task summary only' });\n\nreturn [{\n  json: {\n    request_id: reqId,\n    task_id: null,\n    status: status === 'success' ? 'completed' : (status === 'partial' ? 'partial' : 'failed'),\n    _http_status: httpStatus,\n    result,\n    errors,\n    warnings,\n    verification: verificationSummary,\n    _persist: {\n      project_id: projectId,\n      user_id: userId,\n      claimed_user_id: userId,\n      workspace_id: workspaceId,\n      conversation_id: conversationId\n    }\n  }\n}];"
+      },
+      "id": "811c2ff5-345e-49fd-987d-f80fb36caf51",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_audits",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "request_id",
+              "fieldValue": "={{ $json.request_id }}"
+            },
+            {
+              "fieldId": "audit_id",
+              "fieldValue": "={{ $json.result.audit_id }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._persist.user_id || undefined }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json._persist.workspace_id || undefined }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json._persist.project_id ?? undefined }}"
+            },
+            {
+              "fieldId": "source_type",
+              "fieldValue": "manual"
+            },
+            {
+              "fieldId": "analysis_mode",
+              "fieldValue": "progress"
+            },
+            {
+              "fieldId": "audit_status",
+              "fieldValue": "={{ $json.result.audit_status === 'success' ? 'completed' : ($json.result.audit_status === 'failed' ? 'failed' : 'partial') }}"
+            },
+            {
+              "fieldId": "workflow_summary",
+              "fieldValue": "={{ $json.result.project_summary }}"
+            },
+            {
+              "fieldId": "node_count",
+              "fieldValue": 0
+            },
+            {
+              "fieldId": "recommended_fixes",
+              "fieldValue": "={{ $json.result.recommended_fixes }}"
+            },
+            {
+              "fieldId": "limitations",
+              "fieldValue": "={{ $json.result.limitations }}"
+            },
+            {
+              "fieldId": "verification_summary",
+              "fieldValue": "={{ $json.result.verification_summary }}"
+            }
+          ]
+        }
+      },
+      "id": "eee68622-fd92-4845-b602-0aa8b2dda5fc",
+      "name": "Persist Audit Header",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2464,
+        176
+      ],
+      "alwaysOutputData": false,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src = null;\ntry {\n  if ($('Build Result').isExecuted) {\n    src = $('Build Result').first()?.json;\n  }\n} catch (e) {}\nif (!src) {\n  try {\n    if ($('Format Request Error').isExecuted) {\n      src = $('Format Request Error').first()?.json;\n    }\n  } catch (e) {}\n}\n\nlet fallbackReqId = 'fallback-id';\ntry {\n  fallbackReqId = $('Validate Request').first()?.json?.request_id || 'fallback-id';\n} catch (e) {}\n\nconst reqId = src?.request_id || fallbackReqId;\nconst r = src?.result || {};\nconst auditId = r.audit_id || ('PROG-' + reqId);\nconst rows = [];\n\nconst pushTaskRow = (t, section) => {\n  if (!t || !t.id) return;\n  rows.push({\n    audit_id: auditId,\n    finding_id: 'T-' + section + '-' + String(t.id).slice(0, 30),\n    severity: section === 'blocked' ? 'medium' : (section === 'failed' ? 'high' : 'info'),\n    category: 'TASK_' + section.toUpperCase(),\n    node_id: null,\n    node_name: null,\n    description: String(t.title || '(untitled)').slice(0, 300) + ' [' + (t.status || 'unknown') + ']',\n    evidence: t.blocked_reason ? String(t.blocked_reason).slice(0, 500) : null,\n    suggested_fix: null,\n    confidence: null,\n    knowledge_status: 'Verified',\n    check_type: 'progress_task'\n  });\n};\n\nfor (const t of (r.completed_tasks || [])) pushTaskRow(t, 'completed');\nfor (const t of (r.pending_tasks || [])) pushTaskRow(t, 'pending');\nfor (const t of (r.blocked_tasks || [])) pushTaskRow(t, 'blocked');\nfor (const t of (r.failed_tasks || [])) pushTaskRow(t, 'failed');\n\nif (rows.length === 0) {\n  return [{ json: { _empty: true, audit_id: auditId, request_id: reqId } }];\n}\nreturn rows.map(x => ({ json: x }));"
+      },
+      "id": "ef36cf65-05bc-4683-9d33-a618b4e55830",
+      "name": "Split Task Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has",
+              "leftValue": "={{ $json._empty !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "55ef4a53-e778-4dd4-8bd7-3bfd8043cfac",
+      "name": "Has Rows?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        80
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_audit_findings",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "audit_id",
+              "fieldValue": "={{ $json.audit_id }}"
+            },
+            {
+              "fieldId": "finding_id",
+              "fieldValue": "={{ $json.finding_id }}"
+            },
+            {
+              "fieldId": "severity",
+              "fieldValue": "={{ $json.severity }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json.category }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json.description }}"
+            },
+            {
+              "fieldId": "evidence",
+              "fieldValue": "={{ $json.evidence ?? undefined }}"
+            },
+            {
+              "fieldId": "knowledge_status",
+              "fieldValue": "={{ $json.knowledge_status }}"
+            },
+            {
+              "fieldId": "check_type",
+              "fieldValue": "={{ $json.check_type }}"
+            }
+          ]
+        }
+      },
+      "id": "03ff2557-6674-40f8-99a2-b76b9f137b67",
+      "name": "Persist Task Batch",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        0
+      ],
+      "alwaysOutputData": false,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src = null;\ntry {\n  if ($('Build Result').isExecuted) {\n    const a = $('Build Result').first()?.json;\n    if (a && a.result) src = a;\n  }\n} catch (e) {}\n\nif (!src) {\n  try {\n    if ($('Format Request Error').isExecuted) {\n      const b = $('Format Request Error').first()?.json;\n      if (b && b.result) src = b;\n    }\n  } catch (e) {}\n}\n\nlet fallbackReqId = 'fallback-id';\ntry {\n  fallbackReqId = $('Validate Request').first()?.json?.request_id || 'fallback-id';\n} catch (e) {}\n\nif (!src) {\n  src = {\n    request_id: fallbackReqId,\n    status: 'failed',\n    _http_status: 500,\n    result: { audit_id: 'PROG-' + fallbackReqId, audit_status: 'failed' },\n    verification: { status: 'not_verified', evidence: [] },\n    errors: [],\n    task_id: null,\n    warnings: [],\n    _persist: {}\n  };\n}\nif (!src.request_id) src.request_id = fallbackReqId;\n\nlet headerRow = {};\ntry {\n  headerRow = $('Persist Audit Header').first()?.json ?? {};\n} catch (e) {}\n\nconst id = headerRow.id ?? headerRow.audit_id ?? src.result?.audit_id ?? null;\nconst idOk = typeof id === 'string' ? id.trim().length > 0 : (typeof id === 'number' && isFinite(id));\nconst checks = [];\nif (!idOk) checks.push('no valid header record id');\nif (headerRow.request_id !== undefined && headerRow.request_id !== null && src.request_id && headerRow.request_id !== src.request_id) {\n  checks.push('request_id mismatch');\n}\n\nlet batchRan = false;\ntry {\n  batchRan = $('Persist Task Batch').isExecuted === true;\n} catch (e) {}\n\nif (batchRan) {\n  const batchRows = $input.all().map(i => i.json).filter(r => r && (r.id || r.finding_id || r.audit_id));\n  if (batchRows.length === 0) checks.push('task batch persist unconfirmed');\n}\n\nconst ok = idOk && checks.length === 0;\nconst verification = { ...(src.verification || {}), persisted: ok, persist_record_id: idOk ? id : null, persist_checks: checks };\nconst result = { ...(src.result || {}), verification_summary: verification };\n\nreturn [{\n  json: {\n    ...src,\n    request_id: src.request_id || fallbackReqId,\n    status: ok ? src.status : (src.status === 'failed' ? 'failed' : 'partial'),\n    _http_status: src._http_status || 200,\n    result,\n    verification,\n    errors: ok ? (src.errors || []) : [...(src.errors || []), { category: 'INTERNAL_ERROR', message: 'Persistence unconfirmed: ' + checks.join('; ') }],\n    warnings: src.warnings || []\n  }\n}];"
+      },
+      "id": "5b0c78dc-cdf4-41ef-a1f6-2d628cfb8677",
+      "name": "Verify Persist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src = null;\ntry {\n  if ($('Build Result').isExecuted) {\n    const a = $('Build Result').first()?.json;\n    if (a && a.result) src = a;\n  }\n} catch (e) {}\n\nif (!src) {\n  try {\n    if ($('Format Request Error').isExecuted) {\n      const b = $('Format Request Error').first()?.json;\n      if (b && b.result) src = b;\n    }\n  } catch (e) {}\n}\n\nlet fallbackReqId = 'fallback-id';\ntry {\n  fallbackReqId = $('Validate Request').first()?.json?.request_id || 'fallback-id';\n} catch (e) {}\n\nif (!src) {\n  src = {\n    request_id: fallbackReqId,\n    status: 'failed',\n    _http_status: 500,\n    result: { audit_id: 'PROG-' + fallbackReqId, audit_status: 'failed' },\n    verification: { status: 'not_verified', evidence: [] },\n    errors: [],\n    task_id: null,\n    warnings: [],\n    _persist: {}\n  };\n}\nif (!src.request_id) src.request_id = fallbackReqId;\n\nconst raw = $input.first()?.json || {};\nconst rawStr = JSON.stringify(raw).toLowerCase();\nconst isDup = /23505|duplicate key|unique constraint/.test(rawStr);\nconst cat = isDup ? 'VERSION_CONFLICT' : 'INTERNAL_ERROR';\nconst msg = isDup ? 'Duplicate audit_id: this progress report already persisted (idempotent retry)' : ('Persistence failed: ' + String((raw.error && raw.error.message) || raw.message || 'unknown').slice(0, 200));\nconst origStatus = typeof src._http_status === 'number' ? src._http_status : 200;\nconst httpStatus = isDup ? 409 : (origStatus >= 400 ? origStatus : ((src.result && src.result.audit_status === 'failed') ? 422 : 500));\n\nconst verification = { ...(src.verification || {}), persisted: false, persist_record_id: null, persist_note: msg, idempotent_retry: isDup };\nconst result = { ...(src.result || {}), verification_summary: verification };\n\nreturn [{\n  json: {\n    ...src,\n    request_id: src.request_id || fallbackReqId,\n    status: 'failed',\n    _http_status: httpStatus,\n    result,\n    verification,\n    errors: [...(src.errors || []), { category: cat, message: msg }],\n    warnings: src.warnings || []\n  }\n}];"
+      },
+      "id": "12778e85-0227-4a2f-b5a7-358e7e38b9af",
+      "name": "Persist Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        272
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ ({ request_id: $json.request_id || $('Validate Request').first()?.json?.request_id || 'fallback-id', task_id: $json.task_id ?? null, status: $json.status || 'failed', result: $json.result || { audit_status: 'failed' }, errors: Array.isArray($json.errors) ? $json.errors : [], warnings: Array.isArray($json.warnings) ? $json.warnings : [], verification: $json.verification || { status: 'not_verified', persisted: false } }) }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "9bee6e14-591e-479c-997d-7249627eb741",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3584,
+        176
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Project Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Request Error": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Project Info": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Tasks": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Approvals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Approvals": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Workflow Audits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Workflow Audits": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context": {
+      "main": [
+        [
+          {
+            "node": "Compute Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Progress": {
+      "main": [
+        [
+          {
+            "node": "Compute Next Steps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Next Steps": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Audit Header": {
+      "main": [
+        [
+          {
+            "node": "Split Task Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Task Rows": {
+      "main": [
+        [
+          {
+            "node": "Has Rows?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Rows?": {
+      "main": [
+        [
+          {
+            "node": "Persist Task Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify Persist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Task Batch": {
+      "main": [
+        [
+          {
+            "node": "Verify Persist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Persist": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Failed": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

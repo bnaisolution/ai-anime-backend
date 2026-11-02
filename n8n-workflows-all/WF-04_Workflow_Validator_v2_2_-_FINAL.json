@@ -1,0 +1,1065 @@
+{
+  "name": "WF-04 Workflow Validator v2.2 - FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf04-validate",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "86ff8d65-5288-4844-83b8-a59ff0396896",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        192
+      ],
+      "webhookId": "wf04-validate",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()?.json??{};const headers=(input.headers&&typeof input.headers==='object')?input.headers:((input.body&&typeof input.body==='object'&&input.body.headers&&typeof input.body.headers==='object')?input.body.headers:{});let b=input.body??input;const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);const fail=(category,message,httpStatus)=>[{json:{ok:false,request_id:typeof b?.request_id==='string'?b.request_id.trim()||null:null,user_id:isUuid(b?.user_id)?b.user_id:null,workspace_id:isUuid(b?.workspace_id)?b.workspace_id:null,project_id:isUuid(b?.project_id)?b.project_id:null,conversation_id:isUuid(b?.conversation_id)?b.conversation_id:null,category,message,http_status:httpStatus||400}}];if(!b||typeof b!=='object'||Array.isArray(b))return fail('INVALID_INPUT','Expected JSON object body');if(typeof b.request_id!=='string'||!b.request_id.trim()||b.request_id.trim().length>100)return fail('INVALID_INPUT','request_id required, <=100 chars');const requestId=b.request_id.trim();const userId=typeof b.user_id==='string'?b.user_id.trim().slice(0,100):null;const workspaceId=typeof b.workspace_id==='string'?b.workspace_id.trim().slice(0,100):null;const projectId=typeof b.project_id==='string'?b.project_id.trim().slice(0,100):null;const conversationId=typeof b.conversation_id==='string'?b.conversation_id.trim().slice(0,200):null;if(!userId)return fail('UNAUTHORIZED','user_id required',401);if(!workspaceId)return fail('UNAUTHORIZED','workspace_id required',401);if(!isUuid(userId))return fail('INVALID_INPUT','user_id must be UUID');if(!isUuid(workspaceId))return fail('INVALID_INPUT','workspace_id must be UUID');if(projectId&&!isUuid(projectId))return fail('INVALID_INPUT','project_id must be UUID');if(conversationId&&!isUuid(conversationId))return fail('INVALID_INPUT','conversation_id must be UUID');let envToken,requireToken=false,envAccessible=true;try{envToken=$env?.WF04_SERVICE_TOKEN;requireToken=$env?.WF04_REQUIRE_TOKEN==='true';}catch(e){envAccessible=false;}if(!envAccessible&&requireToken)return fail('INTERNAL_ERROR','token_required_but_env_unavailable',503);if(requireToken&&(typeof envToken!=='string'||envToken===''))return fail('INTERNAL_ERROR','token_required_but_not_configured',503);let tokenCheckStatus='disabled_empty';if(!envAccessible){tokenCheckStatus='disabled_env_blocked';}else if(typeof envToken==='string'&&envToken!==''){tokenCheckStatus='enforced';const provided=headers['x-service-token']||headers['X-Service-Token']||null;if(!provided||provided!==envToken)return fail('UNAUTHORIZED','service_token_invalid',401);}const validModes=['static','compatibility','runtime','full'];const mode=b.test_mode===undefined?'full':b.test_mode;if(typeof mode!=='string'||!validModes.includes(mode))return fail('INVALID_INPUT','test_mode invalid');if(b.workflow_json===undefined||b.workflow_json===null)return fail('INVALID_INPUT','workflow_json required');let raw;try{raw=typeof b.workflow_json==='string'?b.workflow_json:JSON.stringify(b.workflow_json);}catch(e){return fail('INVALID_INPUT','workflow_json not serializable');}const byteLen=(s)=>{try{return new TextEncoder().encode(s).length}catch(e){return s.length*2}};if(byteLen(raw)>200000)return fail('INVALID_INPUT','workflow_json exceeds 200000 bytes');let wfHash=null,hashAvailable=false;try{const c=require('crypto');if(c&&typeof c.createHash==='function'){wfHash=c.createHash('sha256').update(raw).digest('hex');hashAvailable=true;}}catch(e){}const sensitiveKey=/(password|passwd|secret|token|api.?key|authorization|auth.?header|client.?secret|access.?key|private.?key|credential|cookie)/i;const valueSecretPatterns=[/gsk_[A-Za-z0-9]{20,}/g,/sk-proj-[A-Za-z0-9_-]{20,}/g,/\\bsk-[A-Za-z0-9]{20,}/g,/AIza[\\w-]{30,}/g,/gh[pousr]_[A-Za-z0-9]{20,}/g,/xox[baprs]-[A-Za-z0-9-]{10,}/g,/Bearer\\s+[A-Za-z0-9._~+\\/-]{12,}=*/gi];function red(v,key='',depth=0){if(depth>30)return'[REDACTED:DEPTH_LIMIT]';if(sensitiveKey.test(key))return v===null?null:'[REDACTED]';if(typeof v==='string'){let out=v;for(const re of valueSecretPatterns){re.lastIndex=0;out=out.replace(re,'[REDACTED_SECRET]');}return out;}if(Array.isArray(v))return v.map(x=>red(x,key,depth+1));if(v&&typeof v==='object'){const o={};for(const[k,val]of Object.entries(v)){if(k.toLowerCase()==='credentials'){o[k]='[REDACTED]';continue;}o[k]=red(val,k,depth+1);}return o;}return v;}let redactedRaw=raw;try{const parsed=JSON.parse(raw);redactedRaw=JSON.stringify(red(parsed));}catch(e){}let wfParsedForDb=null;try{wfParsedForDb=JSON.parse(redactedRaw);}catch(e){wfParsedForDb=null;}const memoryContext=typeof b.memory_context==='string'?b.memory_context.slice(0,4000):'';const workflowId=typeof b.workflow_id==='string'?b.workflow_id.trim().slice(0,200):null;const workflowName=typeof b.workflow_name==='string'?b.workflow_name.trim().slice(0,200):null;return [{json:{ok:true,request_id:requestId,user_id:userId,workspace_id:workspaceId,project_id:projectId,conversation_id:conversationId,workflow_id:workflowId,workflow_name:workflowName,test_mode:mode,workflow_json_raw:raw,workflow_json_redacted:redactedRaw,_wf_parsed_for_db:wfParsedForDb,workflow_hash:wfHash,hash_available:hashAvailable,target_n8n_version:typeof b.target_n8n_version==='string'?b.target_n8n_version.trim().slice(0,50)||null:null,test_environment_authorized:b.test_environment_authorized===true,memory_context:memoryContext,token_check_status:tokenCheckStatus}}];"
+      },
+      "id": "348f950b-186f-4e74-b1d0-eaaf425f7823",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5a29689c-2a03-4e58-8721-9d37a94a80ba",
+      "name": "Input Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        192
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$input.first()?.json??{};const rid=a.request_id??null;const testId='TST-'+(rid||'rejected');const msg=a.message||'Invalid request';const VALID=['INVALID_INPUT','INVALID_JSON','UNAUTHORIZED','FORBIDDEN','NOT_FOUND','MODEL_ERROR','PROVIDER_RATE_LIMIT','PROVIDER_TIMEOUT','VALIDATION_FAILED','TEST_FAILED','APPROVAL_REQUIRED','VERSION_CONFLICT','INTEGRATION_UNAVAILABLE','INTERNAL_ERROR'];const cat=VALID.includes(a.category||'')?a.category:'INVALID_INPUT';const httpMap={INVALID_INPUT:400,INVALID_JSON:400,UNAUTHORIZED:401,FORBIDDEN:403,NOT_FOUND:404,APPROVAL_REQUIRED:409,VERSION_CONFLICT:409,VALIDATION_FAILED:422,TEST_FAILED:422,PROVIDER_RATE_LIMIT:429,PROVIDER_TIMEOUT:504,MODEL_ERROR:502,INTEGRATION_UNAVAILABLE:503,INTERNAL_ERROR:500};const httpStatus=(typeof a.http_status==='number')?a.http_status:(httpMap[cat]||400);const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);const result={test_id:testId,validation_status:'failed',tests_executed:[],passed_tests:[],failed_tests:[{test_id:'REQ_VALIDATION',name:'Request validation',message:msg}],skipped_tests:[],not_requested_tests:[],evidence:['Request rejected at validation stage; no tests executed'],limitations:['No validation tests were executed due to input validation failure.'],test_mode:null,target_n8n_version:null,workflow_hash:null,node_count:0,counts:{executed:0,passed:0,failed:1,skipped:0,not_requested:0},verification_summary:{status:'not_verified',evidence:[],runtime_verified:false,compatibility_verified:false}};return [{json:{request_id:rid,task_id:null,status:'failed',_http_status:httpStatus,result,errors:[{category:cat,message:msg}],warnings:[],verification:result.verification_summary,_persist:{project_id:isUuid(a.project_id)?a.project_id:null,user_id:isUuid(a.user_id)?a.user_id:null,claimed_user_id:isUuid(a.user_id)?a.user_id:null,workspace_id:isUuid(a.workspace_id)?a.workspace_id:null,conversation_id:isUuid(a.conversation_id)?a.conversation_id:null,workflow_id:null,workflow_name:null,test_id:testId,test_mode:null,node_count:0,event_type:'skill_rejected'}}}];"
+      },
+      "id": "fa24b66f-591b-44dc-b0ed-0c46d2185c6e",
+      "name": "Format Request Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4480,
+        368
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "projects",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.project_id || '00000000-0000-0000-0000-000000000000' }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "30155b6d-90f5-49bb-a788-f51a4b52a85b",
+      "name": "Prefetch Project Context",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        96
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "memory_items",
+        "limit": 10,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "owner_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "keyName": "scope",
+              "condition": "eq",
+              "keyValue": "workflow"
+            },
+            {
+              "keyName": "workflow_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workflow_id || '__no_wf__' }}"
+            }
+          ]
+        }
+      },
+      "id": "c6ad5302-42c9-4f0a-b224-0c4facf97d3e",
+      "name": "Prefetch Workflow Memory",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        96
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const project=$('Prefetch Project Context').all().map(i=>i.json).filter(r=>r&&r.id)[0]||null;const wf=$('Prefetch Workflow Memory').all().map(i=>i.json).filter(r=>r&&r.id).slice(0,5);const compact=(arr)=>arr.map(m=>({key:m.key||null,category:m.category||null,knowledge_status:m.knowledge_status||null,content:m.content?String(m.content).slice(0,500):null}));const memory_context=JSON.stringify({project:project?{id:project.id,name:project.name,status:project.status}:null,workflow:compact(wf)}).slice(0,4000);return [{json:{...meta,memory_context,context_prefetched:true}}];"
+      },
+      "id": "81633212-e2b6-451c-a3de-0fd2af4c4acb",
+      "name": "Merge Prefetched Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};let wf=null;let parseOk=false;let parseErr=null;try{wf=JSON.parse(x.workflow_json_redacted);if(!wf||typeof wf!=='object'||Array.isArray(wf))throw Error('Root must be object');parseOk=true;pushTest('STATIC_JSON_PARSE','JSON parse','passed','Workflow JSON parsed successfully',null);}catch(e){parseErr=String(e.message).slice(0,200);pushTest('STATIC_JSON_PARSE','JSON parse','failed','JSON parse error: '+parseErr,null);}if(!parseOk){pushTest('STATIC_STRUCTURE','Structure check','skipped','Skipped: JSON parse failed',null);pushTest('STATIC_REFS','References check','skipped','Skipped: JSON parse failed',null);pushTest('STATIC_FIELDS','Required fields','skipped','Skipped: JSON parse failed',null);pushTest('STATIC_EXPR','Expressions check','skipped','Skipped: JSON parse failed',null);return [{json:{...x,_parsed_wf:null,_parse_ok:false,_parse_error:parseErr,_tests:tests}}];}const nodesOk=Array.isArray(wf.nodes);const connsOk=wf.connections&&typeof wf.connections==='object'&&!Array.isArray(wf.connections);if(nodesOk&&connsOk)pushTest('STATIC_STRUCTURE','Structure check','passed','nodes array + connections object present',null);else pushTest('STATIC_STRUCTURE','Structure check','failed','nodes array or connections object invalid',null);return [{json:{...x,_parsed_wf:wf,_parse_ok:true,_parse_error:null,_tests:tests}}];"
+      },
+      "id": "ee6b64a7-cfa1-4019-9988-781d69d22cae",
+      "name": "Test Structure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};if(!x._parse_ok){pushTest('STATIC_REFS','References check','skipped','Skipped: parse failed',null);return [{json:{...x,_tests:tests}}];}const wf=x._parsed_wf;const nodes=Array.isArray(wf.nodes)?wf.nodes:[];const names=new Set();for(const n of nodes){if(n&&typeof n.name==='string')names.add(n.name);}let badRefs=[];if(wf.connections&&typeof wf.connections==='object'){for(const [src,groups] of Object.entries(wf.connections)){if(!names.has(src))badRefs.push('src:'+src);if(!groups||typeof groups!=='object')continue;for(const outs of Object.values(groups)){if(!Array.isArray(outs))continue;for(const out of outs){if(!Array.isArray(out))continue;for(const e of out){if(!e||typeof e.node!=='string'||!names.has(e.node))badRefs.push('tgt:'+(e&&e.node));}}}}}if(badRefs.length===0)pushTest('STATIC_REFS','References check','passed','All connection sources/targets valid',null);else pushTest('STATIC_REFS','References check','failed',badRefs.length+' invalid ref(s): '+badRefs.slice(0,8).join(', '),null);return [{json:{...x,_tests:tests}}];"
+      },
+      "id": "342d2ecd-5eb2-4637-896b-dc199feb6d39",
+      "name": "Test References",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};if(!x._parse_ok){pushTest('STATIC_FIELDS','Required fields','skipped','Skipped: parse failed',null);return [{json:{...x,_tests:tests}}];}const wf=x._parsed_wf;const nodes=Array.isArray(wf.nodes)?wf.nodes:[];let bad=[];const ids=new Set(),names=new Set();for(const n of nodes){if(!n||typeof n!=='object'){bad.push('(invalid)');continue;}if(typeof n.id!=='string'||!n.id.trim())bad.push('id-missing:'+(n.name||'?'));else if(ids.has(n.id))bad.push('id-dup:'+n.id);else ids.add(n.id);if(typeof n.name!=='string'||!n.name.trim())bad.push('name-missing:'+(n.id||'?'));else if(names.has(n.name))bad.push('name-dup:'+n.name);else names.add(n.name);if(typeof n.type!=='string'||!n.type.trim())bad.push('type-missing:'+n.name);if(typeof n.typeVersion!=='number')bad.push('typeVersion:'+n.name);if(!n.parameters||typeof n.parameters!=='object')bad.push('params:'+n.name);}if(bad.length===0)pushTest('STATIC_FIELDS','Required fields','passed',nodes.length+' nodes: all required fields present',null);else pushTest('STATIC_FIELDS','Required fields','failed',bad.slice(0,10).join(', '),null);return [{json:{...x,_tests:tests}}];"
+      },
+      "id": "168ed538-582e-488f-a721-dd7470788cde",
+      "name": "Test Required Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;\nconst tests=x._tests||[];\nconst pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};\n\nif(!x._parse_ok){\n    pushTest('STATIC_EXPR','Expressions check','skipped','Skipped: parse failed',null);\n    return [{json:{...x,_tests:tests}}];\n}\n\nconst wf=x._parsed_wf;\nconst nodes=Array.isArray(wf.nodes)?wf.nodes:[];\nconst issues=[];\n\nfunction checkExpressions(obj, nodeName) {\n    if (!obj) return;\n    if (typeof obj === 'string') {\n        const opens = (obj.match(/\\{\\{/g) || []).length;\n        const closes = (obj.match(/\\}\\}/g) || []).length;\n        if (opens !== closes) issues.push(nodeName + ': ' + opens + ' open, ' + closes + ' close');\n    } else if (Array.isArray(obj)) {\n        for (const item of obj) checkExpressions(item, nodeName);\n    } else if (typeof obj === 'object') {\n        for (const key of Object.keys(obj)) checkExpressions(obj[key], nodeName);\n    }\n}\n\nfor(const n of nodes){\n    if(!n||!n.parameters)continue;\n    checkExpressions(n.parameters, n.name);\n}\n\nif(issues.length===0)pushTest('STATIC_EXPR','Expressions check','passed','All parameter expressions have balanced {{ }}',null);\nelse pushTest('STATIC_EXPR','Expressions check','failed',issues.slice(0,5).join('; '),null);\n\nreturn [{json:{...x,_tests:tests}}];"
+      },
+      "id": "e7ec6f0c-5704-42ff-93b2-4c8468d20544",
+      "name": "Test Expressions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};const mode=x.test_mode;const run=(mode==='compatibility'||mode==='runtime'||mode==='full');if(!run){pushTest('COMPAT_VERSION','n8n version check','not_requested','test_mode='+mode,null);return [{json:{...x,_tests:tests}}];}const ver=x.target_n8n_version;if(!ver){pushTest('COMPAT_VERSION','n8n version check','skipped','target_n8n_version not provided',null);return [{json:{...x,_tests:tests}}];}const parts=String(ver).split('.').map(p=>parseInt(p,10)||0);const maj=parts[0]||0,min=parts[1]||0;const isBelow120=(maj<1)||(maj===1&&min<20);if(!x._parse_ok)pushTest('COMPAT_VERSION','n8n version check','passed','Version '+ver+' recorded; parse failed so node-level compat skipped',null);else pushTest('COMPAT_VERSION','n8n version check','passed','Target '+ver+' (below 1.20='+isBelow120+')',null);return [{json:{...x,_tests:tests,_is_below_120:isBelow120}}];"
+      },
+      "id": "e0d72832-3940-4be5-916d-4ab850a0045e",
+      "name": "Test n8n Version",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};const mode=x.test_mode;const run=(mode==='compatibility'||mode==='runtime'||mode==='full');if(!run){pushTest('COMPAT_TYPES','Node types','not_requested','test_mode='+mode,null);return [{json:{...x,_tests:tests}}];}if(!x._parse_ok){pushTest('COMPAT_TYPES','Node types','skipped','parse failed',null);return [{json:{...x,_tests:tests}}];}const wf=x._parsed_wf;const nodes=Array.isArray(wf.nodes)?wf.nodes:[];const known=['n8n-nodes-base.','@n8n/n8n-nodes-langchain.'];const unknown=[];const langchainNodes=[];for(const n of nodes){if(!n||typeof n.type!=='string')continue;if(!known.some(p=>n.type.startsWith(p)))unknown.push(n.type);if(n.type.startsWith('@n8n/n8n-nodes-langchain.'))langchainNodes.push(n);}if(unknown.length===0)pushTest('COMPAT_TYPES','Node types','passed','All node types recognized',null);else pushTest('COMPAT_TYPES','Node types','failed',unknown.slice(0,8).join(', '),null);if(x._is_below_120===true&&langchainNodes.length>0)pushTest('COMPAT_LANGCHAIN_VERSION','LangChain vs n8n version','failed',langchainNodes.length+' LangChain node(s) require n8n >= 1.20 but target is '+x.target_n8n_version,null);else if(langchainNodes.length>0)pushTest('COMPAT_LANGCHAIN_VERSION','LangChain vs n8n version','passed','LangChain nodes present; target version OK',null);return [{json:{...x,_tests:tests}}];"
+      },
+      "id": "310a440f-a90c-4d76-8899-646d5e09c911",
+      "name": "Test Node Types",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};const mode=x.test_mode;const run=(mode==='compatibility'||mode==='runtime'||mode==='full');if(!run){pushTest('COMPAT_PARAMS','Node parameters','not_requested','test_mode='+mode,null);return [{json:{...x,_tests:tests}}];}if(!x._parse_ok){pushTest('COMPAT_PARAMS','Node parameters','skipped','parse failed',null);return [{json:{...x,_tests:tests}}];}const wf=x._parsed_wf;const nodes=Array.isArray(wf.nodes)?wf.nodes:[];const issues=[];for(const n of nodes){if(!n||typeof n!=='object')continue;if(!n.parameters||typeof n.parameters!=='object')issues.push(n.name+': no parameters object');if(n.type&&String(n.type).includes('webhook')){if(!n.parameters.path&&!n.parameters.httpMethod)issues.push(n.name+': webhook missing path/httpMethod');}}if(issues.length===0)pushTest('COMPAT_PARAMS','Node parameters','passed','Parameter presence OK for '+nodes.length+' nodes',null);else pushTest('COMPAT_PARAMS','Node parameters','failed',issues.slice(0,8).join('; '),null);return [{json:{...x,_tests:tests}}];"
+      },
+      "id": "a9042353-1821-4084-a6e6-9cd42ff10fa7",
+      "name": "Test Node Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const pushTest=(id,name,status,msg,evidence)=>{tests.push({test_id:id,name,status,message:msg,evidence:evidence||null});};const mode=x.test_mode;const run=(mode==='compatibility'||mode==='runtime'||mode==='full');if(!run){pushTest('COMPAT_FEATURES','Supported features','not_requested','test_mode='+mode,null);return [{json:{...x,_tests:tests}}];}if(!x._parse_ok){pushTest('COMPAT_FEATURES','Supported features','skipped','parse failed',null);return [{json:{...x,_tests:tests}}];}const wf=x._parsed_wf;const nodes=Array.isArray(wf.nodes)?wf.nodes:[];let featureIssues=[];for(const n of nodes){if(!n||!n.parameters)continue;const p=n.parameters;if(p.pagination&&!['off','none'].includes(String(p.pagination)))featureIssues.push(n.name+': pagination');if(p.streaming===true||p.streamResponse===true)featureIssues.push(n.name+': streaming');if(p.polling===true)featureIssues.push(n.name+': polling');}if(featureIssues.length===0)pushTest('COMPAT_FEATURES','Supported features','passed','No conflicting feature flags detected',null);else pushTest('COMPAT_FEATURES','Supported features','failed','Verify these features: '+featureIssues.slice(0,8).join('; '),null);return [{json:{...x,_tests:tests}}];"
+      },
+      "id": "5eaece68-f902-4476-8022-fdf729d75869",
+      "name": "Test Supported Features",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x = $('Test Supported Features').first()?.json || $input.first()?.json || {};\nconst tests = Array.isArray(x._tests) ? [...x._tests] : [];\nconst pushTest = (id, name, status, msg, evidence) => {\n  tests.push({ test_id: id, name, status, message: msg, evidence: evidence || null });\n};\n\nconst mode = x.test_mode;\nconst run = (mode === 'runtime' || mode === 'full');\nconst authorized = x.test_environment_authorized === true;\n\nlet runtimeEndpoint = null;\ntry {\n  runtimeEndpoint = $env?.WF04_RUNTIME_ENDPOINT || null;\n} catch (e) {}\n\nconst endpointConfigured = !!(runtimeEndpoint && String(runtimeEndpoint).trim());\n\nif (!run) {\n  pushTest('RUNTIME_GATE', 'Runtime eligibility', 'not_requested', 'test_mode=' + mode, null);\n  return [{ json: { ...x, _tests: tests, _runtime_eligible: false, _runtime_reason: 'test_mode=' + mode } }];\n}\nif (!authorized) {\n  pushTest('RUNTIME_GATE', 'Runtime eligibility', 'skipped', 'test_environment_authorized=false — runtime skipped', null);\n  return [{ json: { ...x, _tests: tests, _runtime_eligible: false, _runtime_reason: 'not_authorized' } }];\n}\nif (!endpointConfigured) {\n  pushTest('RUNTIME_GATE', 'Runtime eligibility', 'not_requested', 'authorized=true but WF04_RUNTIME_ENDPOINT not configured — endpoint integration pending', null);\n  return [{ json: { ...x, _tests: tests, _runtime_eligible: false, _runtime_reason: 'endpoint_not_configured' } }];\n}\n\npushTest('RUNTIME_GATE', 'Runtime eligibility', 'passed', 'Test environment authorized + endpoint configured', null);\nreturn [{ json: { ...x, _tests: tests, _runtime_eligible: true, _runtime_reason: 'authorized' } }];"
+      },
+      "id": "8ea4b384-9bc6-4c3b-8061-7a40ea9cbeaf",
+      "name": "Check Runtime Eligibility",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "eligible",
+              "leftValue": "={{ $json._runtime_eligible === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eeadb15d-002b-47a3-a6f7-796e997d471f",
+      "name": "Runtime Eligible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3360,
+        96
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Check Runtime Eligibility').first()?.json || {};\nconst inp = $input.first()?.json || {};\nconst x = (Array.isArray(inp._tests) && inp._tests.length > 0) ? inp : base;\nconst tests = Array.isArray(x._tests) ? [...x._tests] : [];\n\ntests.push({ test_id: 'RUNTIME_EXEC', name: 'Runtime execution', status: 'skipped', message: 'Runtime execution endpoint configured but integration pending', evidence: 'External n8n test environment integration' });\ntests.push({ test_id: 'RUNTIME_LOGS', name: 'Execution logs', status: 'skipped', message: 'Runtime logs unavailable', evidence: null });\ntests.push({ test_id: 'RUNTIME_EXPECTED', name: 'Expected output', status: 'skipped', message: 'Expected output not provided', evidence: null });\ntests.push({ test_id: 'RUNTIME_FAILURE', name: 'Failure analysis', status: 'skipped', message: 'Runtime failure analysis not available', evidence: null });\n\nreturn [{ json: { ...x, _tests: tests, _runtime_executed: false } }];"
+      },
+      "id": "847f8c6b-982f-4b71-a541-e36c838b4d10",
+      "name": "Execute Runtime Tests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        0
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Check Runtime Eligibility').first()?.json || {};\nconst inp = $input.first()?.json || {};\nconst x = (Array.isArray(inp._tests) && inp._tests.length > 0) ? inp : base;\nconst tests = Array.isArray(x._tests) ? [...x._tests] : [];\n\nconst mode = x.test_mode;\nconst run = (mode === 'runtime' || mode === 'full');\nconst reason = x._runtime_reason || 'not_authorized';\n\nif (run) {\n  tests.push({ test_id: 'RUNTIME_EXEC', name: 'Runtime execution', status: 'skipped', message: 'Runtime tests skipped: ' + reason, evidence: 'Blueprint: runtime only when authorized env available' });\n  tests.push({ test_id: 'RUNTIME_LOGS', name: 'Execution logs', status: 'skipped', message: 'Runtime logs unavailable', evidence: null });\n  tests.push({ test_id: 'RUNTIME_EXPECTED', name: 'Expected output', status: 'skipped', message: 'Expected output not provided', evidence: null });\n  tests.push({ test_id: 'RUNTIME_FAILURE', name: 'Failure analysis', status: 'skipped', message: 'Runtime failure analysis not available', evidence: null });\n} else {\n  tests.push({ test_id: 'RUNTIME_EXEC', name: 'Runtime execution', status: 'not_requested', message: 'test_mode=' + mode, evidence: null });\n  tests.push({ test_id: 'RUNTIME_LOGS', name: 'Execution logs', status: 'not_requested', message: 'test_mode=' + mode, evidence: null });\n  tests.push({ test_id: 'RUNTIME_EXPECTED', name: 'Expected output', status: 'not_requested', message: 'test_mode=' + mode, evidence: null });\n  tests.push({ test_id: 'RUNTIME_FAILURE', name: 'Failure analysis', status: 'not_requested', message: 'test_mode=' + mode, evidence: null });\n}\n\nreturn [{ json: { ...x, _tests: tests, _runtime_executed: false } }];"
+      },
+      "id": "2abc8636-bcb2-4879-8643-05c0d0db18ef",
+      "name": "Skip Runtime Tests",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inp = $input.first()?.json || {};\nconst base = $('Check Runtime Eligibility').first()?.json || {};\nconst x = (Array.isArray(inp._tests) && inp._tests.length >= (base._tests?.length || 0)) ? inp : base;\n\nreturn [{ json: { ...x, _runtime_normalized: true } }];"
+      },
+      "id": "95c5942b-9fbe-4d26-be7f-c8819fe4a341",
+      "name": "Normalize Runtime Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3808,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x = $('Normalize Runtime Results').first()?.json || $input.first()?.json || {};\nconst tests = Array.isArray(x._tests) ? x._tests : [];\n\nconst reqId = $('Validate Request').first()?.json?.request_id || x.request_id || 'fallback-id';\nconst testId = 'TST-' + reqId;\n\nconst seen = new Set();\nconst unique = [];\nfor (const t of tests) {\n  if (!t || !t.test_id) continue;\n  if (seen.has(t.test_id)) continue;\n  seen.add(t.test_id);\n  unique.push(t);\n}\n\nreturn [{ json: { ...x, request_id: reqId, _tests: unique, _test_id: testId } }];"
+      },
+      "id": "31c4b034-70d4-461b-9ec2-fb49c9833a88",
+      "name": "Assign Test IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;const tests=x._tests||[];const executed=tests.filter(t=>t.status!=='not_requested');const notRequested=tests.filter(t=>t.status==='not_requested');const passed=executed.filter(t=>t.status==='passed');const failed=executed.filter(t=>t.status==='failed');const skipped=executed.filter(t=>t.status==='skipped');let validationStatus='failed';if(executed.length===0)validationStatus='failed';else if(failed.length>0)validationStatus='failed';else if(skipped.length>0)validationStatus='partial';else validationStatus='passed';const target=x.target_n8n_version||null;const evidence=[];if(x.workflow_hash)evidence.push('workflow_hash='+x.workflow_hash);if(target)evidence.push('target_n8n_version='+target);evidence.push('executed='+executed.length+' passed='+passed.length+' failed='+failed.length+' skipped='+skipped.length+' not_requested='+notRequested.length);const limitations=[];limitations.push('Static + compatibility only; runtime execution not verified when skipped');limitations.push('Expression test is brace-balance only, not full n8n syntax');limitations.push('Compatibility limited to node-type prefix and version-tuple checks');if(skipped.length>0)limitations.push(skipped.length+' test(s) skipped — not counted as passed');if(!x.hash_available)limitations.push('SHA-256 unavailable (crypto module not loadable)');return [{json:{...x,_aggregate:{executed,passed,failed,skipped,notRequested,validation_status:validationStatus,evidence,limitations}}}];"
+      },
+      "id": "81d4e82f-c23f-4632-a66a-ced80b2697cb",
+      "name": "Aggregate Test Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4256,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;\nconst a=x._aggregate||{};\nconst wf=x._parsed_wf;\nlet nodeCount=0;\nif(wf&&Array.isArray(wf.nodes))nodeCount=wf.nodes.filter(n=>n&&typeof n==='object').length;\n\nconst reqId = $('Validate Request').first()?.json?.request_id || x.request_id || 'fallback-id';\n\nconst result={\n    test_id:'TST-'+reqId,\n    validation_status:a.validation_status||'failed',\n    tests_executed:(a.executed||[]).map(t=>({test_id:t.test_id,name:t.name,status:t.status,message:t.message})),\n    passed_tests:(a.passed||[]).map(t=>t.test_id),\n    failed_tests:(a.failed||[]).map(t=>({test_id:t.test_id,name:t.name,message:t.message})),\n    skipped_tests:(a.skipped||[]).map(t=>({test_id:t.test_id,name:t.name,message:t.message})),\n    not_requested_tests:(a.notRequested||[]).map(t=>({test_id:t.test_id,name:t.name,message:t.message})),\n    evidence:a.evidence||[],\n    limitations:a.limitations||[],\n    test_mode:x.test_mode||null,\n    target_n8n_version:x.target_n8n_version||null,\n    workflow_hash:x.workflow_hash||null,\n    node_count:nodeCount,\n    redacted_fields:[],\n    counts:{executed:(a.executed||[]).length,passed:(a.passed||[]).length,failed:(a.failed||[]).length,skipped:(a.skipped||[]).length,not_requested:(a.notRequested||[]).length},\n    verification_summary:{status:'not_verified',evidence:a.evidence||[],runtime_verified:false,compatibility_verified:false}\n};\n\nconst status=a.validation_status||'failed';\nconst httpStatus=status==='failed'?422:200;\nconst errors=(a.failed||[]).length>0?[{category:'VALIDATION_FAILED',message:(a.failed||[]).length+' test(s) failed',details:(a.failed||[]).slice(0,10).map(t=>t.test_id+': '+t.message)}]:[];\nconst warnings=(a.skipped||[]).length>0?[{message:(a.skipped||[]).length+' test(s) skipped; they are NOT counted as passed'}]:[];\n\nreturn [{json:{\n    request_id:reqId,\n    task_id:null,\n    status:status==='passed'?'completed':(status==='partial'?'partial':'failed'),\n    _http_status:httpStatus,\n    result,\n    errors,\n    warnings,\n    verification:result.verification_summary,\n    _persist:{\n        project_id:x.project_id,\n        user_id:x.user_id,\n        claimed_user_id:x.user_id,\n        workspace_id:x.workspace_id,\n        conversation_id:x.conversation_id,\n        workflow_id:x.workflow_id||null,\n        workflow_name:x.workflow_name||null,\n        test_id:result.test_id,\n        test_mode:x.test_mode,\n        node_count:nodeCount,\n        event_type:'skill_executed'\n    }\n}}];"
+      },
+      "id": "4cf842ab-a00e-4a12-b806-4837e037e043",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4480,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_audits",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "request_id",
+              "fieldValue": "={{ $json.request_id }}"
+            },
+            {
+              "fieldId": "audit_id",
+              "fieldValue": "={{ $json.result.test_id }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._persist.user_id }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json._persist.workspace_id }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json._persist.project_id ?? undefined }}"
+            },
+            {
+              "fieldId": "workflow_id",
+              "fieldValue": "={{ $json._persist.workflow_id ?? undefined }}"
+            },
+            {
+              "fieldId": "workflow_name",
+              "fieldValue": "={{ $json._persist.workflow_name ?? undefined }}"
+            },
+            {
+              "fieldId": "source_type",
+              "fieldValue": "uploaded"
+            },
+            {
+              "fieldId": "analysis_mode",
+              "fieldValue": "validation"
+            },
+            {
+              "fieldId": "audit_status",
+              "fieldValue": "={{ $json.result.validation_status === 'passed' ? 'completed' : $json.result.validation_status }}"
+            },
+            {
+              "fieldId": "workflow_summary",
+              "fieldValue": "={{ 'Validation ' + $json.result.validation_status + ': ' + $json.result.counts.executed + ' executed, ' + $json.result.counts.passed + ' passed, ' + $json.result.counts.failed + ' failed, ' + $json.result.counts.skipped + ' skipped' }}"
+            },
+            {
+              "fieldId": "node_count",
+              "fieldValue": "={{ $json._persist.node_count ?? 0 }}"
+            },
+            {
+              "fieldId": "limitations",
+              "fieldValue": "={{ $json.result.limitations }}"
+            },
+            {
+              "fieldId": "verification_summary",
+              "fieldValue": "={{ $json.result.verification_summary }}"
+            },
+            {
+              "fieldId": "raw_workflow_json",
+              "fieldValue": "={{ $('Validate Request').first().json._wf_parsed_for_db ?? undefined }}"
+            }
+          ]
+        }
+      },
+      "id": "685269c0-7737-42de-bf81-ac7a19cf8d9a",
+      "name": "Persist Audit Header",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4704,
+        192
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const src=$('Build Result').first().json;const tests=(src.result&&src.result.tests_executed)||[];if(tests.length===0)return [{json:{_empty:true,audit_id:src.result.test_id,request_id:src.request_id}}];return tests.map((t,i)=>({json:{audit_id:src.result.test_id,finding_id:t.test_id||('T'+String(i+1).padStart(3,'0')),severity:t.status==='failed'?'high':(t.status==='skipped'?'low':'info'),category:'VALIDATION_TEST',node_id:null,node_name:null,description:String(t.name||'Test')+' — '+String(t.status||'unknown'),evidence:t.message!=null?String(t.message).slice(0,2000):null,suggested_fix:null,confidence:null,knowledge_status:'Observed',check_type:'validation_test'}}));"
+      },
+      "id": "ef47b0f5-593f-4a52-acc4-cb9e78f4edc0",
+      "name": "Split Test Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4928,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has",
+              "leftValue": "={{ $json._empty !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d056835e-c3e2-4121-83f1-08fe2c1411da",
+      "name": "Has Test Rows?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5152,
+        96
+      ],
+      "alwaysOutputData": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "workflow_audit_findings",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "audit_id",
+              "fieldValue": "={{ $json.audit_id }}"
+            },
+            {
+              "fieldId": "finding_id",
+              "fieldValue": "={{ $json.finding_id }}"
+            },
+            {
+              "fieldId": "severity",
+              "fieldValue": "={{ $json.severity }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json.category }}"
+            },
+            {
+              "fieldId": "node_id",
+              "fieldValue": "={{ $json.node_id ?? undefined }}"
+            },
+            {
+              "fieldId": "node_name",
+              "fieldValue": "={{ $json.node_name ?? undefined }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json.description }}"
+            },
+            {
+              "fieldId": "evidence",
+              "fieldValue": "={{ $json.evidence ?? undefined }}"
+            },
+            {
+              "fieldId": "suggested_fix",
+              "fieldValue": "={{ $json.suggested_fix ?? undefined }}"
+            },
+            {
+              "fieldId": "confidence",
+              "fieldValue": "={{ $json.confidence ?? undefined }}"
+            },
+            {
+              "fieldId": "knowledge_status",
+              "fieldValue": "={{ $json.knowledge_status }}"
+            },
+            {
+              "fieldId": "check_type",
+              "fieldValue": "={{ $json.check_type }}"
+            }
+          ]
+        }
+      },
+      "id": "3ff0b250-b3b3-4971-988c-e8b102f6bc14",
+      "name": "Persist Test Batch",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5376,
+        32
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}catch(e){}if(!src){try{const b=$('Format Request Error').first()?.json;if(b&&b.result)src=b;}catch(e){}}if(!src){src={request_id:null,result:{validation_status:'failed'},verification:{status:'not_verified',evidence:[]},errors:[],status:'failed',task_id:null,warnings:[],_persist:{}};}const row=$input.first()?.json??{};const id=row.id??row.audit_id??null;const idNonEmpty=typeof id==='string'?id.trim().length>0:(typeof id==='number'&&isFinite(id));const checks=[];if(!idNonEmpty)checks.push('no valid record id');if(row.project_id!==undefined&&row.project_id!==null&&src._persist&&src._persist.project_id&&row.project_id!==src._persist.project_id)checks.push('project_id mismatch');const expectedEvent=src._persist&&src._persist.event_type?src._persist.event_type:'skill_executed';if(row.event_type!==undefined&&row.event_type!==expectedEvent)checks.push('event_type mismatch');if(row.request_id!==undefined&&row.request_id!==null&&src.request_id&&row.request_id!==src.request_id)checks.push('request_id mismatch');const ok=idNonEmpty&&checks.length===0;const verification={...(src.verification||{}),persisted:ok,persist_record_id:idNonEmpty?id:null,persist_checks:checks};const result={...(src.result||{}),verification_summary:verification};return [{json:{...src,status:ok?src.status:'partial',result,verification,errors:ok?(src.errors||[]):[...(src.errors||[]),{category:'INTERNAL_ERROR',message:'Persistence unconfirmed: '+checks.join('; ')}]}}];"
+      },
+      "id": "83c73bab-1eb5-4c20-b49e-91a98e32036f",
+      "name": "Verify Persist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5600,
+        96
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}catch(e){}if(!src){try{const b=$('Format Request Error').first()?.json;if(b&&b.result)src=b;}catch(e){}}if(!src){src={request_id:null,result:{test_id:null,validation_status:'failed'},verification:{status:'not_verified',evidence:[]},errors:[],status:'failed',task_id:null,warnings:[],_persist:{}};}const raw=$input.first()?.json||{};const rawStr=JSON.stringify(raw).toLowerCase();const isDup=/23505|duplicate key|unique constraint/.test(rawStr);const cat=isDup?'VERSION_CONFLICT':'INTERNAL_ERROR';const msg=isDup?'Duplicate audit_id: this run already persisted (idempotent retry)':('Persistence failed: '+String((raw.error&&raw.error.message)||raw.message||'unknown').slice(0,200));const httpStatus=isDup?409:(src.result.validation_status==='failed'?422:500);const verification={...(src.verification||{}),persisted:false,persist_record_id:null,persist_note:msg,idempotent_retry:isDup};const result={...(src.result||{}),verification_summary:verification};return [{json:{...src,status:'failed',_http_status:httpStatus,result,verification,errors:[...(src.errors||[]),{category:cat,message:msg}]}}];"
+      },
+      "id": "fe0e7c7b-0779-4c2e-b570-58976f695896",
+      "name": "Persist Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5600,
+        288
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { request_id: $json.request_id, task_id: $json.task_id, status: $json.status, result: $json.result, errors: $json.errors, warnings: $json.warnings, verification: $json.verification } }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "5708066f-d4a1-48a7-811a-b0e7daf0e997",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        5824,
+        192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Input Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Valid?": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Project Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Request Error": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Project Context": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Workflow Memory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Workflow Memory": {
+      "main": [
+        [
+          {
+            "node": "Merge Prefetched Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Prefetched Context": {
+      "main": [
+        [
+          {
+            "node": "Test Structure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Structure": {
+      "main": [
+        [
+          {
+            "node": "Test References",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test References": {
+      "main": [
+        [
+          {
+            "node": "Test Required Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Required Fields": {
+      "main": [
+        [
+          {
+            "node": "Test Expressions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Expressions": {
+      "main": [
+        [
+          {
+            "node": "Test n8n Version",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test n8n Version": {
+      "main": [
+        [
+          {
+            "node": "Test Node Types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Node Types": {
+      "main": [
+        [
+          {
+            "node": "Test Node Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Node Parameters": {
+      "main": [
+        [
+          {
+            "node": "Test Supported Features",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test Supported Features": {
+      "main": [
+        [
+          {
+            "node": "Check Runtime Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Runtime Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Runtime Eligible?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Runtime Eligible?": {
+      "main": [
+        [
+          {
+            "node": "Execute Runtime Tests",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip Runtime Tests",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Runtime Tests": {
+      "main": [
+        [
+          {
+            "node": "Normalize Runtime Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip Runtime Tests": {
+      "main": [
+        [
+          {
+            "node": "Normalize Runtime Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Runtime Results": {
+      "main": [
+        [
+          {
+            "node": "Assign Test IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Test IDs": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Test Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Test Results": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Audit Header": {
+      "main": [
+        [
+          {
+            "node": "Split Test Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Test Rows": {
+      "main": [
+        [
+          {
+            "node": "Has Test Rows?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Test Rows?": {
+      "main": [
+        [
+          {
+            "node": "Persist Test Batch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify Persist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Test Batch": {
+      "main": [
+        [
+          {
+            "node": "Verify Persist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Persist Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Persist": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Failed": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

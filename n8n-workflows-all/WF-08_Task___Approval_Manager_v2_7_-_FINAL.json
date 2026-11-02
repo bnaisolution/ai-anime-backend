@@ -1,0 +1,2972 @@
+{
+  "name": "WF-08 Task & Approval Manager v2.7 - FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf08-task",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e8325b6e-b54f-469c-9f15-18696a2bb30b",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        2112
+      ],
+      "webhookId": "wf08-task",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()?.json??{};const headers=(input.headers&&typeof input.headers==='object')?input.headers:((input.body&&typeof input.body==='object'&&input.body.headers&&typeof input.body.headers==='object')?input.body.headers:{});let b=input.body??input;const fail=(category,message,httpStatus)=>[{json:{ok:false,request_id:typeof b?.request_id==='string'?b.request_id.trim()||null:null,user_id:typeof b?.user_id==='string'?b.user_id:null,workspace_id:typeof b?.workspace_id==='string'?b.workspace_id:null,project_id:typeof b?.project_id==='string'?b.project_id:null,conversation_id:typeof b?.conversation_id==='string'?b.conversation_id:null,task_id:typeof b?.task_id==='string'?b.task_id:null,category,message,http_status:httpStatus||400}}];if(!b||typeof b!=='object'||Array.isArray(b))return fail('INVALID_INPUT','Expected JSON object body');if(typeof b.request_id!=='string'||!b.request_id.trim())return fail('INVALID_INPUT','request_id required');const requestId=b.request_id.trim();if(requestId.length>100)return fail('INVALID_INPUT','request_id too long');let envToken=undefined,requireToken=false,envAccessible=true;try{envToken=$env?.WF08_SERVICE_TOKEN;requireToken=$env?.WF08_REQUIRE_TOKEN==='true';}catch(e){envAccessible=false;}let tokenCheckStatus='disabled_empty';if(!envAccessible&&requireToken)return fail('INTERNAL_ERROR','token_required_but_env_unavailable',503);if(requireToken&&(typeof envToken!=='string'||envToken===''))return fail('INTERNAL_ERROR','token_required_but_not_configured',503);if(!envAccessible){tokenCheckStatus='disabled_env_blocked';}else if(typeof envToken==='string'&&envToken!==''){tokenCheckStatus='enforced';const provided=headers['x-service-token']||headers['X-Service-Token']||null;if(!provided||provided!==envToken)return fail('UNAUTHORIZED','service_token_invalid',401);}const validOps=['CREATE_TASK','GET_TASK','UPDATE_TASK','SAVE_CHECKPOINT','RECORD_RESULT','REQUEST_APPROVAL','RECORD_APPROVAL'];const operation=typeof b.operation==='string'?b.operation.trim().toUpperCase():null;if(!operation||!validOps.includes(operation))return fail('INVALID_INPUT','Invalid operation');const validStates=['created','planning','awaiting_approval','ready','running','verifying','completed','failed','paused','cancelled'];const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=(s)=>typeof s==='string'&&uuidRe.test(s);const userId=typeof b.user_id==='string'?b.user_id.trim().slice(0,100):null;const workspaceId=typeof b.workspace_id==='string'?b.workspace_id.trim().slice(0,100):null;const projectId=(typeof b.project_id==='string'&&b.project_id.trim())?b.project_id.trim().slice(0,100):null;const conversationId=typeof b.conversation_id==='string'?b.conversation_id.trim().slice(0,200):null;const taskId=typeof b.task_id==='string'?b.task_id.trim().slice(0,100):null;if(!userId)return fail('UNAUTHORIZED','user_id required',401);if(!workspaceId)return fail('UNAUTHORIZED','workspace_id required (mandatory for isolation)',401);if(!isUuid(userId))return fail('INVALID_INPUT','user_id must be valid UUID');if(!isUuid(workspaceId))return fail('INVALID_INPUT','workspace_id must be valid UUID');if(projectId&&!isUuid(projectId))return fail('INVALID_INPUT','project_id must be valid UUID');if(conversationId&&!isUuid(conversationId))return fail('INVALID_INPUT','conversation_id must be valid UUID');if(taskId&&!isUuid(taskId))return fail('INVALID_INPUT','task_id must be valid UUID');const intent=typeof b.intent==='string'?b.intent.trim().slice(0,50):null;const title=typeof b.title==='string'?b.title.trim().slice(0,500):(typeof b.message==='string'?b.message.trim().slice(0,500):null);const description=typeof b.description==='string'?b.description.trim().slice(0,5000):null;const newStatus=typeof b.status==='string'?b.status.trim().toLowerCase():null;if(newStatus&&!validStates.includes(newStatus))return fail('INVALID_INPUT','Invalid status');const priority=typeof b.priority==='string'?b.priority.trim().slice(0,20):null;const blockedReason=typeof b.blocked_reason==='string'?b.blocked_reason.trim().slice(0,1000):null;const payload=(b.payload&&typeof b.payload==='object'&&!Array.isArray(b.payload))?b.payload:null;const checkpoint=(b.checkpoint&&typeof b.checkpoint==='object'&&!Array.isArray(b.checkpoint))?b.checkpoint:null;const resultPayload=(b.result&&typeof b.result==='object'&&!Array.isArray(b.result))?b.result:null;const approvalToken=typeof b.approval_token==='string'?b.approval_token.trim():null;const decision=typeof b.decision==='string'?b.decision.trim().toLowerCase():null;const action=typeof b.action==='string'?b.action.trim().slice(0,100):null;const resourceType=typeof b.resource_type==='string'?b.resource_type.trim().slice(0,50):null;const resourceId=typeof b.resource_id==='string'?b.resource_id.trim().slice(0,200):null;const idempotencyKey=(typeof b.idempotency_key==='string'&&b.idempotency_key.trim())?b.idempotency_key.trim().slice(0,200):null;const rejectionReason=(typeof b.rejection_reason==='string'&&b.rejection_reason.trim())?b.rejection_reason.trim().slice(0,1000):null;let expiresInMin=60;if(typeof b.expires_in_minutes==='number'&&b.expires_in_minutes>0)expiresInMin=Math.min(Math.floor(b.expires_in_minutes),1440);if(operation==='CREATE_TASK'&&!title)return fail('INVALID_INPUT','title required');if(['GET_TASK','UPDATE_TASK','SAVE_CHECKPOINT','RECORD_RESULT','REQUEST_APPROVAL'].includes(operation)&&!taskId)return fail('INVALID_INPUT','task_id required for '+operation);if(operation==='UPDATE_TASK'&&!newStatus&&!description&&!title&&!priority&&!blockedReason)return fail('INVALID_INPUT','UPDATE_TASK requires at least one field');if(operation==='SAVE_CHECKPOINT'&&!checkpoint)return fail('INVALID_INPUT','checkpoint required');if(operation==='RECORD_RESULT'&&!resultPayload)return fail('INVALID_INPUT','result required');if(operation==='REQUEST_APPROVAL'&&(!action||!resourceType||!resourceId))return fail('INVALID_INPUT','action, resource_type, resource_id required');if(operation==='RECORD_APPROVAL'&&(!approvalToken||!decision))return fail('INVALID_INPUT','approval_token and decision required');if(operation==='RECORD_APPROVAL'&&!['granted','denied'].includes(decision))return fail('INVALID_INPUT','decision must be granted or denied');return [{json:{ok:true,request_id:requestId,operation,user_id:userId,workspace_id:workspaceId,project_id:projectId,conversation_id:conversationId,task_id:taskId,intent,title,description,new_status:newStatus,priority,blocked_reason:blockedReason,payload,checkpoint,result_payload:resultPayload,approval_token:approvalToken,decision,action,resource_type:resourceType,resource_id:resourceId,idempotency_key:idempotencyKey,rejection_reason:rejectionReason,expires_in_minutes:expiresInMin,token_check_status:tokenCheckStatus}}];"
+      },
+      "id": "4fe506be-2798-4371-94f6-bddee76de5ce",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        2112
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e9480b53-e046-4191-8d80-e2267d58d66e",
+      "name": "Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        2112
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$input.first()?.json??{};const rid=a.request_id??null;const opId='TASKOP-'+(rid||'rejected')+'-'+Date.now();const VALID_CATEGORIES=['INVALID_INPUT','INVALID_JSON','UNAUTHORIZED','FORBIDDEN','NOT_FOUND','MODEL_ERROR','PROVIDER_RATE_LIMIT','PROVIDER_TIMEOUT','VALIDATION_FAILED','TEST_FAILED','APPROVAL_REQUIRED','VERSION_CONFLICT','INTEGRATION_UNAVAILABLE','INTERNAL_ERROR'];const cat=VALID_CATEGORIES.includes(a.category||'')?a.category:'INVALID_INPUT';const msg=a.message||'Invalid request';const httpMap={INVALID_INPUT:400,INVALID_JSON:400,UNAUTHORIZED:401,FORBIDDEN:403,NOT_FOUND:404,APPROVAL_REQUIRED:409,VERSION_CONFLICT:409,VALIDATION_FAILED:422,TEST_FAILED:422,PROVIDER_RATE_LIMIT:429,PROVIDER_TIMEOUT:504,MODEL_ERROR:502,INTEGRATION_UNAVAILABLE:503,INTERNAL_ERROR:500};const httpStatus=(typeof a.http_status==='number')?a.http_status:(httpMap[cat]||400);return [{json:{request_id:rid,task_id:null,status:'failed',_http_status:httpStatus,result:{operation_id:opId,operation:null,task:null,created:false,updated:false,checkpoint_saved:false,result_recorded:false,approval:null,approval_token:null,approval_expires_at:null,decision:null,limitations:['No task operation performed due to input validation failure.'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:cat,message:msg}],warnings:[],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{claimed_user_id:a.user_id||null,project_id:a.project_id||null,user_id:null,workspace_id:a.workspace_id||null,conversation_id:a.conversation_id||null,resource_type:'task_operation_rejected',resource_id:opId,event_type:'task_operation_rejected'}}}];"
+      },
+      "id": "25ccfc6b-f752-48dd-bef5-54cd9064ea80",
+      "name": "Format Request Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        2608
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r0",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "CREATE_TASK",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CREATE_TASK"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "GET_TASK",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "GET_TASK"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "UPDATE_TASK",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "UPDATE_TASK"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "SAVE_CHECKPOINT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SAVE_CHECKPOINT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "RECORD_RESULT",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "RECORD_RESULT"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r5",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "REQUEST_APPROVAL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "REQUEST_APPROVAL"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r6",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "RECORD_APPROVAL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "RECORD_APPROVAL"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "d04631fc-bd6f-4828-97da-3f68af7432f8",
+      "name": "Operation Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        672,
+        1056
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "tasks",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $('Validate Request').first().json.project_id ?? undefined }}"
+            },
+            {
+              "fieldId": "conversation_id",
+              "fieldValue": "={{ $('Validate Request').first().json.conversation_id ?? undefined }}"
+            },
+            {
+              "fieldId": "task_type",
+              "fieldValue": "={{ $('Validate Request').first().json.intent || 'general' }}"
+            },
+            {
+              "fieldId": "goal",
+              "fieldValue": "={{ $('Validate Request').first().json.title }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $('Validate Request').first().json.title }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $('Validate Request').first().json.description ?? undefined }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $('Validate Request').first().json.intent ?? undefined }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "created"
+            },
+            {
+              "fieldId": "priority",
+              "fieldValue": "={{ $('Validate Request').first().json.priority ?? undefined }}"
+            },
+            {
+              "fieldId": "payload",
+              "fieldValue": "={{ $('Validate Request').first().json.payload ?? undefined }}"
+            },
+            {
+              "fieldId": "current_step",
+              "fieldValue": 0
+            },
+            {
+              "fieldId": "retry_count",
+              "fieldValue": 0
+            },
+            {
+              "fieldId": "max_retries",
+              "fieldValue": 3
+            },
+            {
+              "fieldId": "idempotency_key",
+              "fieldValue": "={{ $('Validate Request').first().json.idempotency_key ?? undefined }}"
+            }
+          ]
+        }
+      },
+      "id": "7c5d2f27-8ca2-495a-873d-6d44bc629110",
+      "name": "Create Task Insert",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4032,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "tasks",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "c36db425-7607-4f7c-954f-a829fc8929dd",
+      "name": "Get Task Select",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        192
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "found",
+              "leftValue": "={{ $('Get Task Select').first().json.id !== undefined && $('Get Task Select').first().json.id !== null && $('Get Task Select').first().json.workspace_id === $('Validate Request').first().json.workspace_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "064da0ff-77d6-49f3-aa2c-09aee6ea8b1b",
+      "name": "Task Found For Details?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3360,
+        192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "task_steps",
+        "limit": 100,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "task_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.task_id }}"
+            }
+          ]
+        }
+      },
+      "id": "8b185c69-65d8-4999-97bb-cdf5b8dbb1c3",
+      "name": "Get Task Steps",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3584,
+        192
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "checkpoints",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "task_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.task_id }}"
+            }
+          ]
+        }
+      },
+      "id": "483e02d1-607a-41a2-b1c7-c2e56c3ded0e",
+      "name": "Get Task Checkpoints",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3808,
+        192
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const base=$('Get Task Select').first()?.json||{};const stepsRaw=$('Get Task Steps').all().map(i=>i.json).filter(r=>r&&r.id);const cpsRaw=$('Get Task Checkpoints').all().map(i=>i.json).filter(r=>r&&r.id);const seenS=new Set();const uniqSteps=[];for(const s of stepsRaw){if(seenS.has(s.id))continue;seenS.add(s.id);uniqSteps.push(s);}const seenC=new Set();const uniqCps=[];for(const c of cpsRaw){if(seenC.has(c.id))continue;seenC.add(c.id);uniqCps.push(c);}const steps=uniqSteps.slice(0,50).map(s=>({id:s.id,step_number:s.step_number||null,name:s.name||null,status:s.status||null,started_at:s.started_at||null,completed_at:s.completed_at||null}));const checkpoints=uniqCps.slice(0,20).map(c=>({id:c.id,step_number:c.step_number||null,can_resume:c.can_resume!==false,created_at:c.created_at||null}));if(!base||!base.id)return [{json:{...meta,_result_kind:'get_task_error',_error_category:'NOT_FOUND',_error_message:'Task not found or workspace mismatch'}}];if(base.workspace_id!==meta.workspace_id)return [{json:{...meta,_result_kind:'get_task_error',_error_category:'FORBIDDEN',_error_message:'Task workspace mismatch'}}];return [{json:{...meta,_result_kind:'get_task',_task:{...base,task_steps:steps,checkpoints:checkpoints},_step_count:steps.length,_checkpoint_count:checkpoints.length}}];"
+      },
+      "id": "c425fc14-bf87-4f76-92eb-008d40374307",
+      "name": "Finalize Get Task",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        192
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "tasks",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "ffdcbb40-6706-40b3-8c33-54e8e51bf073",
+      "name": "Update Task Prefetch",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        512
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const rows=$input.all().map(x=>x.json).filter(x=>x&&typeof x==='object'&&!x.code&&!x.error&&x.id);const current=rows[0]||null;if(!current)return [{json:{...meta,_error:true,_error_category:'NOT_FOUND',_error_message:'Task not found or not owned by user'}}];if(current.workspace_id!==meta.workspace_id)return [{json:{...meta,_error:true,_error_category:'FORBIDDEN',_error_message:'Task workspace mismatch'}}];const VALID_TRANSITIONS={created:['planning','ready','cancelled'],planning:['awaiting_approval','ready','cancelled'],awaiting_approval:['ready','cancelled'],ready:['running','paused','cancelled','awaiting_approval'],running:['verifying','failed','paused'],verifying:['completed','failed'],paused:['ready','running','cancelled'],completed:[],failed:[],cancelled:[]};const currentStatus=String(current.status||'').toLowerCase();const targetStatus=meta.new_status;if(targetStatus&&targetStatus!==currentStatus){const allowed=VALID_TRANSITIONS[currentStatus]||[];if(!allowed.includes(targetStatus))return [{json:{...meta,_error:true,_error_category:'VALIDATION_FAILED',_error_message:'Invalid transition '+currentStatus+' -> '+targetStatus}}];}return [{json:{...meta,_current_task:current,_current_status:currentStatus,_current_updated_at:current.updated_at||null}}];"
+      },
+      "id": "1d38481a-ed0b-4739-ab1e-b1661eb71d22",
+      "name": "Update Task Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        512
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f33cf15b-5465-4be3-be08-6f223efc6289",
+      "name": "Update Task Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3584,
+        512
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "tasks",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            },
+            {
+              "keyName": "updated_at",
+              "condition": "eq",
+              "keyValue": "={{ $json._current_updated_at !== null && $json._current_updated_at !== undefined ? $json._current_updated_at : '1970-01-01T00:00:00Z' }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.new_status ?? undefined }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json.title ?? undefined }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json.description ?? undefined }}"
+            },
+            {
+              "fieldId": "priority",
+              "fieldValue": "={{ $json.priority ?? undefined }}"
+            },
+            {
+              "fieldId": "blocked_reason",
+              "fieldValue": "={{ $json.blocked_reason ?? undefined }}"
+            }
+          ]
+        }
+      },
+      "id": "2183418a-fbe9-4814-88e4-65d0131d5ef9",
+      "name": "Update Task Apply",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3808,
+        480
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Update Task Validate').first().json;const raw=$input.first()?.json;if(raw&&typeof raw==='object'&&raw.id){return [{json:{...x,operation:'UPDATE_TASK',_result_kind:'update',_updated_row:raw}}];}if(raw&&typeof raw==='object'&&(raw.code||raw.message)){return [{json:{...x,operation:'UPDATE_TASK',_result_kind:'error',_error_category:'INTERNAL_ERROR',_error_message:'Database error: '+String(raw.message||raw.code)}}];}return [{json:{...x,operation:'UPDATE_TASK',_result_kind:'error',_error_category:'VERSION_CONFLICT',_error_message:'Update affected 0 rows (updated_at mismatch or concurrent modification)'}}];"
+      },
+      "id": "5a845eab-e047-4e12-8754-9b7bebf26b29",
+      "name": "Wrap Update Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        480
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Update Task Validate').first().json;return [{json:{...x,operation:'UPDATE_TASK',_result_kind:'error',_error_category:x._error_category||'VALIDATION_FAILED',_error_message:x._error_message||'Validation failed'}}];"
+      },
+      "id": "bf1b5733-2693-4d0e-be63-1f36dbd13a0a",
+      "name": "Wrap Update Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        672
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "tasks",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "f58400b5-94b2-4f42-9fdb-956166693cc7",
+      "name": "Checkpoint Prefetch",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        896
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const rows=$input.all().map(x=>x.json).filter(x=>x&&typeof x==='object'&&!x.code&&!x.error&&x.id);const current=rows[0]||null;if(!current)return [{json:{...meta,_error:true,_error_category:'NOT_FOUND',_error_message:'Task not found'}}];if(current.workspace_id!==meta.workspace_id)return [{json:{...meta,_error:true,_error_category:'FORBIDDEN',_error_message:'Task workspace mismatch'}}];if(['completed','failed','cancelled'].includes(String(current.status||'').toLowerCase()))return [{json:{...meta,_error:true,_error_category:'VALIDATION_FAILED',_error_message:'Cannot save checkpoint on terminal-state task'}}];const existingCp=(current.checkpoint&&typeof current.checkpoint==='object')?current.checkpoint:{};const newCp=Object.assign({},existingCp,meta.checkpoint||{},{saved_at:new Date().toISOString()});return [{json:{...meta,_merged_checkpoint:newCp,_current_status:String(current.status||'').toLowerCase()}}];"
+      },
+      "id": "596c33b9-0cf0-4230-abaf-ce348d6852eb",
+      "name": "Checkpoint Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        896
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6b6f4b9c-8306-431b-8a0d-35b2384d432a",
+      "name": "Checkpoint Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3584,
+        896
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "tasks",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "checkpoint",
+              "fieldValue": "={{ $json._merged_checkpoint }}"
+            }
+          ]
+        }
+      },
+      "id": "70e09921-679a-49c9-889e-7e46bfe36065",
+      "name": "Checkpoint Apply",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3808,
+        864
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Checkpoint Prepare').first().json;const raw=$input.first()?.json;if(raw&&typeof raw==='object'&&raw.id){return [{json:{...x,operation:'SAVE_CHECKPOINT',_result_kind:'checkpoint',_updated_row:raw}}];}if(raw&&typeof raw==='object'&&(raw.code||raw.message)){return [{json:{...x,operation:'SAVE_CHECKPOINT',_result_kind:'error',_error_category:'INTERNAL_ERROR',_error_message:'Database error: '+String(raw.message||raw.code)}}];}return [{json:{...x,operation:'SAVE_CHECKPOINT',_result_kind:'error',_error_category:'VERSION_CONFLICT',_error_message:'Checkpoint update affected 0 rows'}}];"
+      },
+      "id": "078409f0-548a-40e4-9738-7c18a824a644",
+      "name": "Wrap Checkpoint Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        864
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Checkpoint Prepare').first().json;return [{json:{...x,operation:'SAVE_CHECKPOINT',_result_kind:'error',_error_category:x._error_category||'VALIDATION_FAILED',_error_message:x._error_message||'Checkpoint error'}}];"
+      },
+      "id": "ac3892e7-bc42-465f-8dab-7354eb1c0cd0",
+      "name": "Wrap Checkpoint Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        1056
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "tasks",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "1a1c2227-5619-46c6-91fd-fcecd0d440c1",
+      "name": "Result Prefetch",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const rows=$input.all().map(x=>x.json).filter(x=>x&&typeof x==='object'&&!x.code&&!x.error&&x.id);const current=rows[0]||null;if(!current)return [{json:{...meta,_error:true,_error_category:'NOT_FOUND',_error_message:'Task not found'}}];if(current.workspace_id!==meta.workspace_id)return [{json:{...meta,_error:true,_error_category:'FORBIDDEN',_error_message:'Task workspace mismatch'}}];const rp=meta.result_payload||{};const statusFromResult=typeof rp.status==='string'?rp.status.toLowerCase():null;const validStates=['created','planning','awaiting_approval','ready','running','verifying','completed','failed','paused','cancelled'];const finalStatus=statusFromResult&&validStates.includes(statusFromResult)?statusFromResult:'completed';return [{json:{...meta,_result_payload:rp,_final_status:finalStatus}}];"
+      },
+      "id": "d2f05c50-424e-47a8-9604-e3ad2193c036",
+      "name": "Result Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5ff8abd1-b00e-4a5f-9385-1307a78a3794",
+      "name": "Result Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3584,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "tasks",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "result",
+              "fieldValue": "={{ $json._result_payload }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json._final_status }}"
+            },
+            {
+              "fieldId": "completed_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "f33fe2db-6ceb-4528-8935-3fc90aa6f289",
+      "name": "Result Apply",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3808,
+        1248
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Result Prepare').first().json;const raw=$input.first()?.json;if(raw&&typeof raw==='object'&&raw.id){return [{json:{...x,operation:'RECORD_RESULT',_result_kind:'result',_updated_row:raw}}];}if(raw&&typeof raw==='object'&&(raw.code||raw.message)){return [{json:{...x,operation:'RECORD_RESULT',_result_kind:'error',_error_category:'INTERNAL_ERROR',_error_message:'Database error: '+String(raw.message||raw.code)}}];}return [{json:{...x,operation:'RECORD_RESULT',_result_kind:'error',_error_category:'VERSION_CONFLICT',_error_message:'Result update affected 0 rows'}}];"
+      },
+      "id": "d9a5d034-cce5-484d-9add-69c57d664f91",
+      "name": "Wrap Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        1248
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Result Prepare').first().json;return [{json:{...x,operation:'RECORD_RESULT',_result_kind:'error',_error_category:x._error_category||'VALIDATION_FAILED',_error_message:x._error_message||'Result error'}}];"
+      },
+      "id": "c810cb68-d033-48fd-843d-6d8766ff82d4",
+      "name": "Wrap Result Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        1440
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "tasks",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "b3224137-36a9-409d-8870-6bdcc83cd3cf",
+      "name": "Approval Task Prefetch",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        2000
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const rows=$input.all().map(x=>x.json).filter(x=>x&&typeof x==='object'&&!x.code&&!x.error&&x.id);const current=rows[0]||null;if(!current)return [{json:{...meta,ok:false,_error_category:'NOT_FOUND',_error_message:'Task not found for REQUEST_APPROVAL'}}];if(current.id!==meta.task_id)return [{json:{...meta,ok:false,_error_category:'VALIDATION_FAILED',_error_message:'Task id mismatch'}}];if(current.user_id!==meta.user_id)return [{json:{...meta,ok:false,_error_category:'FORBIDDEN',_error_message:'Task not owned by caller'}}];if(current.workspace_id!==meta.workspace_id)return [{json:{...meta,ok:false,_error_category:'FORBIDDEN',_error_message:'Task workspace mismatch'}}];const st=String(current.status||'').toLowerCase();const ALLOWED=['created','planning','ready','paused'];if(!ALLOWED.includes(st))return [{json:{...meta,ok:false,_error_category:'VALIDATION_FAILED',_error_message:'Task state '+st+' not eligible for approval (allowed: '+ALLOWED.join(',')+')'}}];return [{json:{...meta,ok:true,_task_snapshot:{id:current.id,status:st,user_id:current.user_id,workspace_id:current.workspace_id||null,updated_at:current.updated_at||null}}}];"
+      },
+      "id": "2bc3c69f-52ce-4949-b454-77a534136373",
+      "name": "Validate Approval Preconditions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        2000
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.ok === true && !$json._error_category }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "76d9b7d7-73b3-41f5-a5dc-f224daa68305",
+      "name": "Preconditions Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        2000
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Approval Preconditions').first().json;const opId='TASKOP-'+meta.request_id+'-prec-'+Date.now();const cat=meta._error_category||'VALIDATION_FAILED';const httpMap={NOT_FOUND:404,FORBIDDEN:403,VALIDATION_FAILED:422};return [{json:{_result_kind:'error',_error_category:cat,_error_message:meta._error_message||'Precondition failed',request_id:meta.request_id,task_id:meta.task_id,status:'failed',_http_status:httpMap[cat]||422,result:{operation_id:opId,operation:'REQUEST_APPROVAL',task:null,created:false,updated:false,checkpoint_saved:false,result_recorded:false,approval:null,approval_token:null,approval_expires_at:null,decision:null,limitations:['Approval request rejected at precondition stage.'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:cat,message:meta._error_message||'Precondition failed'}],warnings:[],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'task_operation_rejected',resource_id:opId,event_type:'task_operation_rejected'}}];"
+      },
+      "id": "a25d51c6-36c6-4b2c-967c-5078c9b0cca2",
+      "name": "Wrap Approval Precondition Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        2496
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Approval Preconditions').first().json;function randomHex(n){try{const c=require('crypto');if(c&&typeof c.randomBytes==='function')return c.randomBytes(n).toString('hex');}catch(e){}if(typeof globalThis!=='undefined'&&globalThis.crypto&&typeof globalThis.crypto.getRandomValues==='function'){const a=new Uint8Array(n);globalThis.crypto.getRandomValues(a);return Array.from(a).map(b=>b.toString(16).padStart(2,'0')).join('');}return null;}async function sha256Hex(str){if(typeof globalThis!=='undefined'&&globalThis.crypto&&globalThis.crypto.subtle&&typeof globalThis.crypto.subtle.digest==='function'){try{const enc=new TextEncoder();const buf=await globalThis.crypto.subtle.digest('SHA-256',enc.encode(str));return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');}catch(e){}}try{const c=require('crypto');if(c&&typeof c.createHash==='function')return c.createHash('sha256').update(str).digest('hex');}catch(e){}return null;}const raw=randomHex(32);if(!raw)return [{json:{...meta,ok:false,_error_category:'INTERNAL_ERROR',_error_message:'Random generator unavailable: set NODE_FUNCTION_ALLOW_BUILTIN=crypto, OR ensure Node.js 18+ with globalThis.crypto'}}];const hash=await sha256Hex(raw);if(!hash)return [{json:{...meta,ok:false,_error_category:'INTERNAL_ERROR',_error_message:'SHA-256 unavailable: set NODE_FUNCTION_ALLOW_BUILTIN=crypto OR use Node 18+'}}];const now=new Date();const expiresAt=new Date(now.getTime()+meta.expires_in_minutes*60000);return [{json:{...meta,ok:true,_raw_token:raw,_token_hash:hash,_expires_at:expiresAt.toISOString(),_created_at:now.toISOString()}}];"
+      },
+      "id": "06f0ed5e-1dae-4c07-b442-39cd40284c21",
+      "name": "Generate Approval Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        1904
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.ok === true && !$json._error_category }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "48af40ba-2320-47a1-b374-f03a850d340d",
+      "name": "Token Generated?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1792,
+        1904
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Generate Approval Token').first().json;const opId='TASKOP-'+meta.request_id+'-tokenerr-'+Date.now();return [{json:{_result_kind:'error',_error_category:'INTERNAL_ERROR',_error_message:meta._error_message||'Token generation failed',request_id:meta.request_id,task_id:meta.task_id,status:'failed',_http_status:500,result:{operation_id:opId,operation:'REQUEST_APPROVAL',task:null,created:false,updated:false,checkpoint_saved:false,result_recorded:false,approval:null,approval_token:null,approval_expires_at:null,decision:null,limitations:['Token generation failed'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:'INTERNAL_ERROR',message:meta._error_message||'Token generation failed'}],warnings:[],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'task_operation',resource_id:opId,event_type:'task_operation'}}];"
+      },
+      "id": "c461e26d-63e6-441a-9c58-f35509c14bad",
+      "name": "Wrap Token Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        2304
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "approval_records",
+        "limit": 5,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "task_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.task_id }}"
+            },
+            {
+              "keyName": "action_type",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.action }}"
+            },
+            {
+              "keyName": "resource_type",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.resource_type }}"
+            },
+            {
+              "keyName": "resource_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.resource_id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "pending"
+            }
+          ]
+        }
+      },
+      "id": "999620e9-518c-46b4-8f98-a74d7dca758a",
+      "name": "Check Existing Approval",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        1808
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "found",
+              "leftValue": "={{ $input.all().filter(i => i.json && i.json.id).length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a3b26b2e-525e-4453-b5c1-fcbb2af68b83",
+      "name": "Existing Approval Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        1808
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const existing=$('Check Existing Approval').all().map(i=>i.json).filter(r=>r&&r.id);const opId='TASKOP-'+meta.request_id+'-dup-'+Date.now();return [{json:{_result_kind:'error',_error_category:'VERSION_CONFLICT',_error_message:'Pending approval already exists for this (task_id, action, resource_id)',request_id:meta.request_id,task_id:meta.task_id,status:'failed',_http_status:409,result:{operation_id:opId,operation:'REQUEST_APPROVAL',task:null,created:false,updated:false,checkpoint_saved:false,result_recorded:false,approval:existing[0]||null,approval_token:null,approval_expires_at:existing[0]?existing[0].expires_at:null,decision:null,limitations:['Duplicate approval request rejected'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:'VERSION_CONFLICT',message:'Pending approval already exists (id='+(existing[0]?existing[0].id:'?')+')'}],warnings:[],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'task_operation_rejected',resource_id:opId,event_type:'task_operation_rejected'}}];"
+      },
+      "id": "e3b0e6f8-31a2-4e84-8c18-a32c562dd465",
+      "name": "Wrap Approval Duplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        1632
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "approval_records",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "task_id",
+              "fieldValue": "={{ $('Validate Request').first().json.task_id }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "fieldId": "action_type",
+              "fieldValue": "={{ $('Validate Request').first().json.action }}"
+            },
+            {
+              "fieldId": "resource_type",
+              "fieldValue": "={{ $('Validate Request').first().json.resource_type }}"
+            },
+            {
+              "fieldId": "resource_id",
+              "fieldValue": "={{ $('Validate Request').first().json.resource_id }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ 'Approval requested: ' + $('Validate Request').first().json.action }}"
+            },
+            {
+              "fieldId": "risk_category",
+              "fieldValue": "medium"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "pending"
+            },
+            {
+              "fieldId": "token_hash",
+              "fieldValue": "={{ $('Generate Approval Token').first().json._token_hash }}"
+            },
+            {
+              "fieldId": "expires_at",
+              "fieldValue": "={{ $('Generate Approval Token').first().json._expires_at }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ { requested_at: $('Generate Approval Token').first().json._created_at, raw_action: $('Validate Request').first().json.action, expires_in_minutes: $('Validate Request').first().json.expires_in_minutes } }}"
+            }
+          ]
+        }
+      },
+      "id": "a252680b-def2-49c9-be1f-ca94f93e392e",
+      "name": "Approval Request Insert",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2464,
+        1872
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "tasks",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Approval Preconditions').first().json._task_snapshot.status }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "awaiting_approval"
+            },
+            {
+              "fieldId": "approval_status",
+              "fieldValue": "pending"
+            }
+          ]
+        }
+      },
+      "id": "1992b59d-1a0c-4850-8a78-390340752fda",
+      "name": "Task Mark Awaiting",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        1872
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "approval_records",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "token_hash",
+              "condition": "eq",
+              "keyValue": "={{ $('Generate Approval Token').first().json._token_hash }}"
+            }
+          ]
+        }
+      },
+      "id": "463b2957-e88f-4a05-afc6-901e75e560f6",
+      "name": "Fetch Approval Row",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2912,
+        1872
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const inserted=$('Approval Request Insert').first()?.json||{};const fetched=$('Fetch Approval Row').first()?.json||{};const taskUpdate=$('Task Mark Awaiting').first()?.json||{};const approvalRow=(inserted&&inserted.id)?inserted:((fetched&&fetched.id)?fetched:null);const taskUpdated=!!(taskUpdate&&taskUpdate.id===meta.task_id);const taskCurrentStatus=taskUpdated?(taskUpdate.status||'awaiting_approval'):'unknown';const rawTokenForResponse=taskUpdated?$('Generate Approval Token').first().json._raw_token:null;const insertRawErr=JSON.stringify(inserted||{}).slice(0,500);return [{json:{...meta,operation:'REQUEST_APPROVAL',_result_kind:'approval_request',_approval_row:approvalRow,_task_updated:taskUpdated,_task_current_status:taskCurrentStatus,_raw_token_returned:rawTokenForResponse,_expires_at_returned:taskUpdated?$('Generate Approval Token').first().json._expires_at:null,_approval_insert_raw_err:insertRawErr}}];"
+      },
+      "id": "2f232939-223b-43da-ad34-b932e3998745",
+      "name": "Wrap Approval Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        1872
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "consistent",
+              "leftValue": "={{ $json._task_updated === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9402e035-983d-44ae-a887-a0ca0b261494",
+      "name": "Task Updated OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3360,
+        1872
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "hasRow",
+              "leftValue": "={{ $json._approval_row !== null && $json._approval_row !== undefined && typeof $json._approval_row.id === 'string' && $json._approval_row.id.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f3c2e707-563c-4a62-b6a2-e018061660b9",
+      "name": "Has Approval To Compensate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3584,
+        1952
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "approval_records",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json._approval_row.id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "pending"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "cancelled"
+            },
+            {
+              "fieldId": "rejection_reason",
+              "fieldValue": "Auto-cancelled: task state not transitioned to awaiting_approval (concurrent modification)"
+            }
+          ]
+        }
+      },
+      "id": "e9281ac1-d8d9-4536-8de0-0a57cf20d7c4",
+      "name": "Compensate Orphan Approval",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3808,
+        1920
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const wrapped=$('Wrap Approval Request').first()?.json||{};const rawComp=$input.first()?.json;const compHasRow=!!(rawComp&&typeof rawComp==='object'&&rawComp.id);const compIsCancelled=compHasRow&&String(rawComp.status||'').toLowerCase()==='cancelled';const compensated=compHasRow&&compIsCancelled;const approvalStatus=compHasRow?String(rawComp.status||'unknown'):'no-row-returned';const compWarning=compHasRow&&!compIsCancelled?'Compensation update returned row but status is not cancelled (approval_status='+approvalStatus+'); verify manually':(compHasRow?'':'Compensation node returned no row; orphan approval may persist with status=pending');const opId='TASKOP-'+meta.request_id+'-partial-'+Date.now();return [{json:{_result_kind:'error',_error_category:'VERSION_CONFLICT',_error_message:'Approval created but task state was not transitioned. Compensation='+(compensated?'succeeded':'incomplete')+'. Current task status: '+String(wrapped._task_current_status||'unknown'),_compensation_succeeded:compensated,request_id:meta.request_id,task_id:meta.task_id,status:'failed',_http_status:409,result:{operation_id:opId,operation:'REQUEST_APPROVAL',task:null,created:false,updated:false,checkpoint_saved:false,result_recorded:false,approval:null,approval_token:null,approval_expires_at:null,decision:null,limitations:['Approval auto-cancelled due to inconsistent task state.'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:'VERSION_CONFLICT',message:'Task state not transitioned; approval created then cancelled'}],warnings:compensated?[]:[{message:compWarning}],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'task_operation_rejected',resource_id:opId,event_type:'task_operation_rejected'}}];"
+      },
+      "id": "117f446a-85bc-4474-a85a-38eebddba21f",
+      "name": "Wrap Approval Partial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        1920
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const wrapped=$('Wrap Approval Request').first()?.json||{};const insertRawErr=String(wrapped._approval_insert_raw_err||'');const isUniqueViolation=/23505|duplicate key|unique constraint/i.test(insertRawErr);const opId='TASKOP-'+meta.request_id+'-nocomp-'+Date.now();const warningMsg=isUniqueViolation?'Unique constraint detected (23505): concurrent REQUEST_APPROVAL likely already inserted a pending row. Verify DB unique index approval_records_pending_uniq exists.':'Approval insert did not return row and no clear error was captured; possible transient DB error. Verify Approval Request Insert node output and DB state.';return [{json:{_result_kind:'error',_error_category:'VERSION_CONFLICT',_error_message:'Task state was not transitioned; approval insert returned no row (concurrent request or transient error). No compensation needed.',_compensation_succeeded:null,request_id:meta.request_id,task_id:meta.task_id,status:'failed',_http_status:409,result:{operation_id:opId,operation:'REQUEST_APPROVAL',task:null,created:false,updated:false,checkpoint_saved:false,result_recorded:false,approval:null,approval_token:null,approval_expires_at:null,decision:null,limitations:['No approval row returned; concurrent request or DB issue.'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:'VERSION_CONFLICT',message:'Approval insert failed or was rejected by dedup'}],warnings:[{message:warningMsg}],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'task_operation_rejected',resource_id:opId,event_type:'task_operation_rejected'}}];"
+      },
+      "id": "5d27df94-ae33-409f-a953-b54013aeb137",
+      "name": "Wrap No Compensation Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        2112
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;async function sha256Hex(str){if(typeof globalThis!=='undefined'&&globalThis.crypto&&globalThis.crypto.subtle&&typeof globalThis.crypto.subtle.digest==='function'){try{const enc=new TextEncoder();const buf=await globalThis.crypto.subtle.digest('SHA-256',enc.encode(str));return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');}catch(e){}}try{const c=require('crypto');if(c&&typeof c.createHash==='function')return c.createHash('sha256').update(str).digest('hex');}catch(e){}return null;}const hash=await sha256Hex(meta.approval_token);if(!hash)return [{json:{...meta,ok:false,_error_category:'INTERNAL_ERROR',_error_message:'sha256 unavailable: enable Web Crypto or NODE_FUNCTION_ALLOW_BUILTIN=crypto'}}];return [{json:{...meta,ok:true,_token_hash:hash}}];"
+      },
+      "id": "e87b0cb8-9b65-4239-9b2f-d8addc8e5db8",
+      "name": "Hash Provided Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        2864
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json.ok === true && !$json._error_category }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "27f0d266-fb94-4ffc-b8af-89fb4f88bb04",
+      "name": "Hash OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2464,
+        2864
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Hash Provided Token').first().json;const opId='TASKOP-'+meta.request_id+'-hasherr-'+Date.now();return [{json:{_result_kind:'error',_error_category:'INTERNAL_ERROR',_error_message:meta._error_message||'hash failed',request_id:meta.request_id,task_id:meta.task_id,status:'failed',_http_status:500,result:{operation_id:opId,operation:'RECORD_APPROVAL',task:null,created:false,updated:false,checkpoint_saved:false,result_recorded:false,approval:null,approval_token:null,approval_expires_at:null,decision:null,limitations:['Token hashing failed'],verification_summary:{status:'not_verified',evidence:[],source:'none',ai_used:false}},errors:[{category:'INTERNAL_ERROR',message:meta._error_message||'hash failed'}],warnings:[],verification:{status:'not_verified',evidence:[],persisted:false,persist_record_id:null},_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'task_operation',resource_id:opId,event_type:'task_operation'}}];"
+      },
+      "id": "06f4aec1-9e6d-4b72-b5f7-07533fd61a8f",
+      "name": "Wrap Hash Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        3120
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "approval_records",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "token_hash",
+              "condition": "eq",
+              "keyValue": "={{ $json._token_hash }}"
+            }
+          ]
+        }
+      },
+      "id": "6a28f677-d347-4054-80fa-273b19d5b782",
+      "name": "Get Approval By Token",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        2768
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Hash Provided Token').first().json;const rows=$input.all().map(x=>x.json).filter(x=>x&&typeof x==='object'&&!x.code&&!x.error&&x.id);const appr=rows[0]||null;if(!appr)return [{json:{...meta,_error:true,_error_category:'NOT_FOUND',_error_message:'Approval token not found'}}];if(appr.user_id!==meta.user_id)return [{json:{...meta,_error:true,_error_category:'FORBIDDEN',_error_message:'Approval token does not belong to user'}}];if(appr.task_id!==meta.task_id)return [{json:{...meta,_error:true,_error_category:'VALIDATION_FAILED',_error_message:'Approval not bound to this task'}}];if(appr.action_type!==meta.action)return [{json:{...meta,_error:true,_error_category:'VALIDATION_FAILED',_error_message:'Approval action mismatch'}}];if(appr.resource_type!==meta.resource_type)return [{json:{...meta,_error:true,_error_category:'VALIDATION_FAILED',_error_message:'Approval resource_type mismatch'}}];if(appr.resource_id!==meta.resource_id)return [{json:{...meta,_error:true,_error_category:'VALIDATION_FAILED',_error_message:'Approval resource_id mismatch'}}];if(appr.status!=='pending')return [{json:{...meta,_error:true,_error_category:'VERSION_CONFLICT',_error_message:'Approval already '+appr.status}}];const exp=new Date(appr.expires_at).getTime();if(!isFinite(exp)||exp<Date.now())return [{json:{...meta,_error:true,_error_category:'APPROVAL_REQUIRED',_error_message:'Approval token expired'}}];return [{json:{...meta,_approval_id:appr.id,_decision:meta.decision,_bind_ok:true}}];"
+      },
+      "id": "19a97307-fd54-4f86-ba05-6170ccacf97b",
+      "name": "Verify Approval Binds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        2768
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._error !== true && ($json._decision === 'granted' || $json._decision === 'denied') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "49ca593d-5600-41ff-a781-37be26ffed62",
+      "name": "Approval Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3136,
+        2768
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "approval_records",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json._approval_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json._decision === 'granted' ? 'approved' : 'rejected' }}"
+            },
+            {
+              "fieldId": "approved_at",
+              "fieldValue": "={{ $json._decision === 'granted' ? new Date().toISOString() : undefined }}"
+            },
+            {
+              "fieldId": "rejection_reason",
+              "fieldValue": "={{ $json._decision === 'denied' ? ($('Validate Request').first().json.rejection_reason || 'User denied') : undefined }}"
+            }
+          ]
+        }
+      },
+      "id": "27f83701-13c0-43b2-bb84-ee047140c50f",
+      "name": "Apply Approval Decision",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3360,
+        2688
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "granted",
+              "leftValue": "={{ $('Verify Approval Binds').first().json._decision === 'granted' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "84bbf7a3-1cb3-4be9-ab7f-ef4616256da0",
+      "name": "Approval Granted?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3584,
+        2688
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "tasks",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.task_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "awaiting_approval"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "ready"
+            },
+            {
+              "fieldId": "approval_status",
+              "fieldValue": "approved"
+            }
+          ]
+        }
+      },
+      "id": "9cf49ebf-9284-4ab7-9098-0f2c2e4ce218",
+      "name": "Task Unlock Ready",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3808,
+        2672
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Verify Approval Binds').first().json;const applied=$('Apply Approval Decision').first()?.json||{};const updatedRow=applied&&applied.id?applied:null;const decision=String(meta._decision||'').toLowerCase();const warnings=[];let taskUnlocked=null;if(decision==='granted'){try{const tu=$('Task Unlock Ready').first()?.json;if(tu&&tu.id===meta.task_id){taskUnlocked=true;}else{taskUnlocked=false;warnings.push({message:'Task status was not awaiting_approval at unlock time; status not changed'});}}catch(e){taskUnlocked=false;warnings.push({message:'Task unlock node did not execute: '+String(e&&e.message||e)});}}else if(decision==='denied'){taskUnlocked=false;}else{taskUnlocked=null;warnings.push({message:'Decision value unexpected; cannot determine task unlock status'});}return [{json:{...meta,operation:'RECORD_APPROVAL',_result_kind:'approval_record',_updated_row:updatedRow,_task_unlocked:taskUnlocked,warnings}}];"
+      },
+      "id": "174cddcd-5ca5-4884-9a5c-d5d0fef88327",
+      "name": "Wrap Approval Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        2688
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Verify Approval Binds').first().json;return [{json:{...x,operation:'RECORD_APPROVAL',_result_kind:'error',_error_category:x._error_category||'VALIDATION_FAILED',_error_message:x._error_message||'Approval error'}}];"
+      },
+      "id": "93ff1113-92ae-4b67-a43d-6fe345c9d22a",
+      "name": "Wrap Approval Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4032,
+        2928
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta=$('Validate Request').first().json;const op=meta.operation;const incoming=$input.first()?.json||{};const kind=incoming._result_kind||null;const opId='TASKOP-'+meta.request_id+'-'+Date.now();let task=null,approval=null,approvalToken=null,approvalExpiresAt=null,decision=null;let created=false,updated=false,checkpointSaved=false,resultRecorded=false;const errors=[],warnings=Array.isArray(incoming.warnings)?[...incoming.warnings]:[];let topStatus='completed';let httpStatus=200;let compensationSucceeded=incoming._compensation_succeeded;function scanIdempotencyDup(obj){if(!obj||typeof obj!=='object')return false;try{const s=JSON.stringify(obj);return /duplicate key|unique constraint|23505/i.test(s);}catch(e){return false;}}const httpMap={INVALID_INPUT:400,INVALID_JSON:400,UNAUTHORIZED:401,FORBIDDEN:403,NOT_FOUND:404,APPROVAL_REQUIRED:409,VERSION_CONFLICT:409,VALIDATION_FAILED:422,TEST_FAILED:422,PROVIDER_RATE_LIMIT:429,PROVIDER_TIMEOUT:504,MODEL_ERROR:502,INTEGRATION_UNAVAILABLE:503,INTERNAL_ERROR:500};if(kind==='error'||kind==='get_task_error'){const cat=incoming._error_category||'INTERNAL_ERROR';errors.push({category:cat,message:incoming._error_message||'Operation failed'});topStatus='failed';httpStatus=httpMap[cat]||500;}else if(op==='CREATE_TASK'){if(scanIdempotencyDup(incoming)){errors.push({category:'VERSION_CONFLICT',message:'Duplicate idempotency_key: task already exists'});topStatus='failed';httpStatus=409;}else{task=incoming&&incoming.id?incoming:null;created=!!task;if(!created){errors.push({category:'INTERNAL_ERROR',message:'Task insert returned no record'});topStatus='partial';httpStatus=500;}}}else if(op==='GET_TASK'){task=incoming._task||(incoming&&incoming.id?incoming:null);if(!task){errors.push({category:'NOT_FOUND',message:'Task not found'});topStatus='failed';httpStatus=404;}}else if(op==='UPDATE_TASK'){task=incoming._updated_row&&incoming._updated_row.id?incoming._updated_row:null;updated=!!task;if(!updated){errors.push({category:'VERSION_CONFLICT',message:'Update affected 0 rows'});topStatus='failed';httpStatus=409;}}else if(op==='SAVE_CHECKPOINT'){checkpointSaved=!!(incoming._updated_row&&incoming._updated_row.id);task=incoming._updated_row&&incoming._updated_row.id?incoming._updated_row:null;if(!checkpointSaved){errors.push({category:'INTERNAL_ERROR',message:'Checkpoint update returned no record'});topStatus='partial';httpStatus=500;}}else if(op==='RECORD_RESULT'){resultRecorded=!!(incoming._updated_row&&incoming._updated_row.id);task=incoming._updated_row&&incoming._updated_row.id?incoming._updated_row:null;if(!resultRecorded){errors.push({category:'INTERNAL_ERROR',message:'Result update returned no record'});topStatus='partial';httpStatus=500;}}else if(op==='REQUEST_APPROVAL'){if(scanIdempotencyDup(incoming)){errors.push({category:'VERSION_CONFLICT',message:'Pending approval already exists (concurrent request)'});topStatus='failed';httpStatus=409;}else{approval=incoming._approval_row||null;approvalToken=incoming._raw_token_returned||null;approvalExpiresAt=incoming._expires_at_returned||null;if(!approval){errors.push({category:'INTERNAL_ERROR',message:'Approval insert returned no record'});topStatus='partial';httpStatus=500;}}}else if(op==='RECORD_APPROVAL'){approval=incoming._updated_row||null;decision=meta.decision||null;if(!approval){errors.push({category:'INTERNAL_ERROR',message:'Approval update returned no record'});topStatus='partial';httpStatus=500;}}const sanitizeTask=(t)=>t?({id:t.id,project_id:t.project_id||null,workspace_id:t.workspace_id||null,user_id:t.user_id||null,conversation_id:t.conversation_id||null,intent:t.intent||t.task_type||null,task_type:t.task_type||null,title:t.title||t.goal||null,goal:t.goal||null,description:t.description||null,status:t.status||null,priority:t.priority||null,blocked_reason:t.blocked_reason||null,checkpoint:t.checkpoint||null,result:t.result||null,payload:t.payload||t.plan||null,task_steps:Array.isArray(t.task_steps)?t.task_steps:[],checkpoints:Array.isArray(t.checkpoints)?t.checkpoints:[],created_at:t.created_at||null,updated_at:t.updated_at||null}):null;const sanitizeApproval=(a)=>a?({id:a.id,task_id:a.task_id||null,user_id:a.user_id||null,workspace_id:a.workspace_id||null,action_type:a.action_type||null,resource_type:a.resource_type||null,resource_id:a.resource_id||null,status:a.status||null,expires_at:a.expires_at||null,approved_at:a.approved_at||null,rejection_reason:a.rejection_reason||null,created_at:a.created_at||null}):null;const verificationStatus=topStatus==='completed'?'verified':'not_verified';const verificationEvidence=[];if(topStatus==='completed'){verificationEvidence.push('Supabase operation completed for user_id='+meta.user_id);verificationEvidence.push('Operation: '+op);}else{verificationEvidence.push('Operation did not complete cleanly; see errors');}const limitations=['Task state machine validated.','Approval tokens SHA-256 hashed; raw token returned only on consistent REQUEST_APPROVAL.','Approval binds: user_id + task_id + action + resource_type + resource_id + expiry.','Dedup: pending approvals per (task_id, action, resource_type, resource_id).','Workspace isolation: workspace_id enforced across all task filters.','PREFLIGHT: DB unique index approval_records_pending_uniq required for concurrency.'].slice(0,6);const result={operation_id:opId,operation:op,task:sanitizeTask(task),created,updated,checkpoint_saved:checkpointSaved,result_recorded:resultRecorded,approval:sanitizeApproval(approval),approval_token:approvalToken,approval_expires_at:approvalExpiresAt,decision,compensation_succeeded:compensationSucceeded,limitations,verification_summary:{status:verificationStatus,evidence:verificationEvidence,source:'database_tasks_approval_records',ai_used:false}};return [{json:{request_id:meta.request_id,task_id:task?task.id:(meta.task_id||null),status:topStatus,_http_status:httpStatus,result,errors,warnings,verification:result.verification_summary,_persist:{project_id:meta.project_id,user_id:meta.user_id,claimed_user_id:meta.user_id,workspace_id:meta.workspace_id,conversation_id:meta.conversation_id,resource_type:'task_operation',resource_id:opId,event_type:'task_operation',note:'user_id claimed by caller; backend must ensure authenticity.'}}}];"
+      },
+      "id": "596da179-bc56-41c6-8f82-939d27655e47",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4256,
+        1472
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "audit_events",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json._persist.project_id || undefined }}"
+            },
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._persist.user_id || undefined }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json._persist.workspace_id || undefined }}"
+            },
+            {
+              "fieldId": "event_type",
+              "fieldValue": "={{ $json._persist.event_type || 'task_operation' }}"
+            },
+            {
+              "fieldId": "resource_type",
+              "fieldValue": "={{ $json._persist.resource_type || 'task_operation' }}"
+            },
+            {
+              "fieldId": "resource_id",
+              "fieldValue": "={{ $json._persist.resource_id }}"
+            },
+            {
+              "fieldId": "action",
+              "fieldValue": "n8n_task_manager"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "details",
+              "fieldValue": "={{ { request_id: $json.request_id, operation_id: $json.result.operation_id, operation: $json.result.operation, task_id: $json.result.task ? $json.result.task.id : null, approval_id: $json.result.approval ? $json.result.approval.id : null, decision: $json.result.decision, http_status: $json._http_status, verification_status: $json.verification.status, claimed_user_id: $json._persist.claimed_user_id, note: $json._persist.note } }}"
+            }
+          ]
+        }
+      },
+      "id": "dc44369f-119b-4003-920b-ef9a5d23214f",
+      "name": "Persist Audit",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4480,
+        2400
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}catch(e){}if(!src){try{const b=$('Format Request Error').first()?.json;if(b&&b.result)src=b;}catch(e){}}if(!src){src={request_id:null,task_id:null,status:'failed',_http_status:500,result:{operation_id:null},errors:[],warnings:[],verification:{status:'not_verified',evidence:[]},_persist:{}};}const row=$input.first()?.json??{};const id=row.id??row.audit_id??null;const idOk=typeof id==='string'?id.trim().length>0:(typeof id==='number'&&isFinite(id));const checks=[];if(!idOk)checks.push('missing audit record id');if(row.event_type!==undefined&&row.event_type!==(src._persist?.event_type||row.event_type))checks.push('event_type mismatch');if(row.resource_id!==undefined&&row.resource_id!==null&&src.result?.operation_id&&row.resource_id!==src.result.operation_id)checks.push('resource_id mismatch');if(row.status!==undefined&&row.status!==null&&row.status!==src.status)checks.push('status mismatch');const ok=idOk&&checks.length===0;const verification={...(src.verification||{}),persisted:ok,persist_record_id:idOk?id:null,persist_checks:checks};const result={...(src.result||{}),verification_summary:verification};const status=ok?src.status:'partial';const httpStatus=ok?(src._http_status||200):500;const errors=ok?(src.errors||[]):[...(src.errors||[]),{category:'INTERNAL_ERROR',message:'Audit persistence unconfirmed: '+checks.join('; ')}];return [{json:{...src,status,_http_status:httpStatus,result,verification,errors}}];"
+      },
+      "id": "eacfbad1-4f75-4466-b97e-c85d7e65e46f",
+      "name": "Verify Audit Saved",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4704,
+        2304
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}catch(e){}if(!src){try{const b=$('Format Request Error').first()?.json;if(b&&b.result)src=b;}catch(e){}}if(!src){src={request_id:null,task_id:null,status:'failed',_http_status:500,result:{operation_id:null},errors:[],warnings:[],verification:{status:'not_verified',evidence:[]},_persist:{}};}const verification={...(src.verification||{}),persisted:false,persist_record_id:null,persist_checks:['audit save failed']};const result={...(src.result||{}),verification_summary:verification};const status=src.status==='failed'?'failed':'partial';return [{json:{...src,status,_http_status:500,result,verification,errors:[...(src.errors||[]),{category:'INTERNAL_ERROR',message:'Audit persistence failed; operation result returned but not saved.'}]}}];"
+      },
+      "id": "7c53db51-3b16-4751-a8d2-8e9c545abf45",
+      "name": "Audit Save Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4704,
+        2496
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { request_id: $json.request_id, task_id: $json.task_id, status: $json.status, result: $json.result, errors: $json.errors, warnings: $json.warnings, verification: $json.verification } }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "b8e94c86-7838-43e1-bc0f-f563288204a2",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4928,
+        2400
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Operation Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Request Error": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Operation Router": {
+      "main": [
+        [
+          {
+            "node": "Create Task Insert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Task Select",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Task Prefetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Checkpoint Prefetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Result Prefetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Approval Task Prefetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Hash Provided Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Task Insert": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Task Select": {
+      "main": [
+        [
+          {
+            "node": "Task Found For Details?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Found For Details?": {
+      "main": [
+        [
+          {
+            "node": "Get Task Steps",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Task Steps": {
+      "main": [
+        [
+          {
+            "node": "Get Task Checkpoints",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Task Checkpoints": {
+      "main": [
+        [
+          {
+            "node": "Finalize Get Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Get Task": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Task Prefetch": {
+      "main": [
+        [
+          {
+            "node": "Update Task Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Task Validate": {
+      "main": [
+        [
+          {
+            "node": "Update Task Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Task Valid?": {
+      "main": [
+        [
+          {
+            "node": "Update Task Apply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Update Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Task Apply": {
+      "main": [
+        [
+          {
+            "node": "Wrap Update Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Update Result": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Update Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkpoint Prefetch": {
+      "main": [
+        [
+          {
+            "node": "Checkpoint Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkpoint Prepare": {
+      "main": [
+        [
+          {
+            "node": "Checkpoint Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkpoint Valid?": {
+      "main": [
+        [
+          {
+            "node": "Checkpoint Apply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Checkpoint Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checkpoint Apply": {
+      "main": [
+        [
+          {
+            "node": "Wrap Checkpoint Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Checkpoint Result": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Checkpoint Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Result Prefetch": {
+      "main": [
+        [
+          {
+            "node": "Result Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Result Prepare": {
+      "main": [
+        [
+          {
+            "node": "Result Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Result Valid?": {
+      "main": [
+        [
+          {
+            "node": "Result Apply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Result Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Result Apply": {
+      "main": [
+        [
+          {
+            "node": "Wrap Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Result": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Result Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Task Prefetch": {
+      "main": [
+        [
+          {
+            "node": "Validate Approval Preconditions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Approval Preconditions": {
+      "main": [
+        [
+          {
+            "node": "Preconditions Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preconditions Valid?": {
+      "main": [
+        [
+          {
+            "node": "Generate Approval Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Approval Precondition Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Approval Precondition Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Approval Token": {
+      "main": [
+        [
+          {
+            "node": "Token Generated?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Generated?": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Token Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Token Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Approval": {
+      "main": [
+        [
+          {
+            "node": "Existing Approval Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Existing Approval Found?": {
+      "main": [
+        [
+          {
+            "node": "Wrap Approval Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Approval Request Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Approval Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Request Insert": {
+      "main": [
+        [
+          {
+            "node": "Task Mark Awaiting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Mark Awaiting": {
+      "main": [
+        [
+          {
+            "node": "Fetch Approval Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Approval Row": {
+      "main": [
+        [
+          {
+            "node": "Wrap Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Task Updated OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Updated OK?": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Has Approval To Compensate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Approval To Compensate?": {
+      "main": [
+        [
+          {
+            "node": "Compensate Orphan Approval",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap No Compensation Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compensate Orphan Approval": {
+      "main": [
+        [
+          {
+            "node": "Wrap Approval Partial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Approval Partial": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap No Compensation Needed": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Provided Token": {
+      "main": [
+        [
+          {
+            "node": "Hash OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash OK?": {
+      "main": [
+        [
+          {
+            "node": "Get Approval By Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Hash Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Hash Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Approval By Token": {
+      "main": [
+        [
+          {
+            "node": "Verify Approval Binds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Approval Binds": {
+      "main": [
+        [
+          {
+            "node": "Approval Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Valid?": {
+      "main": [
+        [
+          {
+            "node": "Apply Approval Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Approval Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Approval Decision": {
+      "main": [
+        [
+          {
+            "node": "Approval Granted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Granted?": {
+      "main": [
+        [
+          {
+            "node": "Task Unlock Ready",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wrap Approval Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Unlock Ready": {
+      "main": [
+        [
+          {
+            "node": "Wrap Approval Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Approval Record": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Approval Error": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Audit": {
+      "main": [
+        [
+          {
+            "node": "Verify Audit Saved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Audit Save Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Audit Saved": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Save Failed": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

@@ -1,0 +1,2127 @@
+{
+  "name": "WF-10 Notification & Reminder Manager v2.4 - FINAL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf10-notify",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0692f5d2-0e96-4371-8d4e-054b12976a5b",
+      "name": "Webhook Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        256,
+        1360
+      ],
+      "webhookId": "wf10-notify",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "yCouiK1rMxC1UElF",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "7a449783-0456-4bac-95cd-9da199570f59",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        928,
+        2192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const src=$input.first()?.json??{};\nlet b=src.body??src;\nif(typeof b==='string'){try{b=JSON.parse(b);}catch(e){}}\nreturn [{json:{_entry_source:'webhook',_body:(b&&typeof b==='object')?b:{},_raw:src}}];"
+      },
+      "id": "77c94192-49a9-42d3-9c3f-1fad4e9f69b1",
+      "name": "Normalize Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        1360
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const uuidRe=/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;const isUuid=s=>typeof s==='string'&&uuidRe.test(s);\nconst input=$input.first()?.json??{};\nconst headers=($('Webhook Input').first()?.json?.headers)||{};\nconst b=input._body||{};\nconst fail=(c,m,h)=>[{json:{ok:false,request_id:typeof b?.request_id==='string'?b.request_id.trim()||null:null,user_id:isUuid(b?.user_id)?b.user_id:null,workspace_id:isUuid(b?.workspace_id)?b.workspace_id:null,project_id:isUuid(b?.project_id)?b.project_id:null,conversation_id:isUuid(b?.conversation_id)?b.conversation_id:null,category:c,message:m,http_status:h||400}}];\nif(!b||typeof b!=='object'||Array.isArray(b))return fail('INVALID_INPUT','JSON object body expected');\nif(typeof b.request_id!=='string'||!b.request_id.trim()||b.request_id.trim().length>100)return fail('INVALID_INPUT','request_id required');\nconst rid=b.request_id.trim();\nconst uid=typeof b.user_id==='string'?b.user_id.trim().slice(0,100):null;\nconst wid=typeof b.workspace_id==='string'?b.workspace_id.trim().slice(0,100):null;\nconst pid=typeof b.project_id==='string'?b.project_id.trim().slice(0,100):null;\nconst cid=typeof b.conversation_id==='string'?b.conversation_id.trim().slice(0,200):null;\nif(!uid)return fail('UNAUTHORIZED','user_id required',401);\nif(!wid)return fail('UNAUTHORIZED','workspace_id required',401);\nif(!isUuid(uid))return fail('INVALID_INPUT','user_id must be UUID');\nif(!isUuid(wid))return fail('INVALID_INPUT','workspace_id must be UUID');\nif(pid&&!isUuid(pid))return fail('INVALID_INPUT','project_id must be UUID');\nif(cid&&!isUuid(cid))return fail('INVALID_INPUT','conversation_id must be UUID');\nlet envToken,requireToken=true,envAccessible=true;try{envToken=$env?.WF10_SERVICE_TOKEN;const rt=$env?.WF10_REQUIRE_TOKEN;requireToken=(rt===undefined||rt===null)?true:(String(rt).toLowerCase()!=='false');}catch(e){envAccessible=false;}\nif(!envAccessible&&requireToken)return fail('INTERNAL_ERROR','token env unavailable',503);\nif(requireToken&&(typeof envToken!=='string'||envToken===''))return fail('INTERNAL_ERROR','service token not configured',503);\nif(typeof envToken==='string'&&envToken!==''){const k=Object.keys(headers).find(x=>x.toLowerCase()==='x-service-token');const p=k?headers[k]:null;if(!p||p!==envToken)return fail('UNAUTHORIZED','service_token_invalid',401);}\nlet envUserId=null,envUserOk=true;try{envUserId=$env?.WF10_AUTHENTICATED_USER_ID||null;}catch(e){envUserOk=false;}\nif(requireToken){if(!envUserOk)return fail('INTERNAL_ERROR','auth env unavailable',503);if(!envUserId)return fail('INTERNAL_ERROR','WF10_AUTHENTICATED_USER_ID not configured',503);if(envUserId!==uid)return fail('FORBIDDEN','user_id mismatch',403);}else{if(envUserId&&envUserId!==uid)return fail('FORBIDDEN','user_id mismatch',403);}\nlet deliveryEndpoint=null;try{deliveryEndpoint=$env?.WF10_DELIVERY_ENDPOINT||null;}catch(e){}\nconst ops=['SCHEDULE_REMINDER','CANCEL_REMINDER','GET_REMINDER','LIST_REMINDERS','LIST_NOTIFICATIONS','MARK_READ','DELIVER_NOTIFICATION'];\nconst operation=typeof b.operation==='string'?b.operation.trim().toUpperCase():null;\nif(!operation||!ops.includes(operation))return fail('INVALID_INPUT','Invalid operation');\nconst reminderId=(typeof b.reminder_id==='string'&&b.reminder_id.trim())?b.reminder_id.trim().slice(0,100):null;\nconst notificationId=(typeof b.notification_id==='string'&&b.notification_id.trim())?b.notification_id.trim().slice(0,100):null;\nconst taskId=(typeof b.task_id==='string'&&b.task_id.trim())?b.task_id.trim().slice(0,100):null;\nconst title=(typeof b.title==='string')?b.title.trim().slice(0,200):null;\nconst description=(typeof b.description==='string')?b.description.trim().slice(0,4000):null;\nconst scheduledAt=(typeof b.scheduled_at==='string')?b.scheduled_at.trim():null;\nconst priority=(typeof b.priority==='string'&&['critical','important','info'].includes(b.priority.toLowerCase()))?b.priority.toLowerCase():'info';\nconst reminderType=(typeof b.reminder_type==='string')?b.reminder_type.trim().slice(0,50):'general';\nconst idempotencyKey=(typeof b.idempotency_key==='string'&&b.idempotency_key.trim())?b.idempotency_key.trim().slice(0,200):null;\nconst limit=Math.min(typeof b.limit==='number'&&b.limit>0?Math.floor(b.limit):20,100);\nconst category=(typeof b.category==='string')?b.category.trim().slice(0,50):null;\nif(operation==='SCHEDULE_REMINDER'){if(!title)return fail('INVALID_INPUT','title required');if(!scheduledAt)return fail('INVALID_INPUT','scheduled_at required');const ts=new Date(scheduledAt).getTime();if(!isFinite(ts))return fail('INVALID_INPUT','scheduled_at invalid');if(ts<=Date.now()-60000)return fail('INVALID_INPUT','scheduled_at must be future');}\nif(operation==='CANCEL_REMINDER'&&!reminderId)return fail('INVALID_INPUT','reminder_id required');\nif(operation==='GET_REMINDER'&&!reminderId)return fail('INVALID_INPUT','reminder_id required');\nif(operation==='MARK_READ'&&!notificationId)return fail('INVALID_INPUT','notification_id required');\nif(operation==='DELIVER_NOTIFICATION'){if(!title)return fail('INVALID_INPUT','title required');if(!deliveryEndpoint)return fail('INTEGRATION_UNAVAILABLE','WF10_DELIVERY_ENDPOINT not configured',503);}\nreturn [{json:{ok:true,request_id:rid,user_id:uid,workspace_id:wid,project_id:pid,conversation_id:cid,operation,reminder_id:reminderId,notification_id:notificationId,task_id:taskId,title,description,scheduled_at:scheduledAt,priority,reminder_type:reminderType,idempotency_key:idempotencyKey,limit,category,delivery_endpoint:deliveryEndpoint,_entry_source:input._entry_source||'webhook'}}];"
+      },
+      "id": "e4a7a1f6-e436-4c31-b11d-47ff793ce59e",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        704,
+        1360
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "v",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "18243a9b-c2e4-473a-b79c-710945ace719",
+      "name": "Request Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        1360
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const a=$input.first()?.json??{};\nconst rid=a.request_id??null;\nconst VALID=['INVALID_INPUT','INVALID_JSON','UNAUTHORIZED','FORBIDDEN','NOT_FOUND','MODEL_ERROR','PROVIDER_RATE_LIMIT','PROVIDER_TIMEOUT','VALIDATION_FAILED','TEST_FAILED','APPROVAL_REQUIRED','VERSION_CONFLICT','INTEGRATION_UNAVAILABLE','INTERNAL_ERROR'];\nconst cat=VALID.includes(a.category||'')?a.category:'INVALID_INPUT';\nconst map={INVALID_INPUT:400,INVALID_JSON:400,UNAUTHORIZED:401,FORBIDDEN:403,NOT_FOUND:404,APPROVAL_REQUIRED:409,VERSION_CONFLICT:409,VALIDATION_FAILED:422,TEST_FAILED:422,PROVIDER_RATE_LIMIT:429,PROVIDER_TIMEOUT:504,MODEL_ERROR:502,INTEGRATION_UNAVAILABLE:503,INTERNAL_ERROR:500};\nlet hs=(typeof a.http_status==='number')?a.http_status:(map[cat]||400);if(hs<100||hs>599)hs=map[cat]||400;\nconst res={audit_id:'NOTIF-'+(rid||('rejected-'+Date.now())),audit_status:'failed',operation:null,reminder_id:null,notification_id:null,reminder:null,reminders:[],notifications:[],delivery:null,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],delivered_confirmed:false},limitations:[a.message||'Invalid'],recommended_fixes:[]};\nreturn [{json:{request_id:rid,task_id:null,status:'failed',_http_status:hs,result:res,errors:[{category:cat,message:a.message||'Invalid'}],warnings:[],verification:res.verification_summary,_persist:{project_id:a.project_id||null,user_id:a.user_id||null,workspace_id:a.workspace_id||null,conversation_id:a.conversation_id||null}}}];"
+      },
+      "id": "148ad2c6-d80e-4254-8329-436551727e6c",
+      "name": "Format Request Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        800
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "integrations",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Validate Request').first().json.workspace_id }}"
+            },
+            {
+              "keyName": "integration_type",
+              "condition": "eq",
+              "keyValue": "notification"
+            }
+          ]
+        }
+      },
+      "id": "49ad1789-3177-41a3-a6fb-eba6cbbd8ec5",
+      "name": "Prefetch Delivery Config",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1152,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseCfg(c){if(!c)return{};if(typeof c==='object'&&!Array.isArray(c))return c;if(typeof c==='string'){try{const p=JSON.parse(c);if(p&&typeof p==='object'&&!Array.isArray(p))return p;}catch(e){}}return{};}\nconst meta=$('Validate Request').first().json;\nconst rows=$('Prefetch Delivery Config').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst intg=rows.length>0?rows[0]:null;\nconst cfg=parseCfg(intg&&intg.config);\nlet ep=meta.delivery_endpoint;\nif(typeof cfg.endpoint==='string'&&cfg.endpoint.trim())ep=cfg.endpoint.trim().replace(/\\/+$/,'');\nconst ahn=(typeof cfg.auth_header_name==='string'&&cfg.auth_header_name.trim())?cfg.auth_header_name.trim():'Authorization';\nconst ahv=(typeof cfg.auth_header_value==='string'&&cfg.auth_header_value.trim())?cfg.auth_header_value.trim():null;\nconst tms=(typeof cfg.timeout_ms==='number'&&cfg.timeout_ms>0)?cfg.timeout_ms:15000;\nconst ch=(typeof cfg.channel==='string'&&cfg.channel.trim())?cfg.channel.trim():'push';\nif(meta.operation==='DELIVER_NOTIFICATION'&&!ep)return [{json:{...meta,_context_error:true,_context_error_category:'INTEGRATION_UNAVAILABLE',_context_error_message:'No delivery endpoint'}}];\nreturn [{json:{...meta,_integration:intg,_context_error:false,_effective_endpoint:ep,_effective_auth_header_name:ahn,_effective_auth_header_value:ahv,_effective_timeout:tms,_effective_channel:ch}}];"
+      },
+      "id": "be5ffb8b-cad0-4074-8d45-cf938881cb80",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "o",
+              "leftValue": "={{ $json._context_error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d9817b94-c4b5-44a5-a292-6fbf4314b882",
+      "name": "Context OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        1280
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;const cat=x._context_error_category||'INTERNAL_ERROR';const msg=x._context_error_message||'Context error';\nconst res={audit_id:x.request_id?('NOTIF-'+x.request_id):null,audit_status:'failed',operation:null,reminder_id:null,notification_id:null,reminder:null,reminders:[],notifications:[],delivery:null,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],delivered_confirmed:false},limitations:[msg],recommended_fixes:[]};\nreturn [{json:{ok:false,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'failed',_http_status:503,result:res,errors:[{category:cat,message:msg}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "82c3ba1a-f8f2-4625-bb31-c134689d0b60",
+      "name": "Context Error Wrapper",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        1904
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "1",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "SCHEDULE_REMINDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SCHEDULE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "CANCEL_REMINDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CANCEL"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "GET_REMINDER",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "GET"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "LIST_REMINDERS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "LIST_R"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "5",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "LIST_NOTIFICATIONS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "LIST_N"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "MARK_READ",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "READ"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7",
+                    "leftValue": "={{ $json.operation }}",
+                    "rightValue": "DELIVER_NOTIFICATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "DELIVER"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "f875908c-ab67-4f9c-85de-0c4dc0baecc5",
+      "name": "Operation Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1824,
+        640
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;\nconst p={user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id||null,task_id:x.task_id||null,title:x.title,description:x.description||null,reminder_type:x.reminder_type||'general',scheduled_at:new Date(x.scheduled_at).toISOString(),status:'scheduled',priority:x.priority||'info',idempotency_key:x.idempotency_key||('SCH-'+x.request_id)};\nreturn [{json:{...x,_payload:p}}];"
+      },
+      "id": "3588c31b-4db0-478e-a712-183cbadd15d7",
+      "name": "Prepare Reminder Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4288,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "reminders",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._payload.user_id }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json._payload.workspace_id }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json._payload.project_id || undefined }}"
+            },
+            {
+              "fieldId": "task_id",
+              "fieldValue": "={{ $json._payload.task_id || undefined }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json._payload.title }}"
+            },
+            {
+              "fieldId": "description",
+              "fieldValue": "={{ $json._payload.description || undefined }}"
+            },
+            {
+              "fieldId": "reminder_type",
+              "fieldValue": "={{ $json._payload.reminder_type }}"
+            },
+            {
+              "fieldId": "scheduled_at",
+              "fieldValue": "={{ $json._payload.scheduled_at }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "scheduled"
+            },
+            {
+              "fieldId": "priority",
+              "fieldValue": "={{ $json._payload.priority }}"
+            },
+            {
+              "fieldId": "idempotency_key",
+              "fieldValue": "={{ $json._payload.idempotency_key }}"
+            }
+          ]
+        }
+      },
+      "id": "a2b8aa1a-d9bd-49ce-bfc8-887fab0efd33",
+      "name": "Insert Reminder",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        80
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;\nconst ins=$input.first()?.json||{};const err=!!(ins.error||ins.code);\nif(err){const raw=JSON.stringify(ins).toLowerCase();const dup=/23505|duplicate key|unique constraint/.test(raw);const cat=dup?'VERSION_CONFLICT':'INTERNAL_ERROR';const msg=dup?'Duplicate idempotency_key':'Insert failed: '+String((ins.error&&ins.error.message)||ins.message||'unknown').slice(0,200);\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:'failed',operation:'SCHEDULE_REMINDER',reminder_id:null,notification_id:null,reminder:null,reminders:[],notifications:[],delivery:null,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],delivered_confirmed:false},limitations:[msg],recommended_fixes:[]};\nreturn [{json:{ok:false,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'failed',_http_status:dup?409:500,result:res,errors:[{category:cat,message:msg}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];}\nconst row=Array.isArray(ins)?ins[0]:ins;\nconst rem=row?{id:row.id||null,user_id:row.user_id||x.user_id,workspace_id:row.workspace_id||x.workspace_id,title:row.title||x.title,scheduled_at:row.scheduled_at||x.scheduled_at,status:row.status||'scheduled',priority:row.priority||x.priority,reminder_type:row.reminder_type||x.reminder_type}:null;\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:'completed',operation:'SCHEDULE_REMINDER',reminder_id:rem?rem.id:null,notification_id:null,reminder:rem,reminders:[],notifications:[],delivery:null,source_type:'live',verification_summary:{status:'verified',evidence:['Reminder created'],delivered_confirmed:false},limitations:['Reminder scheduled.'],recommended_fixes:[]};\nreturn [{json:{ok:true,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'completed',_http_status:200,result:res,errors:[],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "ad07104b-4d34-4ca1-ad6a-1576c6110975",
+      "name": "Format Reminder Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        80
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reminders",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.reminder_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.workspace_id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "in",
+              "keyValue": "scheduled,pending,sent"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "cancelled"
+            }
+          ]
+        }
+      },
+      "id": "9e0d2afd-0698-44c3-bed3-b9ee309295cb",
+      "name": "Update Cancel",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        272
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;\nconst raw=$input.first()?.json||{};\nlet row=null;if(Array.isArray(raw))row=raw[0]||null;else if(raw.data&&Array.isArray(raw.data))row=raw[0]||null;else if(raw&&raw.id)row=raw;\nconst err=!!(raw.error||raw.code);const found=!!(row&&(row.id||row.status));\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:err?'failed':(found?'completed':'partial'),operation:'CANCEL_REMINDER',reminder_id:x.reminder_id,notification_id:null,reminder:found?{id:row.id||null,status:row.status||'cancelled'}:null,reminders:[],notifications:[],delivery:null,source_type:(err||!found)?'manual':'live',verification_summary:{status:err?'not_verified':(found?'verified':'not_verified'),evidence:err?['Error']:[found?'Cancelled':'No match'],delivered_confirmed:false},limitations:err?['Failed']:(found?[]:['No match']),recommended_fixes:[]};\nreturn [{json:{ok:!err,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:err?'failed':(found?'completed':'partial'),_http_status:err?500:200,result:res,errors:err?[{category:'INTERNAL_ERROR',message:'Cancel failed'}]:[],warnings:found?[]:[{message:'No match'}],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "f39c493f-9323-4261-80db-cce3abdab3ca",
+      "name": "Format Cancel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        272
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "reminders",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.reminder_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "9cd1a349-28a4-41c1-af4f-96a88a76e380",
+      "name": "Get Reminder",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        464
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;\nconst rows=$input.all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code&&r.id);const found=rows.length>0;const r=found?rows[0]:null;\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:found?'completed':'partial',operation:'GET_REMINDER',reminder_id:x.reminder_id,notification_id:null,reminder:found?{id:r.id,user_id:r.user_id,workspace_id:r.workspace_id,title:r.title,description:r.description||null,status:r.status,scheduled_at:r.scheduled_at,priority:r.priority,reminder_type:r.reminder_type,created_at:r.created_at||null}:null,reminders:[],notifications:[],delivery:null,source_type:found?'live':'manual',verification_summary:{status:found?'verified':'not_verified',evidence:found?['Fetched']:['Not found'],delivered_confirmed:false},limitations:found?[]:['Not found'],recommended_fixes:[]};\nreturn [{json:{ok:found,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:found?'completed':'partial',_http_status:found?200:404,result:res,errors:found?[]:[{category:'NOT_FOUND',message:'Not found'}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "4e8bf66b-060b-4ddb-84b2-ff9c996cebaa",
+      "name": "Format Get Reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        464
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "reminders",
+        "limit": "={{ $('Merge Context').first().json.limit }}",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.user_id }}"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.workspace_id }}"
+            }
+          ]
+        }
+      },
+      "id": "afa140fb-e682-4cff-9183-0e22bbfc3d87",
+      "name": "List Reminders",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        656
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;\nconst rows=$input.all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code&&r.id);\nconst reminders=rows.slice(0,100).map(r=>({id:r.id,title:r.title,status:r.status,priority:r.priority,scheduled_at:r.scheduled_at,reminder_type:r.reminder_type,created_at:r.created_at||null}));\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:'completed',operation:'LIST_REMINDERS',reminder_id:null,notification_id:null,reminder:null,reminders,notifications:[],delivery:null,source_type:'live',verification_summary:{status:'verified',evidence:['Listed'],delivered_confirmed:false},limitations:['Limit '+x.limit],recommended_fixes:[]};\nreturn [{json:{ok:true,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'completed',_http_status:200,result:res,errors:[],warnings:rows.length===0?[{message:'No reminders'}]:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "6b632111-755f-4d7e-a7da-c8c0278246e3",
+      "name": "Format List Reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        656
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "notifications",
+        "limit": "={{ $('Merge Context').first().json.limit }}",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.user_id }}"
+            }
+          ]
+        }
+      },
+      "id": "e699edfb-0cfa-4145-83c0-f0eacf58904f",
+      "name": "List Notifications",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        944
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;\nconst rows=$input.all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code&&r.id);\nconst notifications=rows.slice(0,100).map(r=>({id:r.id,title:r.title,body:r.body||null,priority:r.priority,category:r.category||null,is_read:r.is_read===true,read_at:r.read_at||null,created_at:r.created_at||null}));\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:'completed',operation:'LIST_NOTIFICATIONS',reminder_id:null,notification_id:null,reminder:null,reminders:[],notifications,delivery:null,source_type:'live',verification_summary:{status:'verified',evidence:['Listed'],delivered_confirmed:false},limitations:['Limit '+x.limit],recommended_fixes:[]};\nreturn [{json:{ok:true,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:'completed',_http_status:200,result:res,errors:[],warnings:rows.length===0?[{message:'No notifications'}]:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "81f588fd-8595-4499-9121-ca0d2a6782ba",
+      "name": "Format List Notifications",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        944
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "notifications",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.notification_id }}"
+            },
+            {
+              "keyName": "user_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Merge Context').first().json.user_id }}"
+            },
+            {
+              "keyName": "is_read",
+              "condition": "eq",
+              "keyValue": "false"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "is_read",
+              "fieldValue": "true"
+            },
+            {
+              "fieldId": "read_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "e78552f1-8728-4eef-9335-a63d2dd56529",
+      "name": "Mark Read",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        1136
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$('Merge Context').first().json;\nconst raw=$input.first()?.json||{};let row=null;if(Array.isArray(raw))row=raw[0]||null;else if(raw.data&&Array.isArray(raw.data))row=raw[0]||null;else if(raw&&raw.id)row=raw;\nconst err=!!(raw.error||raw.code);const found=!!(row&&(row.id||row.is_read!==undefined));\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:err?'failed':(found?'completed':'partial'),operation:'MARK_READ',reminder_id:null,notification_id:x.notification_id,reminder:null,reminders:[],notifications:found?[{id:row.id||x.notification_id,is_read:true,read_at:row.read_at||null}]:[],delivery:null,source_type:(err||!found)?'manual':'live',verification_summary:{status:err?'not_verified':(found?'verified':'not_verified'),evidence:err?['Error']:[found?'Marked':'No match'],delivered_confirmed:false},limitations:err?['Failed']:(found?[]:['No match']),recommended_fixes:[]};\nreturn [{json:{ok:!err,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status:err?'failed':(found?'completed':'partial'),_http_status:err?500:200,result:res,errors:err?[{category:'INTERNAL_ERROR',message:'Mark failed'}]:[],warnings:found?[]:[{message:'No match'}],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}}];"
+      },
+      "id": "4c60b9d7-2abc-4631-bda5-e5ecc5dc416f",
+      "name": "Format Mark Read",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        1136
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nreturn items.map(item=>{const x=item.json;\nif(x._entry_source==='scheduler'&&(x._no_due===true||x._context_error===true||x._no_dispatch===true)){\n  return {json:{...x,_payload_ready:false,_skip_delivery:true,_skip_reason:x._no_due?'no_due':(x._context_error?'context_error':'no_dispatch')}};\n}\nconst src=x._entry_source==='scheduler'?x:($('Merge Context').first()?.json||x);\nconst isWebhook=(x._entry_source!=='scheduler');\nif(!isWebhook&&x.operation!=='DELIVER_NOTIFICATION')return{json:{...x,_payload_ready:false,_payload_error:'not a delivery request'}};\nif(isWebhook&&x.operation!=='DELIVER_NOTIFICATION')return{json:{...x,_payload_ready:false,_payload_error:'not a delivery request'}};\nconst p={title:src.title,body:src.description||src.title,priority:src.priority||'info',category:src.category||null,user_id:src.user_id,workspace_id:src.workspace_id,reminder_id:src.reminder_id||null,idempotency_key:src.idempotency_key||('NOTIF-'+src.request_id)};\nreturn{json:{...src,_delivery_payload:p,_payload_ready:true,_entry_source:src._entry_source}};});"
+      },
+      "id": "88afb47a-b31e-4b5b-87ac-4d73acd0406f",
+      "name": "Prepare Delivery Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        1504
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "r",
+              "leftValue": "={{ $json._payload_ready === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eba25dc0-0664-49c3-9aa3-5c689c9a5eed",
+      "name": "Payload Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2272,
+        1504
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first()?.json||{};\nif(x._skip_delivery===true){\n  return [{json:{...x,status:x.status||'completed',_http_status:x._http_status||200,result:x.result||{audit_id:'NOTIF-'+Date.now(),audit_status:'completed',operation:'SCHEDULER',source_type:'live',verification_summary:x.verification||{status:'verified',evidence:[x._skip_reason||'skip'],delivered_confirmed:false},limitations:[],recommended_fixes:[]},errors:x.errors||[],warnings:x.warnings||[],verification:x.verification||{status:'verified',evidence:[]},_persist:x._persist||{}}}];\n}\nconst res={audit_id:'NOTIF-'+(x.request_id||Date.now()),audit_status:'failed',operation:'DELIVER_NOTIFICATION',reminder_id:null,notification_id:null,reminder:null,reminders:[],notifications:[],delivery:null,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],delivered_confirmed:false},limitations:[x._payload_error||'Payload not ready'],recommended_fixes:[]};\nreturn [{json:{ok:false,request_id:x.request_id||null,user_id:x.user_id||null,workspace_id:x.workspace_id||null,project_id:x.project_id||null,conversation_id:x.conversation_id||null,status:'failed',_http_status:500,result:res,errors:[{category:'INTERNAL_ERROR',message:x._payload_error||'Payload not ready'}],warnings:[],verification:res.verification_summary,_persist:{project_id:x.project_id||null,user_id:x.user_id||null,workspace_id:x.workspace_id||null,conversation_id:x.conversation_id||null}}}];"
+      },
+      "id": "2185bddf-7426-4345-909e-12b92cb99fe4",
+      "name": "Format Payload Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        1712
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "notifications",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._delivery_payload.user_id }}"
+            },
+            {
+              "fieldId": "reminder_id",
+              "fieldValue": "={{ $json._delivery_payload.reminder_id || undefined }}"
+            },
+            {
+              "fieldId": "title",
+              "fieldValue": "={{ $json._delivery_payload.title }}"
+            },
+            {
+              "fieldId": "body",
+              "fieldValue": "={{ $json._delivery_payload.body }}"
+            },
+            {
+              "fieldId": "priority",
+              "fieldValue": "={{ $json._delivery_payload.priority }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json._delivery_payload.category || undefined }}"
+            },
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ { _ctx: { request_id: $json.request_id, user_id: $json.user_id, workspace_id: $json.workspace_id, project_id: $json.project_id, conversation_id: $json.conversation_id, reminder_id: $json._delivery_payload.reminder_id, title: $json._delivery_payload.title, body: $json._delivery_payload.body, priority: $json._delivery_payload.priority, category: $json._delivery_payload.category, idempotency_key: $json._delivery_payload.idempotency_key, entry_source: $json._entry_source, effective_endpoint: $json._effective_endpoint, effective_timeout: $json._effective_timeout, effective_channel: $json._effective_channel, effective_auth_header_name: $json._effective_auth_header_name, effective_auth_header_value: $json._effective_auth_header_value, delivery_payload: $json._delivery_payload } } }}"
+            },
+            {
+              "fieldId": "idempotency_key",
+              "fieldValue": "={{ $json._delivery_payload.idempotency_key }}"
+            }
+          ]
+        }
+      },
+      "id": "6303e479-aed7-4a16-8f14-4c94f2e2219a",
+      "name": "Insert Pending Notification",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2496,
+        1408
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nreturn items.map(item=>{const ins=item.json||{};const err=!!(ins.error||ins.code);const raw=JSON.stringify(ins).toLowerCase();const dup=/23505|duplicate key|unique constraint/.test(raw);\nlet md=ins.metadata;\nif(typeof md==='string'){try{md=JSON.parse(md);}catch(e){md=null;}}\nif(!md||typeof md!=='object'||Array.isArray(md))md={};\nconst ctx=md._ctx||{};\nconst notifId=(ins&&ins.id)||null;\nreturn{json:{request_id:ctx.request_id||null,user_id:ctx.user_id||null,workspace_id:ctx.workspace_id||null,project_id:ctx.project_id||null,conversation_id:ctx.conversation_id||null,reminder_id:ctx.reminder_id||null,title:ctx.title||null,body:ctx.body||null,priority:ctx.priority||null,category:ctx.category||null,idempotency_key:ctx.idempotency_key||null,_entry_source:ctx.entry_source||null,_effective_endpoint:ctx.effective_endpoint||null,_effective_timeout:ctx.effective_timeout||null,_effective_channel:ctx.effective_channel||null,_effective_auth_header_name:ctx.effective_auth_header_name||null,_effective_auth_header_value:ctx.effective_auth_header_value||null,_delivery_payload:ctx.delivery_payload||null,_insert_error:err,_insert_duplicate:dup,_notification_id:notifId}};});"
+      },
+      "id": "ec46cc6b-1792-4073-aa53-12917623d696",
+      "name": "Classify Insert Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        1408
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "ok",
+              "leftValue": "={{ $json._insert_error !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a7a672a1-8b63-43d9-a5d5-fc6b99201228",
+      "name": "Insert Pending OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2944,
+        1408
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nreturn items.map(item=>{const x=item.json||{};\nconst isDup=x._insert_duplicate===true;\nconst cat=isDup?'VERSION_CONFLICT':'INTERNAL_ERROR';\nconst msg=isDup?'Duplicate idempotency_key — delivery skipped':'Notification insert failed (non-duplicate error)';\nconst status=isDup?'completed':'failed';\nconst hs=isDup?200:500;\nconst res={audit_id:'NOTIF-'+(x.request_id||Date.now()),audit_status:isDup?'completed':'failed',operation:'DELIVER_NOTIFICATION',reminder_id:x.reminder_id||null,notification_id:x._notification_id||null,reminder:null,reminders:[],notifications:[],delivery:null,source_type:'manual',verification_summary:{status:'not_verified',evidence:[msg],delivered_confirmed:false},limitations:[msg],recommended_fixes:[]};\nreturn{json:{ok:isDup,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status,_http_status:hs,result:res,errors:isDup?[]:[{category:cat,message:msg}],warnings:isDup?[{message:'Duplicate — provider call skipped'}]:[],verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}};});"
+      },
+      "id": "9beba87b-1748-48cc-9ee9-3dbd28c61690",
+      "name": "Format Insert Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        1520
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json._effective_endpoint }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "={{ $json._effective_auth_header_name || 'Authorization' }}",
+              "value": "={{ $json._effective_auth_header_value || undefined }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json._delivery_payload || {}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": "={{ $json._effective_timeout || 15000 }}"
+        }
+      },
+      "id": "fbb17161-e863-4032-b195-b2c1952356bb",
+      "name": "Call Delivery Provider",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3168,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// v2.4 FIX: filter ctx to only successful inserts, matching Call Delivery Provider's input count\nconst items=$input.all();\nconst ctx=($('Classify Insert Result').all()||[]).map(i=>i.json).filter(x=>x._insert_error!==true);\nreturn items.map((item,i)=>{const resp=item.json||{};const body=resp.body??resp;const ok=resp.statusCode&&resp.statusCode>=200&&resp.statusCode<300;\nlet delivered=false,messageId=null,providerStatus=null;\nif(ok&&body&&typeof body==='object'){\n  if(typeof body.messageId==='string')messageId=body.messageId;else if(typeof body.message_id==='string')messageId=body.message_id;else if(body.data&&typeof body.data==='object'&&typeof body.data.messageId==='string')messageId=body.data.messageId;\n  for(const k of ['status','state','delivery_status']){if(typeof body[k]==='string'){providerStatus=body[k].toLowerCase();break;}}\n  if(providerStatus==='delivered')delivered=true;\n  if(body.delivered===true)delivered=true;\n}\nconst cx=ctx[i]||{};\nreturn{json:{...cx,_delivery_status_code:resp.statusCode||0,_delivery_response_body:body||null,_delivered_flag:delivered,_provider_message_id:messageId,_provider_status:providerStatus,_delivery_ok:ok}};});"
+      },
+      "id": "f9d1e290-e4de-465e-b942-aa42fc0a6e31",
+      "name": "Fetch Delivery Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3392,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "notifications",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json._notification_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "metadata",
+              "fieldValue": "={{ { _ctx: $json._delivery_payload ? { idempotency_key: $json._delivery_payload.idempotency_key } : {}, status: $json._delivered_flag ? 'delivered' : ($json._delivery_ok ? 'sent' : 'failed'), provider_message_id: $json._provider_message_id, provider_status: $json._provider_status, delivery_http_status: $json._delivery_status_code, completed_at: new Date().toISOString() } }}"
+            }
+          ]
+        }
+      },
+      "id": "95bfc4e8-2cc0-4ae3-99e1-317d06a2e0c1",
+      "name": "Update Notification After Delivery",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3616,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read from Fetch Delivery Status (cross-node) — Supabase UPDATE output loses synthetic fields\nconst items=$('Fetch Delivery Status').all();\nreturn items.map(item=>{const x=item.json||{};const err=!!(x.error||x.code);\nconst ch=x._effective_channel||'push';const dlv=x._delivered_flag===true;const st=dlv?'delivered':(x._delivery_ok?'sent':'failed');\nconst warnings=[];if(err)warnings.push({message:'Notification metadata update failed'});if(!dlv&&x._delivery_ok)warnings.push({message:'Provider accepted but not confirmed delivered'});\nreturn{json:{...x,_notification_id:x._notification_id,_channel:ch,_delivery_status:st,_unr_error:err,_warnings_extra:warnings}};});"
+      },
+      "id": "8dfc70ee-6ded-4ba4-8f18-2b393c1b3388",
+      "name": "Prepare Delivery Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "notification_deliveries",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "notification_id",
+              "fieldValue": "={{ $json._notification_id || undefined }}"
+            },
+            {
+              "fieldId": "channel",
+              "fieldValue": "={{ $json._channel }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json._delivery_status }}"
+            },
+            {
+              "fieldId": "attempt_count",
+              "fieldValue": "1"
+            },
+            {
+              "fieldId": "last_attempt_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "delivered_at",
+              "fieldValue": "={{ $json._delivery_status === 'delivered' ? new Date().toISOString() : undefined }}"
+            },
+            {
+              "fieldId": "failure_reason",
+              "fieldValue": "={{ $json._delivery_status === 'failed' ? ('HTTP ' + $json._delivery_status_code) : undefined }}"
+            }
+          ]
+        }
+      },
+      "id": "651c3b4b-defd-44cc-b4b0-b64ad98465e3",
+      "name": "Insert Delivery Record",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4064,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep=($('Prepare Delivery Record').all()||[]).map(i=>i.json);\nconst resp=$input.all().map(i=>i.json);\nif(prep.length===0)return [];\nif(resp.length!==prep.length){\n  return prep.map((p,i)=>{const r=resp[i]||{};return {json:{...p,_delivery_record_id:r.id||null,_delivery_record_error:!!(r.error||r.code),_delivery_record_raw:r,_length_mismatch:true}};});\n}\nreturn prep.map((p,i)=>{const r=resp[i]||{};return {json:{...p,_delivery_record_id:r.id||null,_delivery_record_error:!!(r.error||r.code),_delivery_record_raw:r}};});"
+      },
+      "id": "4956f2a6-d111-4e7a-814a-d83926bad15f",
+      "name": "Pair Delivery with Reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4288,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "reminders",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.reminder_id || '00000000-0000-0000-0000-000000000000' }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "in",
+              "keyValue": "scheduled,pending,sent"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json._delivery_status === 'delivered' ? 'delivered' : ($json._delivery_status === 'sent' ? 'sent' : 'failed') }}"
+            }
+          ]
+        }
+      },
+      "id": "7306eb73-75a4-4c93-b6f5-eae229289f73",
+      "name": "Update Reminder Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        4512,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nconst prep=($('Prepare Delivery Record').all()||[]).map(i=>i.json);\nconst dr=($('Insert Delivery Record').all()||[]).map(i=>i.json);\nconst remUpd=$input.all().map(i=>i.json);\nconst lenOk=(remUpd.length===prep.length)&&(dr.length===prep.length);\nreturn prep.map((x,i)=>{const d=dr[i]||{};const ru=lenOk?(remUpd[i]||{}):{};\nconst drErr=!!(d.error||d.code);const ruErr=!!(ru.error||ru.code);\nconst dlv=x._delivery_status==='delivered';const overallOk=!drErr;\nconst status=!overallOk?'failed':(dlv?'completed':'partial');\nconst hs=overallOk?200:500;\nconst warnings=[...(x._warnings_extra||[])];if(x._length_mismatch)warnings.push({message:'Delivery record count mismatch'});if(!lenOk)warnings.push({message:'Array length mismatch in delivery pipeline'});if(ruErr)warnings.push({message:'Reminder status update failed'});else if(lenOk&&(ru&&ru.id)===undefined&&x.reminder_id)warnings.push({message:'Reminder status update affected 0 rows'});\nconst delivery={id:(d&&d.id)||null,notification_id:x._notification_id,channel:x._channel,status:x._delivery_status,attempt_count:1,delivered_at:dlv?new Date().toISOString():null,failure_reason:x._delivery_status==='failed'?('HTTP '+x._delivery_status_code):null};\nconst res={audit_id:'NOTIF-'+x.request_id,audit_status:!overallOk?'failed':(dlv?'completed':'partial'),operation:'DELIVER_NOTIFICATION',reminder_id:x.reminder_id||null,notification_id:x._notification_id,reminder:null,reminders:[],notifications:[],delivery,source_type:'live',verification_summary:{status:!overallOk?'not_verified':(dlv?'verified':'not_verified'),evidence:!overallOk?['Delivery record insert failed']:(dlv?['Provider confirmed']:['Not confirmed (status='+(x._provider_status||'unknown')+')']),delivered_confirmed:dlv&&overallOk},limitations:['\"delivered\" only when provider confirms.'],recommended_fixes:[]};\nreturn{json:{ok:overallOk,request_id:x.request_id,user_id:x.user_id,workspace_id:x.workspace_id,project_id:x.project_id,conversation_id:x.conversation_id,status,_http_status:hs,result:res,errors:overallOk?[]:[{category:'INTERNAL_ERROR',message:'Delivery record insert failed'}],warnings,verification:res.verification_summary,_persist:{project_id:x.project_id,user_id:x.user_id,workspace_id:x.workspace_id,conversation_id:x.conversation_id}}};});"
+      },
+      "id": "811395ec-618b-4109-823e-a1386571edef",
+      "name": "Format Delivery Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4736,
+        1328
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now=new Date();const end=new Date(now.getTime()+60000).toISOString();\nreturn [{json:{_window_end:end,_entry_source:'scheduler'}}];"
+      },
+      "id": "de24b4fc-7fb9-4614-9e05-95250c6f9a9d",
+      "name": "Prepare Due Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        2192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "reminders",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "scheduled"
+            },
+            {
+              "keyName": "scheduled_at",
+              "condition": "lte",
+              "keyValue": "={{ $json._window_end }}"
+            }
+          ]
+        }
+      },
+      "id": "2a41648f-8ff7-4716-985a-83b0c451ef9d",
+      "name": "Get Due Reminders",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        2192
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "integrations",
+        "limit": 1,
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "integration_type",
+              "condition": "eq",
+              "keyValue": "notification"
+            },
+            {
+              "keyName": "workspace_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Get Due Reminders').first().json.workspace_id || '00000000-0000-0000-0000-000000000000' }}"
+            }
+          ]
+        }
+      },
+      "id": "50b4d713-c8e9-47d3-beee-9e6ed72333d1",
+      "name": "Scheduler Context Lookup",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        2192
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function parseCfg(c){if(!c)return{};if(typeof c==='object'&&!Array.isArray(c))return c;if(typeof c==='string'){try{const p=JSON.parse(c);if(p&&typeof p==='object'&&!Array.isArray(p))return p;}catch(e){}}return{};}\nconst all=($('Get Due Reminders').all()||[]).map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code&&r.id);\nif(all.length===0)return [{json:{_entry_source:'scheduler',_no_due:true,status:'completed',result:{audit_id:'NOTIF-empty-'+Date.now(),audit_status:'completed',operation:'SCHEDULER',source_type:'live',verification_summary:{status:'verified',evidence:['No due reminders'],delivered_confirmed:false},limitations:[],recommended_fixes:[]},errors:[],warnings:[],verification:{status:'verified',evidence:[]},_persist:{}}}];\nconst valid=all.filter(r=>r.user_id&&r.workspace_id);\nconst dropped=all.length-valid.length;\nif(valid.length===0){return [{json:{_entry_source:'scheduler',_no_due:true,_dropped_malformed:dropped,status:'completed',result:{audit_id:'NOTIF-empty-'+Date.now(),audit_status:'completed',operation:'SCHEDULER',source_type:'live',verification_summary:{status:'verified',evidence:['All due rows malformed'],delivered_confirmed:false},limitations:['All due reminders missing user_id/workspace_id'],recommended_fixes:[]},errors:[],warnings:[{message:dropped+' malformed reminder(s) dropped'}],verification:{status:'verified',evidence:[]},_persist:{}}}];}\nlet endpoint=$env?.WF10_DELIVERY_ENDPOINT||null;\nconst lookup=$('Scheduler Context Lookup').all().map(i=>i.json).filter(r=>r&&typeof r==='object'&&!r.code);\nconst intg=lookup.length>0?lookup[0]:null;\nconst cfg=parseCfg(intg&&intg.config);\nif(typeof cfg.endpoint==='string'&&cfg.endpoint.trim())endpoint=cfg.endpoint.trim().replace(/\\/+$/,'');\nconst ahn=(typeof cfg.auth_header_name==='string'&&cfg.auth_header_name.trim())?cfg.auth_header_name.trim():'Authorization';\nconst ahv=(typeof cfg.auth_header_value==='string'&&cfg.auth_header_value.trim())?cfg.auth_header_value.trim():null;\nconst tms=(typeof cfg.timeout_ms==='number'&&cfg.timeout_ms>0)?cfg.timeout_ms:15000;\nconst ch=(typeof cfg.channel==='string'&&cfg.channel.trim())?cfg.channel.trim():'push';\nif(!endpoint)return [{json:{_entry_source:'scheduler',_context_error:true,_context_error_category:'INTEGRATION_UNAVAILABLE',_context_error_message:'No delivery endpoint for scheduler',_no_dispatch:true,status:'failed',result:{audit_id:'NOTIF-ctx-'+Date.now(),audit_status:'failed',operation:'SCHEDULER',source_type:'manual',verification_summary:{status:'not_verified',evidence:[],delivered_confirmed:false},limitations:['No endpoint'],recommended_fixes:[]},errors:[{category:'INTEGRATION_UNAVAILABLE',message:'No endpoint'}],warnings:dropped>0?[{message:dropped+' malformed reminder(s) dropped'}]:[],verification:{status:'not_verified',evidence:[]},_persist:{}}}];\nreturn valid.map(r=>({json:{_entry_source:'scheduler',request_id:'scheduler-'+r.id,user_id:r.user_id,workspace_id:r.workspace_id,project_id:r.project_id||null,conversation_id:null,operation:'DELIVER_NOTIFICATION',reminder_id:r.id,notification_id:null,task_id:r.task_id||null,title:r.title,description:r.description||r.title,scheduled_at:r.scheduled_at,priority:r.priority||'info',reminder_type:r.reminder_type||'general',idempotency_key:'SCHED-DELIVER-'+r.id,limit:20,category:r.reminder_type||null,delivery_endpoint:null,_effective_endpoint:endpoint,_effective_auth_header_name:ahn,_effective_auth_header_value:ahv,_effective_timeout:tms,_effective_channel:ch,_delivery_payload:{title:r.title,body:r.description||r.title,priority:r.priority||'info',category:r.reminder_type||null,user_id:r.user_id,workspace_id:r.workspace_id,reminder_id:r.id,idempotency_key:'SCHED-DELIVER-'+r.id},_payload_ready:true,_dropped_malformed:dropped}}));"
+      },
+      "id": "1c701cc2-b9e9-4637-9b0f-4f5039a2b98c",
+      "name": "Scheduler Context Builder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        2192
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const kinds=['Format Delivery Result','Format Insert Failure','Format Payload Error','Format Reminder Insert','Format Cancel','Format Get Reminder','Format List Reminders','Format List Notifications','Format Mark Read','Context Error Wrapper','Scheduler Context Builder','Format Request Error'];\nlet src=null;\nfor(const k of kinds){try{if($(k).isExecuted){const arr=$(k).all();if(arr&&arr.length>0&&arr[0].json&&arr[0].json.result){src=arr[0].json;break;}}}catch(e){}}\nif(!src){let rid=null;try{rid=$('Validate Request').first()?.json?.request_id||null;}catch(e){}src={request_id:rid,status:'failed',_http_status:500,result:{audit_id:rid?('NOTIF-'+rid):null,audit_status:'failed',operation:null,reminder_id:null,notification_id:null,reminder:null,reminders:[],notifications:[],delivery:null,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],delivered_confirmed:false},limitations:['No upstream'],recommended_fixes:[]},verification:{status:'not_verified',evidence:[]},errors:[{category:'INTERNAL_ERROR',message:'No upstream result'}],task_id:null,warnings:[],_persist:{}};}\nconst warnings=Array.isArray(src.warnings)?[...src.warnings]:[];\nlet dropped=0;\ntry{const sb=$('Scheduler Context Builder').all();dropped=sb.reduce((s,i)=>s+((i.json&&i.json._dropped_malformed)||0),0);}catch(e){}\nif(dropped>0&&!warnings.some(w=>String(w.message||'').includes('malformed')))warnings.push({message:dropped+' malformed reminder(s) dropped in scheduler path'});\nreturn [{json:{...src,warnings}}];"
+      },
+      "id": "f5ada3b5-1b32-47e1-91bb-7fe8b16bdc4d",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4960,
+        928
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const x=$input.first().json;\nconst rid=x.request_id||null;\nconst auditId=(x.result&&x.result.audit_id)||('NOTIF-'+((rid||'unknown')+'-'+Date.now()));\nconst result={...(x.result||{}),audit_id:auditId};\nif(!result.audit_status){const st=x.status||'failed';result.audit_status=(st==='completed')?'completed':(st==='partial'?'partial':'failed');}\nif(result.operation===undefined)result.operation=null;\nif(result.reminder_id===undefined)result.reminder_id=null;\nif(result.notification_id===undefined)result.notification_id=null;\nif(!Array.isArray(result.reminders))result.reminders=[];\nif(!Array.isArray(result.notifications))result.notifications=[];\nif(!Array.isArray(result.limitations))result.limitations=[];\nif(!Array.isArray(result.recommended_fixes))result.recommended_fixes=[];\nif(!result.verification_summary||typeof result.verification_summary!=='object')result.verification_summary={status:'not_verified',evidence:[],delivered_confirmed:false};\nif(!result.source_type){const st=x.status||'failed';result.source_type=(st==='completed'&&result.operation)?'live':'manual';}\nconst httpStatusRaw=(typeof x._http_status==='number'&&x._http_status>0)?x._http_status:null;\nconst httpStatus=(httpStatusRaw!==null)?httpStatusRaw:(x.status==='failed'?500:200);\nlet errors=Array.isArray(x.errors)?[...x.errors]:[];if(errors.length===0&&x.category&&x.message)errors.push({category:x.category,message:x.message});\nconst warnings=Array.isArray(x.warnings)?[...x.warnings]:[];\nconst p=x._persist||{};\nreturn [{json:{request_id:rid,task_id:x.task_id||null,status:x.status||'failed',_http_status:httpStatus,result,errors,warnings,verification:result.verification_summary,_persist:{project_id:p.project_id||null,user_id:p.user_id||null,workspace_id:p.workspace_id||null,conversation_id:p.conversation_id||null}}}];"
+      },
+      "id": "ad996e4c-041a-4db4-8e6e-31377bea0f91",
+      "name": "Build Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5184,
+        928
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "tableId": "audit_events",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "user_id",
+              "fieldValue": "={{ $json._persist.user_id || undefined }}"
+            },
+            {
+              "fieldId": "workspace_id",
+              "fieldValue": "={{ $json._persist.workspace_id || undefined }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json._persist.project_id || undefined }}"
+            },
+            {
+              "fieldId": "event_type",
+              "fieldValue": "={{ $json.status === 'completed' ? 'skill_executed' : ($json.status === 'partial' ? 'skill_partial' : 'skill_rejected') }}"
+            },
+            {
+              "fieldId": "resource_type",
+              "fieldValue": "={{ 'notification_' + ($json.result.operation||'unknown').toLowerCase() }}"
+            },
+            {
+              "fieldId": "resource_id",
+              "fieldValue": "={{ $json.result.audit_id }}"
+            },
+            {
+              "fieldId": "action",
+              "fieldValue": "wf10_notification_manager"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "details",
+              "fieldValue": "={{ { request_id: $json.request_id, operation: $json.result.operation, reminder_id: $json.result.reminder_id, notification_id: $json.result.notification_id, delivered_confirmed: $json.result.verification_summary.delivered_confirmed } }}"
+            }
+          ]
+        }
+      },
+      "id": "c9d3ca43-d1f1-46ac-8ecf-7e824fbb3ef8",
+      "name": "Persist Audit Header",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5408,
+        928
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "h9oGEBstlPSBSV3m",
+          "name": "Supabase Assistant"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "let src=null;try{if($('Build Result').isExecuted){const a=$('Build Result').first()?.json;if(a&&a.result)src=a;}}catch(e){}\nif(!src){let rid=null;try{rid=$('Validate Request').first()?.json?.request_id||null;}catch(e){}src={request_id:rid,status:'failed',_http_status:500,result:{audit_id:null,audit_status:'failed',operation:null,reminder_id:null,notification_id:null,reminder:null,reminders:[],notifications:[],delivery:null,source_type:'manual',verification_summary:{status:'not_verified',evidence:[],delivered_confirmed:false},limitations:[],recommended_fixes:[]},errors:[],warnings:[],_persist:{}};}\nconst raw=$input.first()?.json||{};\nconst err=!!(raw.error||raw.code);const row=Array.isArray(raw)?raw[0]:raw;const id=(row&&row.id)||null;\nconst ok=!err&&!!id;\nconst verification={...(src.verification||{}),persisted:ok,persist_record_id:ok?id:null};\nconst result={...(src.result||{}),verification_summary:verification};\nconst warnings=Array.isArray(src.warnings)?[...src.warnings]:[];if(!ok)warnings.push({message:'Audit persist failed'});\nlet status=src.status||'failed';if(!ok&&status==='completed')status='partial';\nreturn [{json:{...src,status,result,verification,warnings}}];"
+      },
+      "id": "84a49544-7e29-46b6-ad55-ff2ad9c0542f",
+      "name": "Verify Persist",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5632,
+        928
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "wh",
+              "leftValue": "={{ $('Webhook Input').isExecuted === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b60749d1-75c0-4d48-bafe-7a87c1124b2b",
+      "name": "Is Webhook?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5856,
+        928
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { request_id: $json.request_id, task_id: $json.task_id, status: $json.status, result: $json.result, errors: $json.errors, warnings: $json.warnings, verification: $json.verification } }}",
+        "options": {
+          "responseCode": "={{ $json._http_status || 200 }}"
+        }
+      },
+      "id": "8a0274eb-7b58-4fc4-899c-546883a6cbec",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        6080,
+        928
+      ],
+      "alwaysOutputData": true,
+      "executeOnce": true,
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook Input": {
+      "main": [
+        [
+          {
+            "node": "Normalize Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Request Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Valid?": {
+      "main": [
+        [
+          {
+            "node": "Prefetch Delivery Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Request Error": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prefetch Delivery Config": {
+      "main": [
+        [
+          {
+            "node": "Merge Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Context": {
+      "main": [
+        [
+          {
+            "node": "Context OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context OK?": {
+      "main": [
+        [
+          {
+            "node": "Operation Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Context Error Wrapper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Context Error Wrapper": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Operation Router": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reminder Insert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "List Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "List Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Read",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Delivery Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Request Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reminder Insert": {
+      "main": [
+        [
+          {
+            "node": "Insert Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Reminder": {
+      "main": [
+        [
+          {
+            "node": "Format Reminder Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reminder Insert": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Cancel": {
+      "main": [
+        [
+          {
+            "node": "Format Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Cancel": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Reminder": {
+      "main": [
+        [
+          {
+            "node": "Format Get Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Get Reminder": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Reminders": {
+      "main": [
+        [
+          {
+            "node": "Format List Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format List Reminders": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Notifications": {
+      "main": [
+        [
+          {
+            "node": "Format List Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format List Notifications": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Read": {
+      "main": [
+        [
+          {
+            "node": "Format Mark Read",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Mark Read": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Delivery Payload": {
+      "main": [
+        [
+          {
+            "node": "Payload Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payload Ready?": {
+      "main": [
+        [
+          {
+            "node": "Insert Pending Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Payload Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Payload Error": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Pending Notification": {
+      "main": [
+        [
+          {
+            "node": "Classify Insert Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Insert Result": {
+      "main": [
+        [
+          {
+            "node": "Insert Pending OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Pending OK?": {
+      "main": [
+        [
+          {
+            "node": "Call Delivery Provider",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Insert Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Insert Failure": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Delivery Provider": {
+      "main": [
+        [
+          {
+            "node": "Fetch Delivery Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Delivery Status": {
+      "main": [
+        [
+          {
+            "node": "Update Notification After Delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Notification After Delivery": {
+      "main": [
+        [
+          {
+            "node": "Prepare Delivery Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Delivery Record": {
+      "main": [
+        [
+          {
+            "node": "Insert Delivery Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Delivery Record": {
+      "main": [
+        [
+          {
+            "node": "Pair Delivery with Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pair Delivery with Reminder": {
+      "main": [
+        [
+          {
+            "node": "Update Reminder Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Reminder Status": {
+      "main": [
+        [
+          {
+            "node": "Format Delivery Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Delivery Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Due Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Due Window": {
+      "main": [
+        [
+          {
+            "node": "Get Due Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Due Reminders": {
+      "main": [
+        [
+          {
+            "node": "Scheduler Context Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scheduler Context Lookup": {
+      "main": [
+        [
+          {
+            "node": "Scheduler Context Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scheduler Context Builder": {
+      "main": [
+        [
+          {
+            "node": "Prepare Delivery Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Build Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result": {
+      "main": [
+        [
+          {
+            "node": "Persist Audit Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Audit Header": {
+      "main": [
+        [
+          {
+            "node": "Verify Persist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Persist": {
+      "main": [
+        [
+          {
+            "node": "Is Webhook?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Webhook?": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}
