@@ -22,6 +22,6 @@ export async function getEpisodePlan(projectId: string, episodeNo: number): Prom
     animeSupabase.from('episode_states').select('*').eq('project_id', projectId).eq('episode_no', episodeNo).maybeSingle(),
     animeSupabase.from('scenes').select('id, project_id, episode_no, scene_order, description, visual_prompt, status, created_at').eq('project_id', projectId).eq('episode_no', episodeNo).order('scene_order', { ascending: true }),
   ]);
-  const scenes = (scenesRes.data ?? []).map((s: any) => ({ ...s, clips: [] }));
+  const scenes = (scenesRes.data ?? []).map((s: any) => ({ ...s, scene_no: s.scene_order, clips: [] }));
   return { project_id: projectId, episode, state_detail: stateRes.data ?? null, scenes_count: scenes.length, scenes };
 }

@@ -24,3 +24,6 @@ src/modules/approvals/src/modules/approvals/
 .env.bak*
 src/modules/approvals/
 all_git_code.txt
+backups/
+*.bak_*
+*.bak

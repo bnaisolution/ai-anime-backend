@@ -9,6 +9,6 @@ export async function listScenes(projectId: string, episodeNo: number, paginatio
   if (scenesRes.error !== null || clipsRes.error !== null) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Query failed', cause: scenesRes.error || clipsRes.error });
   const raw = scenesRes.data ?? []; const hasMore = raw.length > limit; const sliced = hasMore ? raw.slice(0, limit) : raw;
   const clipsBy = new Map(); for (const c of (clipsRes.data ?? [])) { if (typeof c.scene_order === 'number') { const arr = clipsBy.get(c.scene_order) || []; arr.push(c); clipsBy.set(c.scene_order, arr); } }
-  const items = sliced.map((s: any) => ({ ...s, clips: clipsBy.get(s.scene_order) || [] }));
+  const items = sliced.map((s: any) => ({ ...s, scene_no: s.scene_order, clips: (clipsBy.get(s.scene_order) || []).map((c: any) => ({ ...c, scene_no: c.scene_order })) }));
   return { items, next_cursor: hasMore && items.length > 0 ? String(items[items.length - 1].scene_order) : null };
 }
