@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-31T16:02:26.696Z",
+  "createdAt": "2026-10-26T10:10:44.896Z",
+  "id": "2fcuca0HkGxGIYMv",
   "name": "StoryWf12",
+  "description": "WF-12 Quota Governor: Tracks API/GPU usage and blocks requests if limits are exceeded.",
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {},
@@ -15,7 +21,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// [BLOCKER-8 FIX] Targeted Project Budget Ceiling Evaluation (#369)\nconst dynamicBudgetCeiling = Number($input.first()?.json?.payload?.budget_ceiling ?? $input.first()?.json?.budget_ceiling ?? $env.DAILY_QUOTA_LIMIT ?? 5000);\nconst effectiveBudgetCeiling = Number.isFinite(dynamicBudgetCeiling) && dynamicBudgetCeiling > 0 ? dynamicBudgetCeiling : 5000;\nif ($input.first()?.json) {\n  $input.first().json.daily_limit = effectiveBudgetCeiling;\n  $input.first().json.budget_ceiling = effectiveBudgetCeiling;\n}\n\nconst raw = ($input.item && $input.item.json) ? $input.item.json : {};\nconst extracted = raw.extracted_params || {};\nconst project_id = raw.project_id || extracted.project_id || null;\n\nconst userInfra = raw.user_infrastructure || {};\nconst gpuRouting = userInfra.gpu_routing || raw.gpu_routing || {};\nconst primaryHours = Number(gpuRouting.kaggle_primary?.weekly_hours_used || 0);\nconst secondaryHours = Number(gpuRouting.kaggle_secondary?.weekly_hours_used || 0);\n\nlet active_gpu_slot = 'KAGGLE_PRIMARY';\nif (gpuRouting.preferred_mode === 'CUSTOM_GPU' || gpuRouting.custom_gpu?.enabled) {\n  active_gpu_slot = 'CUSTOM_GPU';\n} else if (primaryHours >= 29.5) {\n  active_gpu_slot = 'KAGGLE_SECONDARY';\n}\n\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? active_gpu_slot : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type.includes('KAGGLE') || service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISODate();\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn {\n  json: {\n    ...raw,\n    project_id,\n    service_type,\n    active_gpu_slot,\n    kaggle_primary_hours: primaryHours,\n    kaggle_secondary_hours: secondaryHours,\n    estimated_cost_units,\n    usage_date,\n    sessionId: (raw.sessionId || `sess_${$execution.id}`).toString()\n  }\n};"
+        "jsCode": "/* [START_WF12_CAN_PROCEED] */\nconst __postProcess = (o) => {\n  if (!o || typeof o !== 'object') return o;\n  const ok = o.can_proceed !== undefined ? Boolean(o.can_proceed) : (o.is_allowed !== false && o.allowed !== false && o.status !== 'BLOCKED');\n  return { ...o, is_allowed: ok, can_proceed: ok };\n};\nconst __rawNodeOut = await (async () => {\nconst raw = ($input.item && $input.item.json) ? $input.item.json : {};\nconst extracted = raw.extracted_params || {};\nconst project_id = raw.project_id || extracted.project_id || null;\n\nconst userInfra = raw.user_infrastructure || {};\nconst gpuRouting = userInfra.gpu_routing || raw.gpu_routing || {};\nconst primaryHours = Number(gpuRouting.kaggle_primary?.weekly_hours_used || 0);\nconst secondaryHours = Number(gpuRouting.kaggle_secondary?.weekly_hours_used || 0);\n\nlet active_gpu_slot = 'KAGGLE_PRIMARY';\nif (gpuRouting.preferred_mode === 'CUSTOM_GPU' || gpuRouting.custom_gpu?.enabled) {\n  active_gpu_slot = 'CUSTOM_GPU';\n} else if (primaryHours >= 29.5) {\n  active_gpu_slot = 'KAGGLE_SECONDARY';\n}\n\nconst service_type = (raw.service_type || (raw.intent === 'GENERATE_EPISODE' ? active_gpu_slot : 'LLM')).toString().toUpperCase().trim();\nconst estimated_cost_units = Number(raw.estimated_cost_units !== undefined ? raw.estimated_cost_units : (service_type.includes('KAGGLE') || service_type === 'GPU' ? 250 : 50));\nconst usage_date = $now.toISODate();\n\nif (!project_id) {\n  throw new Error('WF-12 Error: project_id is strictly required for Quota Governance (Rule 5).');\n}\n\nreturn {\n  json: {\n    ...raw,\n    project_id,\n    service_type,\n    active_gpu_slot,\n    kaggle_primary_hours: primaryHours,\n    kaggle_secondary_hours: secondaryHours,\n    estimated_cost_units,\n    usage_date,\n    sessionId: (raw.sessionId || `sess_${$execution.id}`).toString()\n  }\n};\n})();\nif (__rawNodeOut === undefined) {\n  return $input.all();\n}\nif (Array.isArray(__rawNodeOut)) {\n  return __rawNodeOut.map(it => (it && typeof it === 'object' && it.json ? { ...it, json: __postProcess(it.json) } : __postProcess(it)));\n}\nif (__rawNodeOut && typeof __rawNodeOut === 'object' && __rawNodeOut.json) {\n  return { ...__rawNodeOut, json: __postProcess(__rawNodeOut.json) };\n}\nreturn __postProcess(__rawNodeOut);\n/* [END_WF12_CAN_PROCEED] */\n"
       },
       "id": "2d4d7178-e840-44b1-a03f-d3c1c832e843",
       "name": "Input Normalizer & Cost Estimator",
@@ -66,7 +72,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// [BLOCKER-8 FIX] Targeted Project Budget Ceiling Evaluation (#369)\nconst dynamicBudgetCeiling = Number($input.first()?.json?.payload?.budget_ceiling ?? $input.first()?.json?.budget_ceiling ?? $env.DAILY_QUOTA_LIMIT ?? 5000);\nconst effectiveBudgetCeiling = Number.isFinite(dynamicBudgetCeiling) && dynamicBudgetCeiling > 0 ? dynamicBudgetCeiling : 5000;\nif ($input.first()?.json) {\n  $input.first().json.daily_limit = effectiveBudgetCeiling;\n  $input.first().json.budget_ceiling = effectiveBudgetCeiling;\n}\n\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Cost Estimator');\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISO() }\n  }\n};"
+        "jsCode": "/* [START_WF12_CAN_PROCEED] */\nconst __postProcess = (o) => {\n  if (!o || typeof o !== 'object') return o;\n  const ok = o.can_proceed !== undefined ? Boolean(o.can_proceed) : (o.is_allowed !== false && o.allowed !== false && o.status !== 'BLOCKED');\n  return { ...o, is_allowed: ok, can_proceed: ok };\n};\nconst __rawNodeOut = await (async () => {\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst base = __getNodeJson('Input Normalizer & Cost Estimator');\nconst resp = $input.item.json;\nconst existingRow = Array.isArray(resp) ? resp[0] : (resp && resp.accumulated_units !== undefined ? resp : null);\n\nconst dailyLimit = Number($env.DAILY_QUOTA_LIMIT || 5000);\nconst currentAccumulated = Number(existingRow?.accumulated_units || 0);\nconst estimatedCost = Number(base.estimated_cost_units || 0);\nconst projectedTotal = currentAccumulated + estimatedCost;\n\nconst is_allowed = projectedTotal <= dailyLimit;\nconst remaining_quota = Math.max(0, dailyLimit - (is_allowed ? projectedTotal : currentAccumulated));\nconst quota_status = is_allowed ? 'QUOTA_APPROVED' : 'QUOTA_EXCEEDED';\n\nreturn {\n  json: {\n    ...base, daily_quota_limit: dailyLimit, current_accumulated_units: currentAccumulated, projected_total_units: projectedTotal,\n    remaining_quota_units: remaining_quota, is_allowed, quota_status,\n    upsert_payload: { project_id: base.project_id, usage_date: base.usage_date, service_type: base.service_type, accumulated_units: projectedTotal, updated_at: $now.toISO() }\n  }\n};\n})();\nif (__rawNodeOut === undefined) {\n  return $input.all();\n}\nif (Array.isArray(__rawNodeOut)) {\n  return __rawNodeOut.map(it => (it && typeof it === 'object' && it.json ? { ...it, json: __postProcess(it.json) } : __postProcess(it)));\n}\nif (__rawNodeOut && typeof __rawNodeOut === 'object' && __rawNodeOut.json) {\n  return { ...__rawNodeOut, json: __postProcess(__rawNodeOut.json) };\n}\nreturn __postProcess(__rawNodeOut);\n/* [END_WF12_CAN_PROCEED] */\n"
       },
       "id": "9f131fca-b8de-4d4a-9b85-6444786d05da",
       "name": "Quota & Throttling Evaluator",
@@ -190,7 +196,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// [BLOCKER-8 FIX] Targeted Project Budget Ceiling Evaluation (#369)\nconst dynamicBudgetCeiling = Number($input.first()?.json?.payload?.budget_ceiling ?? $input.first()?.json?.budget_ceiling ?? $env.DAILY_QUOTA_LIMIT ?? 5000);\nconst effectiveBudgetCeiling = Number.isFinite(dynamicBudgetCeiling) && dynamicBudgetCeiling > 0 ? dynamicBudgetCeiling : 5000;\nif ($input.first()?.json) {\n  $input.first().json.daily_limit = effectiveBudgetCeiling;\n  $input.first().json.budget_ceiling = effectiveBudgetCeiling;\n}\n\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Quota & Throttling Evaluator');\n\nconst msg = state.is_allowed\n  ? [\n      `\u2705 **WF-12: Quota Approved (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `\u2022 **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `\u2022 **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `\ud83d\uded1 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `\u2022 **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `\u2022 **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `\u2022 **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};"
+        "jsCode": "/* [START_WF12_CAN_PROCEED] */\nconst __postProcess = (o) => {\n  if (!o || typeof o !== 'object') return o;\n  const ok = o.can_proceed !== undefined ? Boolean(o.can_proceed) : (o.is_allowed !== false && o.allowed !== false && o.status !== 'BLOCKED');\n  return { ...o, is_allowed: ok, can_proceed: ok };\n};\nconst __rawNodeOut = await (async () => {\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Quota & Throttling Evaluator');\n\nconst msg = state.is_allowed\n  ? [\n      `✅ **WF-12: Quota Approved (${state.service_type})!**`,\n      `• **Date:** \\`${state.usage_date}\\` | **Service:** \\`${state.service_type}\\``,\n      `• **Used / Daily Limit:** \\`${state.projected_total_units} / ${state.daily_quota_limit}\\` units`,\n      `• **Remaining Quota:** \\`${state.remaining_quota_units}\\` units`\n    ].join('\\n')\n  : [\n      `🛑 **WF-12: QUOTA_EXCEEDED (${state.service_type})!**`,\n      `• **Date:** \\`${state.usage_date}\\` | **Current Used:** \\`${state.current_accumulated_units}\\` units`,\n      `• **Requested Cost:** \\`+${state.estimated_cost_units}\\` units would exceed Daily Limit (\\`${state.daily_quota_limit}\\`).`,\n      `• **Action:** Request throttled & blocked safely.`\n    ].join('\\n');\n\nreturn {\n  json: {\n    ...state, ok: state.is_allowed, status: state.quota_status, workflow_name: 'WF-12', execution_id: $execution.id,\n    is_allowed: state.is_allowed, remaining_quota: state.remaining_quota_units, output: msg, text: msg\n  }\n};\n})();\nif (__rawNodeOut === undefined) {\n  return $input.all();\n}\nif (Array.isArray(__rawNodeOut)) {\n  return __rawNodeOut.map(it => (it && typeof it === 'object' && it.json ? { ...it, json: __postProcess(it.json) } : __postProcess(it)));\n}\nif (__rawNodeOut && typeof __rawNodeOut === 'object' && __rawNodeOut.json) {\n  return { ...__rawNodeOut, json: __postProcess(__rawNodeOut.json) };\n}\nreturn __postProcess(__rawNodeOut);\n/* [END_WF12_CAN_PROCEED] */\n"
       },
       "id": "7065e197-7638-4671-9c32-72189905a44e",
       "name": "Final Quota Response Formatter",
@@ -291,5 +297,46 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "c2ff5ea3-6882-4a96-97ee-57e71ddd0acf",
+  "activeVersionId": "c2ff5ea3-6882-4a96-97ee-57e71ddd0acf",
+  "versionCounter": 13,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [
+    {
+      "updatedAt": "2026-10-26T06:14:16.780Z",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine"
+    }
+  ],
+  "shared": [
+    {
+      "updatedAt": "2026-10-26T10:10:44.899Z",
+      "createdAt": "2026-10-26T10:10:44.899Z",
+      "role": "workflow:owner",
+      "workflowId": "y5DW83fQjvyrzE98",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "updatedAt": "2026-10-17T06:52:24.955Z",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
   }
 }

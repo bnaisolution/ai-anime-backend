@@ -519,7 +519,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     };
   });
 
-  app.get('/v1/anime/prompts', async (request: any) => {
+  app.get('/v1/anime/prompts', { preHandler: [async (req: any, reply: any) => { await (app as any).authenticate(req, reply); }] }, async (request: any) => {
     const userId = authCheck(request);
     const projectId = request.query?.project_id as string | undefined;
     let query = animeSupabase
@@ -536,7 +536,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     return { data: data ?? [], meta: { request_id: request.anime?.request_id } };
   });
 
-  app.post('/v1/anime/prompts', { schema: { body: CreatePromptBody } }, async (request: any, reply: any) => {
+  app.post('/v1/anime/prompts', { schema: { body: CreatePromptBody }, preHandler: [async (req: any, reply: any) => { await (app as any).authenticate(req, reply); }] }, async (request: any, reply: any) => {
     const userId = authCheck(request);
     const { project_id, title, visual_medium, prompt_text, set_active } = request.body;
 
@@ -568,7 +568,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     return { data, meta: { request_id: request.anime?.request_id } };
   });
 
-  app.delete('/v1/anime/prompts/:id', { schema: { params: IdParams } }, async (request: any) => {
+  app.delete('/v1/anime/prompts/:id', { schema: { params: IdParams }, preHandler: [async (req: any, reply: any) => { await (app as any).authenticate(req, reply); }] }, async (request: any) => {
     const userId = authCheck(request);
     await animeSupabase
       .from('user_system_prompts')

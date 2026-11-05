@@ -6,6 +6,7 @@ import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 
 const READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
 const WRITE_ROLES = ['owner', 'admin', 'editor'];
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ProjParamsSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -16,6 +17,76 @@ const CharRefParamsSchema = Type.Object({
   cid: Type.String({ minLength: 1 }),
 });
 
+const EpisodeParamsSchema = Type.Object({
+  id: Type.String({ format: 'uuid' }),
+  episodeNo: Type.Union([Type.String(), Type.Number()]),
+});
+
+const SceneParamsSchema = Type.Object({
+  id: Type.String({ format: 'uuid' }),
+  episodeNo: Type.Union([Type.String(), Type.Number()]),
+  sceneId: Type.String({ minLength: 1 }),
+});
+
+const JobCancelParamsSchema = Type.Object({
+  id: Type.String({ format: 'uuid' }),
+  jobId: Type.String({ format: 'uuid' }),
+});
+
+async function requireAuthenticatedUserId(request: any): Promise<string> {
+  if (!request.user && typeof request.jwtVerify === 'function') {
+    try {
+      await request.jwtVerify();
+    } catch (_err) {
+      // Fall through to check headers/context
+    }
+  }
+  const uid =
+    request.user?.sub ||
+    request.user?.id ||
+    request.authContext?.userId ||
+    request.headers?.['x-user-id'];
+
+  if (!uid || typeof uid !== 'string' || !UUID_REGEX.test(uid)) {
+    throw new AnimeError({
+      code: AnimeErrorCode.AUTH_INVALID,
+      message: 'Verified authenticated user identity is required',
+    });
+  }
+  return uid;
+}
+
+async function syncCharacterStatusSafe(
+  projectId: string,
+  characterId: string,
+  characterCode: string,
+  statusVal: string
+): Promise<void> {
+  const { data: existingStatus } = await animeSupabase
+    .from('character_status')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('character_code', characterCode)
+    .maybeSingle();
+
+  if (existingStatus?.id) {
+    await animeSupabase
+      .from('character_status')
+      .update({
+        status: statusVal.toLowerCase(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', existingStatus.id);
+  } else {
+    await animeSupabase.from('character_status').insert({
+      project_id: projectId,
+      character_id: characterId,
+      character_code: characterCode,
+      status: statusVal.toLowerCase(),
+    });
+  }
+}
+
 export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<void> {
   // 1. GET /v1/anime/projects/:id/quota
   app.get(
@@ -24,23 +95,36 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     async (request: any) => {
       const projectId = request.params.id;
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-      const { data, error } = await animeSupabase
-        .from('quota_usage')
-        .select('*')
-        .eq('project_id', projectId)
-        .gte('usage_date', yesterday)
-        .order('usage_date', { ascending: false });
 
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch quota usage', cause: error });
+      const [quotaRes, projRes] = await Promise.all([
+        animeSupabase
+          .from('quota_usage')
+          .select('*')
+          .eq('project_id', projectId)
+          .gte('usage_date', yesterday)
+          .order('usage_date', { ascending: false }),
+        animeSupabase.from('projects').select('story_bible').eq('id', projectId).maybeSingle(),
+      ]);
+
+      if (quotaRes.error) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch quota usage', cause: quotaRes.error });
       }
-      const rows = data ?? [];
+
+      const rows = quotaRes.data ?? [];
+      const bible = (projRes.data?.story_bible && typeof projRes.data.story_bible === 'object') ? projRes.data.story_bible : {};
+      const configuredLimit = Number(bible.budget_ceiling ?? process.env.DAILY_QUOTA_LIMIT ?? 5000);
+
+      const totalTokensUsed = rows.reduce((acc: number, r: any) => acc + Number(r.tokens_used ?? r.units_used ?? 0), 0);
+      const totalRequests = rows.reduce((acc: number, r: any) => acc + Number(r.request_count ?? 1), 0);
+
       return {
         data: {
           project_id: projectId,
           since_date: yesterday,
           records_count: rows.length,
-          daily_limit: Number(process.env.DAILY_QUOTA_LIMIT || 5000),
+          requests_count: totalRequests,
+          tokens_used: totalTokensUsed,
+          daily_limit: configuredLimit,
           latest: rows[0] ?? null,
           items: rows,
         },
@@ -62,7 +146,20 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       if (error) {
         throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch continuity checks', cause: error });
       }
-      return { data: data ?? [] };
+
+      const normalized = (data ?? []).map((row: any) => {
+        const errs = Array.isArray(row.errors) ? row.errors : [];
+        const warns = Array.isArray(row.warnings) ? row.warnings : [];
+        const derivedSeverity =
+          row.severity ||
+          (errs.length > 2 ? 'CRITICAL' : errs.length > 0 ? 'ERROR' : warns.length > 0 ? 'WARNING' : 'NONE');
+        return {
+          ...row,
+          severity: derivedSeverity,
+        };
+      });
+
+      return { data: normalized };
     }
   );
 
@@ -75,7 +172,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         .from('pending_actions')
         .select('*')
         .eq('project_id', request.params.id)
-        .in('status', ['FAILED', 'RETRY_SCHEDULED', 'DEAD_LETTER'])
+        .in('status', ['failed', 'retry_scheduled', 'dead_letter', 'FAILED', 'RETRY_SCHEDULED', 'DEAD_LETTER'])
         .order('ready_at', { ascending: true });
 
       if (error) {
@@ -91,13 +188,22 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     { schema: { params: CharRefParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const { id: projectId, cid } = request.params;
-      const { data, error } = await animeSupabase
+      if (cid === 'default' || !cid.trim()) {
+        return { data: [] };
+      }
+
+      let query = animeSupabase
         .from('character_reference_history')
         .select('*')
-        .eq('project_id', projectId)
-        .eq('character_code', cid)
-        .order('created_at', { ascending: false });
+        .eq('project_id', projectId);
 
+      if (UUID_REGEX.test(cid)) {
+        query = query.or(`character_id.eq.${cid},character_code.eq.${cid}`);
+      } else {
+        query = query.eq('character_code', cid);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) {
         throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch character reference history', cause: error });
       }
@@ -105,128 +211,43 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     }
   );
 
-  // 5. GET /v1/anime/projects/:id/character-knowledge
-  app.get(
-    '/v1/anime/projects/:id/character-knowledge',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('character_knowledge')
-        .select('*')
-        .eq('project_id', request.params.id);
+  // 5-15. Explicit Lore & Category Read Routes
+  const categoryRoutes: Array<{ slug: string; table: string; activeCol?: string; activeVal?: any }> = [
+    { slug: 'character-knowledge', table: 'character_knowledge' },
+    { slug: 'mysteries', table: 'mystery_tracker' },
+    { slug: 'arcs', table: 'character_arcs' },
+    { slug: 'powers', table: 'power_system' },
+    { slug: 'locations', table: 'locations' },
+    { slug: 'artifacts', table: 'artifacts' },
+    { slug: 'rules', table: 'story_rules', activeCol: 'active', activeVal: true },
+    { slug: 'foreshadowing', table: 'foreshadowing' },
+    { slug: 'character-status', table: 'character_status' },
+    { slug: 'relationships', table: 'character_relationships' },
+  ];
 
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch character knowledge', cause: error });
+  for (const routeCfg of categoryRoutes) {
+    app.get(
+      `/v1/anime/projects/:id/${routeCfg.slug}`,
+      { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+      async (request: any) => {
+        let q = animeSupabase.from(routeCfg.table).select('*').eq('project_id', request.params.id);
+        if (routeCfg.activeCol !== undefined) {
+          q = q.eq(routeCfg.activeCol, routeCfg.activeVal);
+        }
+        const { data, error } = await q;
+        if (error) {
+          throw new AnimeError({
+            code: AnimeErrorCode.INTERNAL,
+            message: `Failed to fetch ${routeCfg.slug} from ${routeCfg.table}`,
+            cause: error,
+          });
+        }
+        return { data: data ?? [] };
       }
-      return { data: data ?? [] };
-    }
-  );
+    );
+  }
 
-  // 6. GET /v1/anime/projects/:id/mysteries
-  app.get(
-    '/v1/anime/projects/:id/mysteries',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('mystery_tracker')
-        .select('*')
-        .eq('project_id', request.params.id)
-        .in('status', ['OPEN', 'PARTIAL', 'ACTIVE', 'RESOLVED']);
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch mysteries', cause: error });
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 7. GET /v1/anime/projects/:id/arcs
-  app.get(
-    '/v1/anime/projects/:id/arcs',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('character_arcs')
-        .select('*')
-        .eq('project_id', request.params.id);
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch character arcs', cause: error });
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 8. GET /v1/anime/projects/:id/powers
-  app.get(
-    '/v1/anime/projects/:id/powers',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('power_system')
-        .select('*')
-        .eq('project_id', request.params.id);
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch power system', cause: error });
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 9. GET /v1/anime/projects/:id/locations
-  app.get(
-    '/v1/anime/projects/:id/locations',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('locations')
-        .select('*')
-        .eq('project_id', request.params.id);
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch locations', cause: error });
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 10. GET /v1/anime/projects/:id/artifacts
-  app.get(
-    '/v1/anime/projects/:id/artifacts',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('artifacts')
-        .select('*')
-        .eq('project_id', request.params.id);
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch artifacts', cause: error });
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 11. GET /v1/anime/projects/:id/rules
-  app.get(
-    '/v1/anime/projects/:id/rules',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('story_rules')
-        .select('*')
-        .eq('project_id', request.params.id)
-        .eq('active', true);
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch story rules', cause: error });
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 12. GET /v1/anime/projects/:id/voices
+  // GET /v1/anime/projects/:id/voices
   app.get(
     '/v1/anime/projects/:id/voices',
     { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
@@ -243,60 +264,47 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     }
   );
 
-  // 13. GET /v1/anime/projects/:id/foreshadowing
-  app.get(
-    '/v1/anime/projects/:id/foreshadowing',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+  // 16. POST /v1/anime/projects
+  app.post(
+    '/v1/anime/projects',
     async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('foreshadowing')
-        .select('*')
-        .eq('project_id', request.params.id)
-        .eq('status', 'active');
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch foreshadowing', cause: error });
+      const userId = await requireAuthenticatedUserId(request);
+      const body = (request.body ?? {}) as Record<string, any>;
+      const name = String(body.name || body.title || '').trim();
+      if (!name) {
+        throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Project name is required' });
       }
-      return { data: data ?? [] };
+
+      const initialBible = {
+        ...(body.story_bible && typeof body.story_bible === 'object' ? body.story_bible : {}),
+        visual_medium: body.visual_medium || 'ANIME',
+        genre: body.genre || 'Action / Fantasy',
+        premise: body.premise || body.description || '',
+        auto_approve: Boolean(body.auto_approve ?? false),
+        budget_ceiling: Number(body.budget_ceiling ?? 1000),
+        ...(body.cover_image_url ? { cover_image_url: body.cover_image_url } : {}),
+      };
+
+      const { data: created, error: createErr } = await animeSupabase
+        .from('projects')
+        .insert({
+          name,
+          user_id: userId,
+          is_active: true,
+          story_bible: initialBible,
+        })
+        .select('*')
+        .single();
+
+      if (createErr || !created) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to create project', cause: createErr });
+      }
+
+      return { data: created };
     }
   );
 
-  // 14. GET /v1/anime/projects/:id/character-status
-  app.get(
-    '/v1/anime/projects/:id/character-status',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('character_status')
-        .select('*')
-        .eq('project_id', request.params.id)
-        .order('character_code', { ascending: true });
-
-      if (error) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch character status', cause: error });
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 15. GET /v1/anime/projects/:id/relationships
-  app.get(
-    '/v1/anime/projects/:id/relationships',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
-    async (request: any) => {
-      const { data, error } = await animeSupabase
-        .from('character_relationships')
-        .select('*')
-        .eq('project_id', request.params.id);
-
-      if (error) {
-        return { data: [] };
-      }
-      return { data: data ?? [] };
-    }
-  );
-
-  // 16. PATCH /v1/anime/projects/:id
+  // 17. PATCH /v1/anime/projects/:id
   app.patch(
     '/v1/anime/projects/:id',
     { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
@@ -315,12 +323,15 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       }
 
       const currentBible = (existing.story_bible && typeof existing.story_bible === 'object') ? existing.story_bible : {};
+      const incomingBible = (body.story_bible && typeof body.story_bible === 'object') ? body.story_bible : {};
+
       const updatedBible = {
         ...currentBible,
-        ...(body.visual_medium ? { visual_medium: body.visual_medium } : {}),
-        ...(body.genre ? { genre: body.genre } : {}),
+        ...incomingBible,
+        ...(body.visual_medium !== undefined ? { visual_medium: body.visual_medium } : {}),
+        ...(body.genre !== undefined ? { genre: body.genre } : {}),
         ...(body.auto_approve !== undefined ? { auto_approve: Boolean(body.auto_approve) } : {}),
-        ...(body.cover_image_url ? { cover_image_url: body.cover_image_url } : {}),
+        ...(body.cover_image_url !== undefined ? { cover_image_url: body.cover_image_url } : {}),
         ...(body.budget_ceiling !== undefined ? { budget_ceiling: Number(body.budget_ceiling) } : {}),
       };
 
@@ -344,11 +355,61 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       if (updateErr) {
         throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to update project settings', cause: updateErr });
       }
-      return { data: updated };
+
+      return {
+        data: {
+          ...updated,
+          visual_medium: updatedBible.visual_medium ?? 'ANIME',
+          genre: updatedBible.genre ?? 'Action / Fantasy',
+          auto_approve: Boolean(updatedBible.auto_approve ?? false),
+          cover_image_url: updatedBible.cover_image_url ?? null,
+          budget_ceiling: Number(updatedBible.budget_ceiling ?? 1000),
+        },
+      };
     }
   );
 
-  // 17. PATCH /v1/anime/projects/:id/budget
+  // 18. PATCH /v1/anime/projects/:id/bible
+  app.patch(
+    '/v1/anime/projects/:id/bible',
+    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    async (request: any) => {
+      const projectId = request.params.id;
+      const body = (request.body ?? {}) as Record<string, any>;
+
+      const { data: existing, error: fetchErr } = await animeSupabase
+        .from('projects')
+        .select('story_bible')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (fetchErr || !existing) {
+        throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Project not found', cause: fetchErr });
+      }
+
+      const currentBible = (existing.story_bible && typeof existing.story_bible === 'object') ? existing.story_bible : {};
+      const mergedBible = {
+        ...currentBible,
+        ...(body.story_bible && typeof body.story_bible === 'object' ? body.story_bible : body),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: updated, error: updateErr } = await animeSupabase
+        .from('projects')
+        .update({ story_bible: mergedBible })
+        .eq('id', projectId)
+        .select('id, name, story_bible')
+        .single();
+
+      if (updateErr) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to save Story Bible', cause: updateErr });
+      }
+
+      return { data: updated.story_bible };
+    }
+  );
+
+  // 19. PATCH /v1/anime/projects/:id/budget
   app.patch(
     '/v1/anime/projects/:id/budget',
     { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
@@ -356,6 +417,9 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       const projectId = request.params.id;
       const body = (request.body ?? {}) as Record<string, any>;
       const ceiling = Number(body.budget_ceiling ?? body.limit ?? 1000);
+      if (!Number.isFinite(ceiling) || ceiling <= 0) {
+        throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Budget ceiling must be a positive number' });
+      }
 
       const { data: existing } = await animeSupabase
         .from('projects')
@@ -378,7 +442,246 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     }
   );
 
-  // 18. GET /v1/anime/projects/:id/media
+  // 20. POST & PATCH Characters
+  app.post(
+    '/v1/anime/projects/:id/characters',
+    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    async (request: any) => {
+      const projectId = request.params.id;
+      const body = (request.body ?? {}) as Record<string, any>;
+      const name = String(body.name || '').trim();
+      if (!name) {
+        throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Character name is required' });
+      }
+
+      const charCode = String(body.character_code || `CHAR_${Date.now().toString().slice(-5)}`).toUpperCase();
+      const roleVal = String(body.role || 'SUPPORTING');
+      const visualDna = (body.visual_dna && typeof body.visual_dna === 'object')
+        ? { ...body.visual_dna, role: roleVal }
+        : { summary: String(body.visual_dna || ''), role: roleVal };
+      const voiceConfig = (body.voice_config && typeof body.voice_config === 'object')
+        ? body.voice_config
+        : (body.voice_id ? { voice_id: String(body.voice_id) } : {});
+
+      const insertPayload: Record<string, any> = {
+        project_id: projectId,
+        character_code: charCode,
+        name,
+        description: body.description || '',
+        visual_dna: visualDna,
+        voice_config: voiceConfig,
+        initial_status: body.status || body.initial_status || 'alive',
+        image_url: body.image_url || null,
+      };
+
+      const { data: created, error } = await animeSupabase
+        .from('characters')
+        .insert(insertPayload)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to create character', cause: error });
+      }
+
+      await syncCharacterStatusSafe(projectId, created.id, charCode, String(body.status || 'alive'));
+
+      return { data: { ...created, role: roleVal } };
+    }
+  );
+
+  app.patch(
+    '/v1/anime/projects/:id/characters/:cid',
+    { schema: { params: CharRefParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    async (request: any) => {
+      const { id: projectId, cid } = request.params;
+      const body = (request.body ?? {}) as Record<string, any>;
+
+      let findQuery = animeSupabase.from('characters').select('*').eq('project_id', projectId);
+      if (UUID_REGEX.test(cid)) {
+        findQuery = findQuery.or(`id.eq.${cid},character_code.eq.${cid}`);
+      } else {
+        findQuery = findQuery.eq('character_code', cid);
+      }
+
+      const { data: existing, error: findErr } = await findQuery.maybeSingle();
+      if (findErr || !existing) {
+        throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Character not found', cause: findErr });
+      }
+
+      const currentDna = (existing.visual_dna && typeof existing.visual_dna === 'object') ? existing.visual_dna : {};
+      const currentVoice = (existing.voice_config && typeof existing.voice_config === 'object') ? existing.voice_config : {};
+
+      const patchFields: Record<string, any> = {};
+      if (typeof body.name === 'string' && body.name.trim()) patchFields.name = body.name.trim();
+      if (typeof body.description === 'string') patchFields.description = body.description;
+      if (body.image_url !== undefined) patchFields.image_url = body.image_url;
+      if (body.status !== undefined) patchFields.initial_status = String(body.status).toLowerCase();
+
+      if (body.role !== undefined || body.visual_dna !== undefined) {
+        patchFields.visual_dna = {
+          ...currentDna,
+          ...(typeof body.visual_dna === 'object' && body.visual_dna ? body.visual_dna : {}),
+          ...(typeof body.visual_dna === 'string' ? { summary: body.visual_dna } : {}),
+          ...(body.role !== undefined ? { role: body.role } : {}),
+        };
+      }
+
+      if (body.voice_id !== undefined || body.voice_config !== undefined) {
+        patchFields.voice_config = {
+          ...currentVoice,
+          ...(typeof body.voice_config === 'object' && body.voice_config ? body.voice_config : {}),
+          ...(body.voice_id !== undefined ? { voice_id: body.voice_id } : {}),
+        };
+      }
+
+      const { data: updated, error: updErr } = await animeSupabase
+        .from('characters')
+        .update(patchFields)
+        .eq('id', existing.id)
+        .select('*')
+        .single();
+
+      if (updErr) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to update character', cause: updErr });
+      }
+
+      if (body.status !== undefined) {
+        await syncCharacterStatusSafe(projectId, existing.id, existing.character_code, String(body.status));
+      }
+
+      return { data: updated };
+    }
+  );
+
+  // 21. PATCH /v1/anime/projects/:id/episodes/:episodeNo
+  app.patch(
+    '/v1/anime/projects/:id/episodes/:episodeNo',
+    { schema: { params: EpisodeParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    async (request: any) => {
+      const projectId = request.params.id;
+      const episodeNo = Number(request.params.episodeNo);
+      const body = (request.body ?? {}) as Record<string, any>;
+
+      const { data: existingEp } = await animeSupabase
+        .from('episodes')
+        .select('script_json')
+        .eq('project_id', projectId)
+        .eq('episode_no', episodeNo)
+        .maybeSingle();
+
+      const currentScriptJson =
+        existingEp?.script_json && typeof existingEp.script_json === 'object'
+          ? existingEp.script_json
+          : {};
+
+      const patchData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (typeof body.title === 'string') patchData.title = body.title.trim();
+      if (typeof body.synopsis === 'string') patchData.synopsis = body.synopsis;
+      if (typeof body.status === 'string') patchData.current_state = body.status;
+      if (typeof body.current_state === 'string') patchData.current_state = body.current_state;
+      if (typeof body.qc_status === 'string') patchData.qc_status = body.qc_status;
+
+      if (body.script_json !== undefined || typeof body.script_text === 'string' || body.prompt_id !== undefined) {
+        patchData.script_json = {
+          ...currentScriptJson,
+          ...(typeof body.script_json === 'object' && body.script_json ? body.script_json : {}),
+          ...(typeof body.script_text === 'string' ? { raw_script: body.script_text } : {}),
+          ...(body.prompt_id !== undefined ? { prompt_id: body.prompt_id } : {}),
+          updated_at: new Date().toISOString(),
+        };
+      }
+
+      const { data, error } = await animeSupabase
+        .from('episodes')
+        .update(patchData)
+        .eq('project_id', projectId)
+        .eq('episode_no', episodeNo)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to update episode', cause: error });
+      }
+      return { data };
+    }
+  );
+
+  // 22. PATCH /v1/anime/projects/:id/episodes/:episodeNo/scenes/:sceneId
+  app.patch(
+    '/v1/anime/projects/:id/episodes/:episodeNo/scenes/:sceneId',
+    { schema: { params: SceneParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    async (request: any) => {
+      const { id: projectId, sceneId } = request.params;
+      const body = (request.body ?? {}) as Record<string, any>;
+
+      const patchData: Record<string, any> = {};
+      if (typeof body.description === 'string') patchData.description = body.description;
+      if (typeof body.visual_prompt === 'string') patchData.visual_prompt = body.visual_prompt;
+      if (typeof body.dialogue === 'string') patchData.dialogue = body.dialogue;
+      if (typeof body.status === 'string') patchData.status = body.status;
+      if (typeof body.duration_sec === 'number') patchData.duration_sec = body.duration_sec;
+
+      let query = animeSupabase.from('scenes').update(patchData).eq('project_id', projectId);
+      if (UUID_REGEX.test(sceneId)) {
+        query = query.eq('id', sceneId);
+      } else {
+        query = query.eq('scene_order', Number(sceneId) || 1);
+      }
+
+      const { data, error } = await query.select('*').single();
+      if (error) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to update scene', cause: error });
+      }
+      return { data };
+    }
+  );
+
+  // 23. POST /v1/anime/projects/:id/jobs/:jobId/cancel
+  app.post(
+    '/v1/anime/projects/:id/jobs/:jobId/cancel',
+    { schema: { params: JobCancelParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    async (request: any) => {
+      const { id: projectId, jobId } = request.params;
+      const nowIso = new Date().toISOString();
+
+      const { data: cancelledCmd, error: cmdErr } = await animeSupabase
+        .from('api_commands')
+        .update({
+          status: 'CANCELLED',
+          error_message: 'Cancelled by user from Studio UI',
+          updated_at: nowIso,
+        })
+        .eq('project_id', projectId)
+        .eq('id', jobId)
+        .select('*')
+        .maybeSingle();
+
+      if (cmdErr) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to cancel job', cause: cmdErr });
+      }
+
+      await animeSupabase
+        .from('pending_actions')
+        .update({ status: 'CANCELLED', updated_at: nowIso })
+        .eq('project_id', projectId)
+        .eq('command_id', jobId);
+
+      return {
+        data: {
+          job_id: jobId,
+          project_id: projectId,
+          status: 'CANCELLED',
+          cancelled_at: nowIso,
+          command: cancelledCmd,
+        },
+      };
+    }
+  );
+
+  // 24. GET /v1/anime/projects/:id/media
   app.get(
     '/v1/anime/projects/:id/media',
     { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
@@ -390,6 +693,14 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         animeSupabase.from('characters').select('id, character_code, name, image_url, reference_version').eq('project_id', projectId),
       ]);
 
+      if (scenesRes.error || clipsRes.error || charsRes.error) {
+        throw new AnimeError({
+          code: AnimeErrorCode.INTERNAL,
+          message: 'Failed to load project media assets',
+          cause: scenesRes.error || clipsRes.error || charsRes.error,
+        });
+      }
+
       return {
         data: {
           scenes: scenesRes.data ?? [],
@@ -400,7 +711,40 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     }
   );
 
-  // 19. GET /v1/anime/projects/:id/canon/proposals
+  // 25. POST /v1/anime/projects/:id/canon (A6 & A11 FIXED: Includes fact_type NOT NULL column)
+  app.post(
+    '/v1/anime/projects/:id/canon',
+    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    async (request: any) => {
+      const projectId = request.params.id;
+      const body = (request.body ?? {}) as Record<string, any>;
+      const rawFact = String(body.fact_value || body.fact || body.description || '').trim();
+      if (!rawFact) {
+        throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Canon fact text is required' });
+      }
+      const factKey = String(body.fact_key || `CANON_${Date.now().toString().slice(-6)}`).trim();
+      const canonStatus = body.locked === false ? 'DRAFT' : String(body.canon_status || 'LOCKED').toUpperCase();
+
+      const { data, error } = await animeSupabase
+        .from('canon_facts')
+        .insert({
+          project_id: projectId,
+          fact_type: String(body.fact_type || 'WORLD_RULE'),
+          fact_key: factKey,
+          fact_value: { statement: rawFact, category: body.category || 'WORLD_LAW' },
+          canon_status: canonStatus,
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to insert canon fact', cause: error });
+      }
+      return { data };
+    }
+  );
+
+  // 26. GET /v1/anime/projects/:id/canon/proposals
   app.get(
     '/v1/anime/projects/:id/canon/proposals',
     { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
@@ -414,15 +758,15 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       if (error) {
         throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to fetch canon proposals', cause: error });
       }
+
       const filtered = (data ?? []).filter((d: any) =>
-        String(d.type || '').toUpperCase().includes('CANON') ||
-        String(d.status || '').toUpperCase() === 'PENDING'
+        String(d.type || '').toUpperCase().includes('CANON') || String(d.status || '').toUpperCase() === 'PENDING'
       );
       return { data: filtered };
     }
   );
 
-  // 20. GET /v1/anime/projects/:id/notifications
+  // 27. GET /v1/anime/projects/:id/notifications
   app.get(
     '/v1/anime/projects/:id/notifications',
     { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },

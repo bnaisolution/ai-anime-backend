@@ -1,3 +1,5 @@
+import { extractUserId } from './auth/project-guard';
+import { createProjectSynchronous } from './reads/projects.service';
 import { animeSupabase } from './db/anime.supabase';
 import type { FastifyInstance } from 'fastify';
 import { registerAnimeAdminLedgerRoutes } from './admin/ledger.routes';
@@ -20,23 +22,23 @@ import { supervisorWorker } from './supervisor/supervisor.worker';
 import { registerAnimeDevicesRoutes } from './system/devices.routes';
 
 export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
-
-  // === BATCH6_GLOBAL_PREVALIDATION_HOOK (#112, #192, #198, #214, #259, #369) ===
+  // === BATCH6_GLOBAL_PREVALIDATION_HOOK (SIDE-EFFECT-FREE STUDIO CONTEXT & DUPLICATE GUARD) ===
   app.addHook('preValidation', async (request: any) => {
     const url = String(request.url || '');
     const body = request.body as Record<string, any> | undefined;
     if (!body || typeof body !== 'object') return;
 
-    // 1. Fix #112: Enforce Anime Studio Director context on /api/v1/ai/chat
+    // 1. Compact SQL-RAG Context for AI Director (/api/v1/ai/chat)
     if (url.includes('/api/v1/ai/chat') && typeof body.message === 'string') {
       const screenCtx = body.current_screen ? `[Screen: ${body.current_screen}] ` : '';
       if (!body.message.includes('[ANIME_STUDIO_DIRECTOR]')) {
-        body.system_instruction = 'You are the AI Anime Director for StoryWF-00..13. Only discuss anime production, Story Bible, Character Visual DNA, Continuity, Canon, and Pipeline actions. If the user asks to generate an episode, include {"action":"GENERATE_EPISODE"}.';
+        body.system_instruction =
+          'You are the AI Anime Director for StoryWF-00..13. Discuss anime production, Story Bible, Character Visual DNA, Continuity, Canon, and Pipeline actions. Never execute mutations without explicit user confirmation.';
         body.message = `${screenCtx}${body.message}`;
       }
     }
 
-    // 2. Enrich command, vision, and quick media requests before they enter Outbox -> n8n StoryWF-00..13
+    // 2. Read-Only Context Enrichment & Duplicate Episode Generation Guard (Zero DB Mutations Here!)
     if (
       url.includes('/v1/anime/commands') ||
       url.includes('/vision/analyze') ||
@@ -46,10 +48,36 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
       const projectId = body.project_id || request.params?.id || request.headers?.['x-project-id'];
       if (!projectId || projectId === '00000000-0000-0000-0000-000000000000') return;
 
+      const intentStr = String(body.intent || '').toUpperCase();
+
+      // BUG-013: Prevent duplicate concurrent episode generation for the same project + episode
+      if (intentStr === 'GENERATE_EPISODE' || intentStr === 'CONTINUE_EPISODE') {
+        const epNo = Number(body.episode_no ?? body.payload?.episode_no ?? 1);
+        const forceRegenerate = Boolean(body.payload?.force_regenerate ?? false);
+        if (!forceRegenerate) {
+          const { data: activeJobs } = await animeSupabase
+            .from('api_commands')
+            .select('id, status, intent')
+            .eq('project_id', projectId)
+            .in('intent', ['GENERATE_EPISODE', 'CONTINUE_EPISODE'])
+            .in('status', ['QUEUED', 'DISPATCHED', 'ACKNOWLEDGED', 'RUNNING', 'RECONCILING'])
+            .limit(5);
+
+          if (activeJobs && activeJobs.length > 0) {
+            request.activeDuplicateCommand = activeJobs[0];
+          }
+        }
+      }
+
       try {
         const [{ data: proj }, { data: prompts }] = await Promise.all([
           animeSupabase.from('projects').select('story_bible').eq('id', projectId).maybeSingle(),
-          animeSupabase.from('user_system_prompts').select('*').eq('project_id', projectId).order('created_at', { ascending: false }).limit(10),
+          animeSupabase
+            .from('user_system_prompts')
+            .select('*')
+            .or(`project_id.eq.${projectId},project_id.is.null`)
+            .order('created_at', { ascending: false })
+            .limit(20),
         ]);
 
         const bible = (proj?.story_bible && typeof proj.story_bible === 'object') ? proj.story_bible : {};
@@ -58,7 +86,6 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
         const visualMedium = String(bible.visual_medium ?? 'ANIME');
         const visionProvider = String(bible.vision_provider ?? 'gemini');
 
-        const intentStr = String(body.intent || '').toUpperCase();
         const categoryNeeded =
           intentStr.includes('BIBLE') ? 'BIBLE' :
           intentStr.includes('EPISODE') ? 'EPISODE' :
@@ -66,7 +93,7 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
 
         const matchedPrompt = (prompts ?? []).find(
           (p: any) => String(p.prompt_category || 'BIBLE').toUpperCase() === categoryNeeded
-        ) || (prompts ?? [])[0];
+        );
 
         const existingPayload = (body.payload && typeof body.payload === 'object') ? body.payload : {};
         body.payload = {
@@ -76,23 +103,19 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
           visual_medium: existingPayload.visual_medium ?? visualMedium,
           vision_provider: existingPayload.vision_provider ?? visionProvider,
           ...(matchedPrompt?.prompt_text && !existingPayload.custom_system_prompt
-            ? { custom_system_prompt: matchedPrompt.prompt_text }
+            ? { custom_system_prompt: matchedPrompt.prompt_text, prompt_category: categoryNeeded }
             : {}),
         };
-
-        if (body.payload.auto_approve === true && body.episode_no) {
-          await animeSupabase
-            .from('episodes')
-            .update({ qc_status: 'APPROVED' })
-            .eq('project_id', projectId)
-            .eq('episode_no', Number(body.episode_no));
-        }
       } catch (_err) {
-        // Non-blocking enrichment guard
+        // Read-only enrichment guard
       }
     }
   });
   // === END_BATCH6_GLOBAL_PREVALIDATION_HOOK ===
+
+
+  
+
 
   app.addHook('onRequest', animeRequestIdHook);
   app.setErrorHandler(animeErrorHandler);

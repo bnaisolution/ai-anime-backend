@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-31T16:02:26.652Z",
+  "createdAt": "2026-10-26T07:50:44.585Z",
+  "id": "8q9tF3VE0mLUZQfa",
   "name": "storywf04",
+  "description": "WF-04 Admin & Governance: Handles manual reviews, voice changes, and system status.",
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "id": "ebce0528-c9ec-4ffe-8b9b-916967eaa4aa",
@@ -1544,5 +1550,46 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "e41398d7-77df-49c1-8cd5-3157c1f93100",
+  "activeVersionId": "e41398d7-77df-49c1-8cd5-3157c1f93100",
+  "versionCounter": 10,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [
+    {
+      "updatedAt": "2026-10-26T06:14:16.780Z",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine"
+    }
+  ],
+  "shared": [
+    {
+      "updatedAt": "2026-10-26T07:50:44.588Z",
+      "createdAt": "2026-10-26T07:50:44.588Z",
+      "role": "workflow:owner",
+      "workflowId": "8q9tF3VE0mLUZQfa",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "updatedAt": "2026-10-17T06:52:24.955Z",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
   }
 }

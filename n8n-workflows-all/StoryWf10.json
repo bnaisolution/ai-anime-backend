@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-10-31T16:02:26.690Z",
+  "createdAt": "2026-10-26T10:05:11.836Z",
+  "id": "swOEbQV3iNUNmMwu",
   "name": "StoryWf10",
+  "description": "WF-10 State Machine: Manages episode state transitions (e.g., DRAFT to MIXED).",
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {},
@@ -604,5 +610,46 @@
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "24848c8e-38bf-4406-a118-745ecf88d7c3",
+  "activeVersionId": "24848c8e-38bf-4406-a118-745ecf88d7c3",
+  "versionCounter": 8,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "tags": [
+    {
+      "updatedAt": "2026-10-26T06:14:16.780Z",
+      "createdAt": "2026-10-26T06:14:16.780Z",
+      "id": "LuIq0zIeNa69i786",
+      "name": "Anime-Engine"
+    }
+  ],
+  "shared": [
+    {
+      "updatedAt": "2026-10-26T10:05:11.838Z",
+      "createdAt": "2026-10-26T10:05:11.838Z",
+      "role": "workflow:owner",
+      "workflowId": "swOEbQV3iNUNmMwu",
+      "projectId": "DHmXIxR6TKeJcd0d",
+      "project": {
+        "updatedAt": "2026-10-17T06:52:24.955Z",
+        "createdAt": "2026-10-17T06:30:12.506Z",
+        "id": "DHmXIxR6TKeJcd0d",
+        "name": "Neeraj  Behra <bnaisolution@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "0d76f8a6-0fa9-4e49-8e78-c2e23aad410f"
+      }
+    }
+  ],
+  "versionMetadata": {
+    "name": null,
+    "description": null
   }
 }
