@@ -1,90 +1,98 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { animeSupabase } from '../db/anime.supabase';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { resolveTelegramFileAccess, userOwnsAnyProject } from './telegram.media.repo';
+import {
+  buildTelegramDownloadUrl,
+  buildTelegramGetFileUrl,
+  invalidRequest,
+  safeMediaContentType,
+  TelegramProxyError,
+  validateTelegramBotToken,
+  validateTelegramFileId
+} from './telegram.security';
+
+const UPSTREAM_TIMEOUT_MS = 15000;
+
+function sendProxyError(reply: FastifyReply, error: unknown): FastifyReply {
+  if (error instanceof TelegramProxyError) {
+    return reply.status(error.statusCode).send({ ok: false, error: error.message });
+  }
+  return reply.status(500).send({ ok: false, error: 'Telegram media proxy failed' });
+}
+
+async function fetchWithoutRedirect(url: URL): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    return await fetch(url, { method: 'GET', redirect: 'error', signal: controller.signal });
+  } catch (_error) {
+    throw new TelegramProxyError(502, 'TELEGRAM_UPSTREAM_FAILED', 'Telegram media request failed');
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export default async function telegramProxyRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     '/v1/media/telegram/:file_id',
-    async (
-      request: FastifyRequest<{ Params: { file_id: string }; Querystring: { bot_token?: string } }>,
-      reply: FastifyReply
-    ) => {
-      const fileId = request.params.file_id?.trim();
-      if (!fileId) {
-        return reply.status(400).send({ ok: false, error: 'Missing Telegram file_id' });
+    { preHandler: [app.authenticateOptional], logLevel: 'warn' },
+    async (request, reply) => {
+      try {
+        const query = (request.query ?? {}) as Record<string, unknown>;
+        if (Object.prototype.hasOwnProperty.call(query, 'bot_token')) {
+          throw invalidRequest('bot_token is not accepted');
+        }
+
+        const fileId = validateTelegramFileId((request.params as { file_id?: string }).file_id);
+        const auth = request.authContext;
+        const access = await resolveTelegramFileAccess(fileId, Boolean(auth));
+
+        if (!access.published) {
+          if (!auth) {
+            return reply.status(401).send({ ok: false, error: 'Authentication required' });
+          }
+          if (access.projectIds.length === 0) {
+            return reply.status(404).send({ ok: false, error: 'Media asset not found' });
+          }
+          const ownsProject = await userOwnsAnyProject(auth.userId, access.projectIds);
+          if (!ownsProject) {
+            return reply.status(403).send({ ok: false, error: 'Media access denied' });
+          }
+        }
+
+        const botToken = validateTelegramBotToken(process.env.TELEGRAM_BOT_TOKEN);
+        const getFileUrl = buildTelegramGetFileUrl(botToken, fileId);
+        const metaResponse = await fetchWithoutRedirect(getFileUrl);
+        if (!metaResponse.ok) {
+          throw new TelegramProxyError(502, 'TELEGRAM_UPSTREAM_FAILED', 'Telegram media request failed');
+        }
+
+        let metadata: { ok?: boolean; result?: { file_path?: string; file_size?: number } };
+        try {
+          metadata = await metaResponse.json() as typeof metadata;
+        } catch (_error) {
+          throw new TelegramProxyError(502, 'TELEGRAM_UPSTREAM_FAILED', 'Telegram media request failed');
+        }
+
+        const filePath = typeof metadata.result?.file_path === 'string' ? metadata.result.file_path : '';
+        if (metadata.ok !== true || !filePath) {
+          return reply.status(404).send({ ok: false, error: 'Media asset not found' });
+        }
+
+        const downloadUrl = buildTelegramDownloadUrl(botToken, filePath);
+        const mediaResponse = await fetchWithoutRedirect(downloadUrl);
+        if (!mediaResponse.ok || !mediaResponse.body) {
+          throw new TelegramProxyError(502, 'TELEGRAM_UPSTREAM_FAILED', 'Telegram media request failed');
+        }
+
+        const buffer = Buffer.from(await mediaResponse.arrayBuffer());
+        reply.header('Content-Type', safeMediaContentType(filePath, mediaResponse.headers.get('content-type')));
+        reply.header('Content-Length', String(buffer.byteLength));
+        reply.header('Cache-Control', 'private, no-store');
+        reply.header('X-Content-Type-Options', 'nosniff');
+        return reply.status(200).send(buffer);
+      } catch (error) {
+        return sendProxyError(reply, error);
       }
-
-      let botToken = request.query.bot_token || process.env.TELEGRAM_BOT_TOKEN || '';
-
-      if (!botToken) {
-        const { data: infraRow } = await animeSupabase
-          .from('user_infrastructure')
-          .select('config')
-          .in('provider_type', ['custom', 'kaggle', 'own_gpu'])
-          .eq('status', 'active')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle<{ config: Record<string, any> }>();
-
-        botToken =
-          infraRow?.config?.telegram_storage?.bot_token ||
-          infraRow?.config?.bot_token ||
-          '';
-      }
-
-      if (!botToken) {
-        return reply.status(500).send({
-          ok: false,
-          error: 'TELEGRAM_BOT_TOKEN is not configured in environment or user_infrastructure.',
-        });
-      }
-
-      const getFileUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${encodeURIComponent(fileId)}`;
-      const metaRes = await fetch(getFileUrl);
-      const metaJson = (await metaRes.json()) as {
-        ok: boolean;
-        result?: { file_path?: string; file_size?: number };
-        description?: string;
-      };
-
-      if (!metaJson.ok || !metaJson.result?.file_path) {
-        return reply.status(404).send({
-          ok: false,
-          error: metaJson.description || 'Unable to resolve file_path from Telegram.',
-        });
-      }
-
-      const fileDownloadUrl = `https://api.telegram.org/file/bot${botToken}/${metaJson.result.file_path}`;
-      const streamRes = await fetch(fileDownloadUrl);
-
-      if (!streamRes.ok || !streamRes.body) {
-        return reply.status(502).send({
-          ok: false,
-          error: 'Failed to stream binary asset from Telegram CDN.',
-        });
-      }
-
-      const ext = metaJson.result.file_path.split('.').pop()?.toLowerCase() || '';
-      const contentType =
-        ext === 'mp4'
-          ? 'video/mp4'
-          : ext === 'wav'
-            ? 'audio/wav'
-            : ext === 'mp3'
-              ? 'audio/mpeg'
-              : ext === 'png'
-                ? 'image/png'
-                : ext === 'jpg' || ext === 'jpeg'
-                  ? 'image/jpeg'
-                  : streamRes.headers.get('content-type') || 'application/octet-stream';
-
-      reply.header('Content-Type', contentType);
-      reply.header('Cache-Control', 'public, max-age=31536000, immutable');
-      if (metaJson.result.file_size) {
-        reply.header('Content-Length', String(metaJson.result.file_size));
-      }
-
-      const arrayBuffer = await streamRes.arrayBuffer();
-      return reply.send(Buffer.from(arrayBuffer));
     }
   );
 }

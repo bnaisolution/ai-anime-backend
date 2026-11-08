@@ -27,12 +27,14 @@ export default async function aiRoutes(fastify: FastifyInstance) {
     // Fetch compact app context for AI Director
     let appContext = '';
     try {
-      const [projRes, charsRes, epsRes] = await Promise.all([
-        animeSupabase.from('projects').select('name, story_bible').eq('id', projectId).maybeSingle(),
-        animeSupabase.from('characters').select('name, role, initial_status').eq('project_id', projectId).limit(8),
-        animeSupabase.from('episodes').select('episode_no, current_state').eq('project_id', projectId).limit(5)
-      ]);
+      let projectQuery = animeSupabase.from('projects').select('name, story_bible').eq('id', projectId);
+      if (auth.role !== 'owner_admin') projectQuery = projectQuery.eq('user_id', auth.userId);
+      const projRes = await projectQuery.maybeSingle();
       if (projRes.data) {
+        const [charsRes, epsRes] = await Promise.all([
+          animeSupabase.from('characters').select('name, role, initial_status').eq('project_id', projectId).limit(8),
+          animeSupabase.from('episodes').select('episode_no, current_state').eq('project_id', projectId).limit(5)
+        ]);
         const bible = projRes.data.story_bible || {};
         const cast = (charsRes.data || []).map((c: any) => c.name).join(', ') || 'None';
         const eps = (epsRes.data || []).map((e: any) => `Ep${e.episode_no}:${e.current_state}`).join(', ') || 'None';

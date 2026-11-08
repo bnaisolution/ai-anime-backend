@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { Type } from '@sinclair/typebox';
+import { requireProjectRole } from '../auth/project-guard';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { animeSupabase } from '../db/anime.supabase';
 import * as svc from './infrastructure.service';
+
+const PROMPT_READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
+const PROMPT_WRITE_ROLES = ['owner', 'admin', 'editor'];
 
 const ProviderTypeEnum = Type.Union([
   Type.Literal('kaggle'), Type.Literal('own_gpu'), Type.Literal('github_actions'),
@@ -419,20 +423,26 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     return userId as string;
   };
 
-  app.get('/v1/anime/infrastructure', async (request: any) => {
+  const guardOptionalPromptProject = (roles: string[]) => async (request: any, reply: any) => {
+    const projectId = request.body?.project_id ?? request.query?.project_id;
+    if (projectId === undefined || projectId === null || projectId === '') return;
+    await requireProjectRole(roles)(request, reply);
+  };
+
+  app.get('/v1/anime/infrastructure', { preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     const items = await svc.list(userId);
     return { data: items, meta: { request_id: request.anime?.request_id } };
   });
 
-  app.post('/v1/anime/infrastructure', { schema: { body: CreateBody } }, async (request: any, reply: any) => {
+  app.post('/v1/anime/infrastructure', { schema: { body: CreateBody }, preHandler: [app.authenticate] }, async (request: any, reply: any) => {
     const userId = authCheck(request);
     const dto = await svc.create(userId, { ...request.body, request_id: request.anime?.request_id });
     void reply.status(201);
     return { data: dto, meta: { request_id: request.anime?.request_id } };
   });
 
-  app.get('/v1/anime/infrastructure/gpu', async (request: any) => {
+  app.get('/v1/anime/infrastructure/gpu', { preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     const items = await svc.list(userId);
     const gpuRow = items.find((i: any) => i.name === 'gpu_routing_master' || i.provider_type === 'own_gpu' || i.provider_type === 'kaggle');
@@ -445,7 +455,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     };
   });
 
-  app.post('/v1/anime/infrastructure/gpu', { schema: { body: GpuSetupBody } }, async (request: any) => {
+  app.post('/v1/anime/infrastructure/gpu', { schema: { body: GpuSetupBody }, preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     const body = request.body;
     const datasetSlug = body.models_dataset_slug || 'bnaisolution/anime-engine-models-v1';
@@ -519,7 +529,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     };
   });
 
-  app.get('/v1/anime/prompts', { preHandler: [async (req: any, reply: any) => { await (app as any).authenticate(req, reply); }] }, async (request: any) => {
+  app.get('/v1/anime/prompts', { preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_READ_ROLES)] }, async (request: any) => {
     const userId = authCheck(request);
     const projectId = request.query?.project_id as string | undefined;
     let query = animeSupabase
@@ -536,7 +546,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     return { data: data ?? [], meta: { request_id: request.anime?.request_id } };
   });
 
-  app.post('/v1/anime/prompts', { schema: { body: CreatePromptBody }, preHandler: [async (req: any, reply: any) => { await (app as any).authenticate(req, reply); }] }, async (request: any, reply: any) => {
+  app.post('/v1/anime/prompts', { schema: { body: CreatePromptBody }, preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_WRITE_ROLES)] }, async (request: any, reply: any) => {
     const userId = authCheck(request);
     const { project_id, title, visual_medium, prompt_text, set_active } = request.body;
 
@@ -568,7 +578,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     return { data, meta: { request_id: request.anime?.request_id } };
   });
 
-  app.delete('/v1/anime/prompts/:id', { schema: { params: IdParams }, preHandler: [async (req: any, reply: any) => { await (app as any).authenticate(req, reply); }] }, async (request: any) => {
+  app.delete('/v1/anime/prompts/:id', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     await animeSupabase
       .from('user_system_prompts')
@@ -578,30 +588,30 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     return { data: { ok: true }, meta: { request_id: request.anime?.request_id } };
   });
 
-  app.get('/v1/anime/infrastructure/:id', { schema: { params: IdParams } }, async (request: any) => {
+  app.get('/v1/anime/infrastructure/:id', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     return { data: await svc.getById(request.params.id, userId) };
   });
 
-  app.patch('/v1/anime/infrastructure/:id', { schema: { params: IdParams, body: UpdateBody } }, async (request: any) => {
+  app.patch('/v1/anime/infrastructure/:id', { schema: { params: IdParams, body: UpdateBody }, preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     return { data: await svc.update(request.params.id, userId, { ...request.body, request_id: request.anime?.request_id }) };
   });
 
-  app.delete('/v1/anime/infrastructure/:id', { schema: { params: IdParams } }, async (request: any, reply: any) => {
+  app.delete('/v1/anime/infrastructure/:id', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any, reply: any) => {
     const userId = authCheck(request);
     await svc.remove(request.params.id, userId, request.anime?.request_id);
     void reply.status(204);
     return;
   });
 
-  app.post('/v1/anime/infrastructure/:id/set-default', { schema: { params: IdParams } }, async (request: any) => {
+  app.post('/v1/anime/infrastructure/:id/set-default', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     await svc.setDefault(request.params.id, userId, request.anime?.request_id);
     return { data: { ok: true } };
   });
 
-  app.post('/v1/anime/infrastructure/:id/verify', { schema: { params: IdParams } }, async (request: any) => {
+  app.post('/v1/anime/infrastructure/:id/verify', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     return { data: await svc.verify(request.params.id, userId, request.anime?.request_id) };
   });

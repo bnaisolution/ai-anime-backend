@@ -31,8 +31,9 @@ export default async function filesRoutes(fastify: FastifyInstance) {
     const auth = request.authContext;
     const body: any = request.body || {};
     if (!body.artifact_id) return reply.code(400).send({ status: 'failed', errors: [{ message: 'artifact_id required' }] });
+    if (!auth.workspaceId) return reply.code(403).send({ status: 'failed', errors: [{ category: 'FORBIDDEN', message: 'Workspace scope required' }] });
 
-    const { error } = await fastify.supabase.from('versioned_artifacts').delete().eq('id', body.artifact_id);
+    const { error } = await fastify.supabase.from('versioned_artifacts').delete().eq('id', body.artifact_id).eq('workspace_id', auth.workspaceId);
     await fastify.supabase.from('data_jobs').insert({ user_id: auth.userId, job_type: 'file_artifact_deletion', scope: { artifact_id: body.artifact_id }, status: error ? 'failed' : 'completed', started_at: new Date().toISOString() });
 
     return reply.send({ status: error ? 'failed' : 'completed', deleted_artifact_id: body.artifact_id });

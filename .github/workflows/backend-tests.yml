@@ -1,0 +1,450 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      sibling_ref:
+        description: "Git ref for ai-anime-android and anime-cpu-worker"
+        required: false
+        default: "main"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SIBLING_REF: ${{ inputs.sibling_ref || vars.SIBLING_REF || 'main' }}
+
+jobs:
+  backend-safe:
+    name: Backend safe suites
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          path: ai-anime-backend
+      - name: Checkout Android sibling
+        id: android_checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: bnaisolution/ai-anime-android
+          ref: ${{ env.SIBLING_REF }}
+          path: ai-anime-android
+          token: ${{ secrets.SIBLING_REPO_TOKEN || github.token }}
+      - name: Checkout worker sibling
+        id: worker_checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: bnaisolution/anime-cpu-worker
+          ref: ${{ env.SIBLING_REF }}
+          path: anime-cpu-worker
+          token: ${{ secrets.SIBLING_REPO_TOKEN || github.token }}
+      - name: Check sibling availability
+        id: siblings
+        run: |
+          mkdir -p ai-anime-backend/test-results
+          if [ -d ai-anime-android/.git ] && [ -d anime-cpu-worker/.git ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            rm -f ai-anime-backend/test-results/static-blocked.txt
+            echo "Sibling repositories available"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "BLOCKED: sibling repositories were not checked out."
+              echo "Set a read-only SIBLING_REPO_TOKEN with access to bnaisolution/ai-anime-android and bnaisolution/anime-cpu-worker."
+            } | tee ai-anime-backend/test-results/static-blocked.txt
+          fi
+      - name: Record checkout SHAs
+        run: |
+          mkdir -p ai-anime-backend/test-results
+          {
+            echo "backend=$(git -C ai-anime-backend rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "android=$(git -C ai-anime-android rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "worker=$(git -C anime-cpu-worker rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "sibling_ref=${SIBLING_REF}"
+            echo "sibling_token_configured=${{ secrets.SIBLING_REPO_TOKEN != '' }}"
+          } | tee ai-anime-backend/test-results/checkout.txt
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ai-anime-backend/package-lock.json
+      - name: Install dependencies
+        id: install
+        working-directory: ai-anime-backend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile TypeScript
+        id: build
+        working-directory: ai-anime-backend
+        run: npm run build
+      - name: Unit tests
+        id: unit
+        if: always()
+        working-directory: ai-anime-backend
+        run: node --test --test-reporter=junit --test-reporter-destination=test-results/unit.xml test/unit/*.test.js
+      - name: Route tests
+        id: routes
+        if: always()
+        working-directory: ai-anime-backend
+        run: node --test --test-reporter=junit --test-reporter-destination=test-results/routes.xml test/routes/*.test.js
+      - name: Static canonical checks
+        id: static_local
+        if: always()
+        working-directory: ai-anime-backend
+        run: node --test --test-reporter=junit --test-reporter-destination=test-results/static-local.xml test/static/schema.contract.test.js test/static/workflows.contract.test.js
+      - name: Static cross-repo checks
+        id: static_siblings
+        if: always() && steps.siblings.outputs.available == 'true'
+        working-directory: ai-anime-backend
+        run: node --test --test-reporter=junit --test-reporter-destination=test-results/static-siblings.xml test/static/android.static.test.js test/static/worker.static.test.js
+      - name: Upload safe test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-safe-results
+          path: ai-anime-backend/test-results/**
+          retention-days: 14
+          if-no-files-found: error
+      - name: Write safe job summary
+        if: always()
+        run: |
+          {
+            echo "### Backend safe suites"
+            echo ""
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| install | ${{ steps.install.outcome }} |"
+            echo "| build | ${{ steps.build.outcome }} |"
+            echo "| unit | ${{ steps.unit.outcome }} |"
+            echo "| routes | ${{ steps.routes.outcome }} |"
+            echo "| static-local | ${{ steps.static_local.outcome }} |"
+            echo "| static-siblings | ${{ steps.static_siblings.outcome }} |"
+            echo "| siblings | ${{ steps.siblings.outputs.available }} |"
+            echo ""
+            if [ -f ai-anime-backend/test-results/static-blocked.txt ]; then
+              echo '```'
+              cat ai-anime-backend/test-results/static-blocked.txt
+              echo '```'
+            fi
+            if [ -f ai-anime-backend/test-results/checkout.txt ]; then
+              echo '```'
+              cat ai-anime-backend/test-results/checkout.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend-regression:
+    name: Backend regression suites (non-gating)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          path: ai-anime-backend
+      - name: Checkout Android sibling
+        id: android_checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: bnaisolution/ai-anime-android
+          ref: ${{ env.SIBLING_REF }}
+          path: ai-anime-android
+          token: ${{ secrets.SIBLING_REPO_TOKEN || github.token }}
+      - name: Checkout worker sibling
+        id: worker_checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: bnaisolution/anime-cpu-worker
+          ref: ${{ env.SIBLING_REF }}
+          path: anime-cpu-worker
+          token: ${{ secrets.SIBLING_REPO_TOKEN || github.token }}
+      - name: Check sibling availability
+        id: siblings
+        run: |
+          mkdir -p ai-anime-backend/test-results
+          if [ -d ai-anime-android/.git ] && [ -d anime-cpu-worker/.git ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            rm -f ai-anime-backend/test-results/regression-blocked.txt
+            echo "Sibling repositories available"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "BLOCKED: sibling repositories were not checked out."
+              echo "Set a read-only SIBLING_REPO_TOKEN with access to bnaisolution/ai-anime-android and bnaisolution/anime-cpu-worker."
+            } | tee ai-anime-backend/test-results/regression-blocked.txt
+          fi
+      - name: Record checkout SHAs
+        run: |
+          mkdir -p ai-anime-backend/test-results
+          {
+            echo "backend=$(git -C ai-anime-backend rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "android=$(git -C ai-anime-android rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "worker=$(git -C anime-cpu-worker rev-parse HEAD 2>/dev/null || echo unavailable)"
+            echo "sibling_ref=${SIBLING_REF}"
+          } | tee ai-anime-backend/test-results/checkout-regression.txt
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ai-anime-backend/package-lock.json
+      - name: Install dependencies
+        id: install
+        working-directory: ai-anime-backend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile TypeScript
+        id: build
+        working-directory: ai-anime-backend
+        run: npm run build
+      - name: Regression tests (non-gating)
+        id: regression
+        if: steps.siblings.outputs.available == 'true'
+        continue-on-error: true
+        working-directory: ai-anime-backend
+        run: node --test --test-reporter=junit --test-reporter-destination=test-results/regression.xml test/regression/*.test.js
+      - name: Upload regression reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-regression-results
+          path: ai-anime-backend/test-results/**
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Write regression job summary
+        if: always()
+        run: |
+          {
+            echo "### Backend regression suites (non-gating)"
+            echo ""
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| install | ${{ steps.install.outcome }} |"
+            echo "| build | ${{ steps.build.outcome }} |"
+            echo "| regression | ${{ steps.regression.outcome }} |"
+            echo "| siblings | ${{ steps.siblings.outputs.available }} |"
+            echo ""
+            echo "Regression test failures are non-gating; install/build failures still gate. A failed regression outcome is reported, not hidden."
+            if [ -f ai-anime-backend/test-results/regression-blocked.txt ]; then
+              echo ""
+              echo '```'
+              cat ai-anime-backend/test-results/regression-blocked.txt
+              echo '```'
+            fi
+            if [ -f ai-anime-backend/test-results/checkout-regression.txt ]; then
+              echo ""
+              echo '```'
+              cat ai-anime-backend/test-results/checkout-regression.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  db-gate:
+    name: Database test gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run_db: ${{ steps.gate.outputs.run_db }}
+      reason: ${{ steps.gate.outputs.reason }}
+    steps:
+      - name: Evaluate isolated database gate
+        id: gate
+        env:
+          RUN_DB_TESTS: ${{ vars.RUN_DB_TESTS }}
+          TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ "${RUN_DB_TESTS:-false}" != "true" ]; then
+            echo "run_db=false" >> "$GITHUB_OUTPUT"
+            echo "reason=RUN_DB_TESTS repository variable is not true" >> "$GITHUB_OUTPUT"
+          elif [ -z "${TEST_SUPABASE_URL:-}" ]; then
+            echo "run_db=false" >> "$GITHUB_OUTPUT"
+            echo "reason=TEST_SUPABASE_URL secret is not configured" >> "$GITHUB_OUTPUT"
+          elif [ -z "${TEST_SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "run_db=false" >> "$GITHUB_OUTPUT"
+            echo "reason=TEST_SUPABASE_SERVICE_ROLE_KEY secret is not configured" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_db=true" >> "$GITHUB_OUTPUT"
+            echo "reason=enabled" >> "$GITHUB_OUTPUT"
+          fi
+
+  db-integration:
+    name: Backend isolated database tests
+    needs: db-gate
+    if: needs.db-gate.outputs.run_db == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout backend
+        uses: actions/checkout@v4
+        with:
+          path: ai-anime-backend
+      - name: Record checkout SHA
+        run: |
+          mkdir -p ai-anime-backend/test-results
+          {
+            echo "backend=$(git -C ai-anime-backend rev-parse HEAD 2>/dev/null || echo unavailable)"
+          } | tee ai-anime-backend/test-results/checkout-db.txt
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ai-anime-backend/package-lock.json
+      - name: Install dependencies
+        working-directory: ai-anime-backend
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile TypeScript
+        working-directory: ai-anime-backend
+        run: npm run build
+      - name: Database integration tests
+        id: db
+        working-directory: ai-anime-backend
+        env:
+          ALLOW_TEST_DB: "1"
+          TEST_SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node --test --test-reporter=junit --test-reporter-destination=test-results/db.xml test/db/*.test.js
+      - name: Upload database reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-db-results
+          path: ai-anime-backend/test-results/**
+          retention-days: 14
+          if-no-files-found: error
+      - name: Write database job summary
+        if: always()
+        run: |
+          {
+            echo "### Backend isolated database tests"
+            echo ""
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| db | ${{ steps.db.outcome }} |"
+            echo ""
+            echo "Database tests run only against the isolated test project and never against production."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  backend-summary:
+    name: Backend test summary
+    needs: [backend-safe, backend-regression, db-gate, db-integration]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download backend artifacts
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: backend-*-results
+          path: artifacts
+          merge-multiple: true
+      - name: Write honest backend summary
+        env:
+          SAFE_RESULT: ${{ needs.backend-safe.result }}
+          REGRESSION_RESULT: ${{ needs.backend-regression.result }}
+          DB_GATE_RESULT: ${{ needs.db-gate.result }}
+          DB_RESULT: ${{ needs.db-integration.result }}
+          DB_REASON: ${{ needs.db-gate.outputs.reason }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const dir = 'artifacts';
+          const read = (name) => {
+            const p = path.join(dir, name);
+            return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+          };
+          const count = (xml, pattern) => (xml.match(pattern) || []).length;
+          const suite = (name) => {
+            const xml = read(name);
+            if (!xml) return { state: 'NOT RUN', tests: 0, failures: 0, errors: 0, skipped: 0 };
+            const tests = count(xml, /<testcase\b/g);
+            const failures = count(xml, /<failure\b/g);
+            const errors = count(xml, /<error\b/g);
+            const skipped = count(xml, /<skipped\b/g);
+            if (tests === 0) return { state: 'NOT RUN', tests, failures, errors, skipped };
+            const state = failures + errors > 0 ? 'FAIL' : (skipped > 0 ? 'BLOCKED' : 'PASS');
+            return { state, tests, failures, errors, skipped };
+          };
+          const row = (label, result, detail) => `| ${label} | ${result} | ${detail} |`;
+          const unit = suite('unit.xml');
+          const routes = suite('routes.xml');
+          const staticLocal = suite('static-local.xml');
+          const staticSiblings = suite('static-siblings.xml');
+          const regression = suite('regression.xml');
+          const db = suite('db.xml');
+          const safeResult = process.env.SAFE_RESULT || 'unknown';
+          const regressionResult = process.env.REGRESSION_RESULT || 'unknown';
+          const dbResult = process.env.DB_RESULT || 'unknown';
+          const dbReason = process.env.DB_REASON || 'database gate did not complete';
+          const checkout = read('checkout.txt').trim();
+          const staticBlocked = read('static-blocked.txt').trim();
+          const regressionBlocked = read('regression-blocked.txt').trim();
+
+          let safeState;
+          if (safeResult === 'skipped' || safeResult === 'cancelled') safeState = 'NOT RUN';
+          else if (safeResult === 'failure') safeState = 'FAIL';
+          else if (staticBlocked || unit.state === 'BLOCKED' || routes.state === 'BLOCKED' || staticLocal.state === 'BLOCKED' || staticSiblings.state === 'BLOCKED') safeState = 'BLOCKED';
+          else if (unit.state === 'PASS' && routes.state === 'PASS' && staticLocal.state === 'PASS' && staticSiblings.state === 'PASS') safeState = 'PASS';
+          else safeState = 'FAIL';
+          const safeDetail = [
+            `unit=${unit.state} (${unit.tests} tests, ${unit.skipped} skipped)`,
+            `routes=${routes.state} (${routes.tests}, ${routes.skipped} skipped)`,
+            `static-local=${staticLocal.state} (${staticLocal.tests}, ${staticLocal.skipped} skipped)`,
+            `static-siblings=${staticSiblings.state} (${staticSiblings.tests}, ${staticSiblings.skipped} skipped)`,
+            staticBlocked ? `static blocked: ${staticBlocked.split('\n')[0]}` : '',
+          ].filter(Boolean).join('; ');
+
+          let regressionState;
+          let regressionDetail = `tests=${regression.tests}, failures=${regression.failures}, errors=${regression.errors}, skipped=${regression.skipped}`;
+          if (regressionResult === 'skipped' || regressionResult === 'cancelled') regressionState = 'NON-GATING NOT RUN';
+          else if (regressionResult === 'failure') { regressionState = 'NON-GATING FAIL'; regressionDetail = 'regression job failed before producing a report'; }
+          else if (regressionBlocked) { regressionState = 'NON-GATING BLOCKED'; regressionDetail = regressionBlocked.split('\n')[0]; }
+          else if (regression.state === 'PASS') regressionState = 'NON-GATING PASS';
+          else if (regression.state === 'NOT RUN') regressionState = 'NON-GATING NOT RUN';
+          else regressionState = 'NON-GATING FAIL';
+          let dbState = 'BLOCKED';
+          let dbDetail = dbReason;
+          if (dbResult === 'success') {
+            if (db.state === 'PASS') { dbState = 'PASS'; dbDetail = 'executed against isolated test project'; }
+            else if (db.state === 'BLOCKED') { dbState = 'BLOCKED'; dbDetail = 'database tests skipped by safety gate'; }
+            else { dbState = 'FAIL'; dbDetail = 'database tests did not pass'; }
+          }
+          else if (dbResult === 'failure') { dbState = 'FAIL'; dbDetail = 'database job failed'; }
+          else if (dbResult === 'cancelled') { dbState = 'NOT RUN'; dbDetail = 'database job cancelled'; }
+
+          const lines = [
+            '## Backend CI summary',
+            '',
+            '| Layer | Status | Evidence |',
+            '|---|---|---|',
+            row('backend-safe', safeState, safeDetail),
+            row('backend-regression', regressionState, regressionDetail),
+            row('db-integration', dbState, dbDetail),
+            '',
+            'Checkout SHAs:',
+            '```',
+            checkout || 'unavailable',
+            '```',
+          ];
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+          NODE

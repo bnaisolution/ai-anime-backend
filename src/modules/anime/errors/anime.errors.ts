@@ -16,6 +16,11 @@ export function animeErrorHandler(error: FastifyError | AnimeError | Error, requ
   const requestId = (request as any).anime?.request_id ?? randomUUID();
   if (!reply.hasHeader('X-Request-Id')) reply.header('X-Request-Id', requestId);
   if (error instanceof AnimeError) return void reply.status(error.httpStatus).send({ error: { code: error.code, message: error.message, retryable: error.retryable, request_id: requestId } });
+  const statusCode = typeof (error as any).statusCode === 'number' ? (error as any).statusCode : 0;
+  if (statusCode >= 400 && statusCode < 500) {
+    const code = (error as any).validation ? 'VALIDATION_ERROR' : ((error as any).code ?? 'BAD_REQUEST');
+    return void reply.status(statusCode).send({ error: { code, message: error.message, retryable: false, request_id: requestId } });
+  }
   request.log.error({ err: error, request_id: requestId }, '[AnimeEngine] Unhandled error');
   void reply.status(500).send({ error: { code: AnimeErrorCode.INTERNAL, message: 'Internal error.', retryable: true, request_id: requestId } });
 }

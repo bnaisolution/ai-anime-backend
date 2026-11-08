@@ -47,7 +47,7 @@ async function bootstrap() {
   await server.register(supabasePlugin);
   await server.register(authPlugin);
 
-  server.get('/health', async () => ({ status: 'ok', version: '3.1.0', timestamp: new Date().toISOString() }));
+  server.get('/health', async () => ({ status: 'ok' }));
 
   // --- EXISTING v3.0 ROUTES ---
   await server.register(authRoutes, { prefix: '/api/v1/auth' });

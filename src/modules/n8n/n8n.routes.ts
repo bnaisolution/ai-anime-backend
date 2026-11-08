@@ -17,13 +17,14 @@ export default async function n8nRoutes(fastify: FastifyInstance) {
   });
 
   // Sandbox Test Endpoint
-  fastify.post('/test-workflow', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/test-workflow', { preHandler: [fastify.authenticate, fastify.requireOwner] }, async (request, reply) => {
     const body = request.body as { workflow_json?: any };
     if (!body.workflow_json) return reply.code(400).send({ status: 'failed', error: 'workflow_json required' });
 
     try {
       const n8nUrl = `${process.env.N8N_BASE_URL || 'http://n8n:5678'}/api/v1/workflows`;
-      const apiKey = process.env.WF09_N8N_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwZDc2ZjhhNi0wZmE5LTRlNDktOGU3OC1jMmUyM2FhZDQxMGYiLCJpc3MiOiJuOG4iLCJqdGkiOiIwMDcwZjVmNi0xMjc4LTRkNjktODAyYy0xMDg2YmM2NzY3N2EiLCJpYXQiOjE3OTI2MDY3MTgsImF1ZCI6InB1YmxpYy1hcGkifQ.64rbV68mnPpgk8MiGZnxyyMHh5pUIQiil1JPyExsE6Y';
+      const apiKey = (process.env.WF09_N8N_API_KEY || '').trim();
+      if (!apiKey) return reply.code(503).send({ status: 'failed', error: 'N8N_API_KEY_NOT_CONFIGURED' });
       
       const createRes = await fetch(n8nUrl, {
         method: 'POST',
@@ -56,13 +57,14 @@ export default async function n8nRoutes(fastify: FastifyInstance) {
   });
 
   // NEW: Deploy to Live n8n Endpoint (Phase 5)
-  fastify.post('/deploy-workflow', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+  fastify.post('/deploy-workflow', { preHandler: [fastify.authenticate, fastify.requireOwner] }, async (request, reply) => {
     const body = request.body as { workflow_json?: any };
     if (!body.workflow_json) return reply.code(400).send({ status: 'failed', error: 'workflow_json required' });
 
     try {
       const n8nUrl = `${process.env.N8N_BASE_URL || 'http://n8n:5678'}/api/v1/workflows`;
-      const apiKey = process.env.WF09_N8N_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwZDc2ZjhhNi0wZmE5LTRlNDktOGU3OC1jMmUyM2FhZDQxMGYiLCJpc3MiOiJuOG4iLCJqdGkiOiIwMDcwZjVmNi0xMjc4LTRkNjktODAyYy0xMDg2YmM2NzY3N2EiLCJpYXQiOjE3OTI2MDY3MTgsImF1ZCI6InB1YmxpYy1hcGkifQ.64rbV68mnPpgk8MiGZnxyyMHh5pUIQiil1JPyExsE6Y';
+      const apiKey = (process.env.WF09_N8N_API_KEY || '').trim();
+      if (!apiKey) return reply.code(503).send({ status: 'failed', error: 'N8N_API_KEY_NOT_CONFIGURED' });
       
       const deployRes = await fetch(n8nUrl, {
         method: 'POST',

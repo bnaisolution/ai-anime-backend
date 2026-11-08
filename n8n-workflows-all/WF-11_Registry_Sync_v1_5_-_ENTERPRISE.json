@@ -1,4 +1,5 @@
 {
+  "id": "7ae33b1c-d166-4dca-9b6f-fd4dd0db20bd",
   "name": "WF-11 Registry Sync v1.5 - ENTERPRISE",
   "nodes": [
     {
@@ -79,7 +80,7 @@
           "parameters": [
             {
               "name": "X-N8N-API-KEY",
-              "value": "={{ $env.WF11_N8N_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwZDc2ZjhhNi0wZmE5LTRlNDktOGU3OC1jMmUyM2FhZDQxMGYiLCJpc3MiOiJuOG4iLCJqdGkiOiIwMDcwZjVmNi0xMjc4LTRkNjktODAyYy0xMDg2YmM2NzY3N2EiLCJpYXQiOjE3OTI2MDY3MTgsImF1ZCI6InB1YmxpYy1hcGkifQ.64rbV68mnPpgk8MiGZnxyyMHh5pUIQiil1JPyExsE6Y' }}"
+              "value": "={{ $env.WF11_N8N_API_KEY }}"
             },
             {
               "name": "Accept",

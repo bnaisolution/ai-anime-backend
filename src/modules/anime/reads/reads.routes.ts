@@ -1,7 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import { extractUserId, requireProjectRole } from '../auth/project-guard';
-import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { getEpisode, getEpisodePlan, listEpisodes } from './episodes.service';
 import { getJob, listJobs } from './jobs.service';
 import { getProject, getProjectOverview, listProjects } from './projects.service';
@@ -14,18 +13,16 @@ const EpSchema = Type.Object({ id: Type.String({ format: 'uuid' }), episodeNo: T
 const JobSchema = Type.Object({ id: Type.String({ format: 'uuid' }), jobId: Type.String({ format: 'uuid' }) });
 
 export async function registerAnimeReadsRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/v1/anime/projects', { schema: { querystring: CursorSchema } }, async (request: any, reply: any) => {
-    if (!extractUserId(request) && typeof (app as any).authenticate === 'function') { try { await (app as any).authenticate(request, reply); } catch (_e) {} }
-    const userId = extractUserId(request);
-    if (!userId) throw new AnimeError({ code: AnimeErrorCode.AUTH_INVALID, message: 'Missing auth token.' });
+  app.get('/v1/anime/projects', { schema: { querystring: CursorSchema }, preHandler: [app.authenticate] }, async (request: any) => {
+    const userId = extractUserId(request)!;
     return { data: await listProjects(userId) };
   });
-  app.get('/v1/anime/projects/:id', { schema: { params: ProjSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getProject(request.params.id, extractUserId(request)!) }; });
-  app.get('/v1/anime/projects/:id/overview', { schema: { params: ProjSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getProjectOverview(request.params.id) }; });
-  app.get('/v1/anime/projects/:id/episodes', { schema: { params: ProjSchema, querystring: CursorSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: (await listEpisodes(request.params.id, request.query)).items }; });
-  app.get('/v1/anime/projects/:id/episodes/:episodeNo', { schema: { params: EpSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getEpisode(request.params.id, request.params.episodeNo) }; });
-  app.get('/v1/anime/projects/:id/episodes/:episodeNo/plan', { schema: { params: EpSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getEpisodePlan(request.params.id, request.params.episodeNo) }; });
-  app.get('/v1/anime/projects/:id/episodes/:episodeNo/scenes', { schema: { params: EpSchema, querystring: CursorSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: (await listScenes(request.params.id, request.params.episodeNo, request.query)).items }; });
-  app.get('/v1/anime/projects/:id/jobs', { schema: { params: ProjSchema, querystring: CursorSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await listJobs(request.params.id) }; });
-  app.get('/v1/anime/projects/:id/jobs/:jobId', { schema: { params: JobSchema }, preHandler: [requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getJob(request.params.id, request.params.jobId) }; });
+  app.get('/v1/anime/projects/:id', { schema: { params: ProjSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getProject(request.params.id, extractUserId(request)!) }; });
+  app.get('/v1/anime/projects/:id/overview', { schema: { params: ProjSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getProjectOverview(request.params.id) }; });
+  app.get('/v1/anime/projects/:id/episodes', { schema: { params: ProjSchema, querystring: CursorSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: (await listEpisodes(request.params.id, request.query)).items }; });
+  app.get('/v1/anime/projects/:id/episodes/:episodeNo', { schema: { params: EpSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getEpisode(request.params.id, request.params.episodeNo) }; });
+  app.get('/v1/anime/projects/:id/episodes/:episodeNo/plan', { schema: { params: EpSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getEpisodePlan(request.params.id, request.params.episodeNo) }; });
+  app.get('/v1/anime/projects/:id/episodes/:episodeNo/scenes', { schema: { params: EpSchema, querystring: CursorSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: (await listScenes(request.params.id, request.params.episodeNo, request.query)).items }; });
+  app.get('/v1/anime/projects/:id/jobs', { schema: { params: ProjSchema, querystring: CursorSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await listJobs(request.params.id) }; });
+  app.get('/v1/anime/projects/:id/jobs/:jobId', { schema: { params: JobSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] }, async (request: any) => { return { data: await getJob(request.params.id, request.params.jobId) }; });
 }

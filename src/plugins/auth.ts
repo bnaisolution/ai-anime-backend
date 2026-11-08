@@ -1,6 +1,5 @@
 import fp from 'fastify-plugin';
 import fastifyJwt from '@fastify/jwt';
-import crypto from 'crypto';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../config/env';
 
@@ -16,70 +15,143 @@ declare module 'fastify' {
   interface FastifyRequest { authContext: AuthContext; }
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateOptional: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     authenticateService: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireOwner: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requireRole: (roles: Array<'owner_admin' | 'normal_user' | 'trusted_service'>) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
 
+interface VerifiedJwtPayload {
+  sub?: string;
+  workspace_id?: string;
+  email?: string;
+  role?: string;
+  iss?: string;
+  aud?: string | string[];
+  exp?: number;
+  iat?: number;
+}
+
+function unauthorized(reply: FastifyReply, message: string): void {
+  void reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message }] });
+}
+
 export default fp(async (fastify) => {
-  await fastify.register(fastifyJwt, { secret: env.JWT_SECRET });
+  await fastify.register(fastifyJwt, {
+    secret: env.JWT_SECRET,
+    sign: {
+      algorithm: 'HS256',
+      iss: env.JWT_ISSUER,
+      aud: env.JWT_AUDIENCE,
+      expiresIn: env.JWT_EXPIRES_IN,
+    },
+    verify: {
+      algorithms: ['HS256'],
+      allowedIss: env.JWT_ISSUER,
+      allowedAud: env.JWT_AUDIENCE,
+      requiredClaims: ['iss', 'aud', 'exp', 'sub'],
+      maxAge: env.JWT_EXPIRES_IN,
+    },
+  });
 
-  fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
-    const authHeader = request.headers.authorization || '';
+  const verifyUserBearer = async (request: FastifyRequest, reply: FastifyReply): Promise<boolean> => {
+    const authHeader = typeof request.headers.authorization === 'string' ? request.headers.authorization : '';
+    if (!authHeader) return false;
+
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-    if (!token) return reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message: 'Bearer token required' }] });
-
-    let decoded: { sub?: string; workspace_id?: string; email?: string; role?: string };
-    try {
-      decoded = fastify.jwt.verify<{ sub?: string; workspace_id?: string; email?: string; role?: string }>(token);
-    } catch (_e) {
-      return reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message: 'Invalid or expired token' }] });
+    if (!token) {
+      unauthorized(reply, 'Invalid authorization header');
+      return false;
     }
 
-    const sub = decoded.sub;
-    if (!sub) return reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message: 'Token missing subject' }] });
+    let decoded: VerifiedJwtPayload;
+    try {
+      decoded = fastify.jwt.verify<VerifiedJwtPayload>(token);
+    } catch (_e) {
+      unauthorized(reply, 'Invalid or expired token');
+      return false;
+    }
 
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const { data: blacklisted, error: blErr } = await fastify.supabase.from('token_blacklist').select('id').eq('token_hash', tokenHash).maybeSingle();
-    if (blErr) fastify.log.warn({ err: blErr }, 'Token blacklist check failed (fail-open)');
-    if (blacklisted) return reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message: 'Token has been revoked' }] });
+    const sub = typeof decoded.sub === 'string' ? decoded.sub.trim() : '';
+    if (!sub) {
+      unauthorized(reply, 'Token missing subject');
+      return false;
+    }
+    if (decoded.role === 'trusted_service') {
+      unauthorized(reply, 'Service identities cannot authenticate as users');
+      return false;
+    }
+    if (typeof decoded.exp !== 'number' || decoded.exp * 1000 <= Date.now()) {
+      unauthorized(reply, 'Invalid or expired token');
+      return false;
+    }
 
-    const isOwner = env.OWNER_EMAILS.includes((decoded.email || '').toLowerCase()) || decoded.role === 'owner_admin';
+    const email = typeof decoded.email === 'string' ? decoded.email.trim().toLowerCase() : '';
+    const isOwner = email !== '' && env.OWNER_EMAILS.includes(email);
+
     request.authContext = {
       userId: sub,
-      workspaceId: decoded.workspace_id || env.DEFAULT_WORKSPACE_ID,
-      email: decoded.email || 'user@bnai.dpdns.org',
+      workspaceId: typeof decoded.workspace_id === 'string' ? decoded.workspace_id : '',
+      email,
       role: isOwner ? 'owner_admin' : 'normal_user',
       isServiceIdentity: false
     };
+    return true;
+  };
+
+  fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
+    const authenticated = await verifyUserBearer(request, reply);
+    if (!authenticated && !reply.sent) {
+      unauthorized(reply, 'Bearer token required');
+    }
+  });
+
+  fastify.decorate('authenticateOptional', async (request: FastifyRequest, reply: FastifyReply) => {
+    await verifyUserBearer(request, reply);
   });
 
   fastify.decorate('authenticateService', async (request: FastifyRequest, reply: FastifyReply) => {
     const svcToken = (request.headers['x-service-token'] as string | undefined)?.trim();
-    const validTokens = [env.TRUSTED_SERVICE_TOKEN, env.N8N_WEBHOOK_SECRET, process.env.LEGACY_N8N_TOKEN].filter(Boolean) as string[];
-    if (!svcToken || !validTokens.includes(svcToken)) return reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message: 'Invalid x-service-token' }] });
+    const validTokens = [env.TRUSTED_SERVICE_TOKEN, env.N8N_WEBHOOK_SECRET, process.env.LEGACY_N8N_TOKEN]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0);
+    if (!svcToken || !validTokens.includes(svcToken)) {
+      unauthorized(reply, 'Invalid x-service-token');
+      return;
+    }
 
-    const body = (request.body as Record<string, unknown>) || {};
     request.authContext = {
-      userId: typeof body.userId === 'string' && body.userId ? body.userId : env.DEFAULT_USER_ID,
-      workspaceId: typeof body.workspaceId === 'string' && body.workspaceId ? body.workspaceId : env.DEFAULT_WORKSPACE_ID,
-      email: 'n8n-service@internal.local',
+      userId: 'service:trusted',
+      workspaceId: '',
+      email: 'service@internal.invalid',
       role: 'trusted_service',
       isServiceIdentity: true
     };
   });
 
   fastify.decorate('requireOwner', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.authContext) return reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message: 'Authentication required' }] });
-    if (request.authContext.isServiceIdentity) return reply.code(403).send({ status: 'failed', errors: [{ category: 'FORBIDDEN', message: 'Service identity cannot access owner routes' }] });
-    if (request.authContext.role !== 'owner_admin') return reply.code(403).send({ status: 'failed', errors: [{ category: 'FORBIDDEN', message: 'Owner Admin role required' }] });
+    if (!request.authContext) {
+      unauthorized(reply, 'Authentication required');
+      return;
+    }
+    if (request.authContext.isServiceIdentity) {
+      void reply.code(403).send({ status: 'failed', errors: [{ category: 'FORBIDDEN', message: 'Service identity cannot access owner routes' }] });
+      return;
+    }
+    if (request.authContext.role !== 'owner_admin') {
+      void reply.code(403).send({ status: 'failed', errors: [{ category: 'FORBIDDEN', message: 'Owner Admin role required' }] });
+    }
   });
 
   fastify.decorate('requireRole', (roles: Array<'owner_admin' | 'normal_user' | 'trusted_service'>) => {
     return async (request: FastifyRequest, reply: FastifyReply) => {
-      if (!request.authContext) return reply.code(401).send({ status: 'failed', errors: [{ category: 'UNAUTHORIZED', message: 'Authentication required' }] });
-      if (!roles.includes(request.authContext.role)) return reply.code(403).send({ status: 'failed', errors: [{ category: 'FORBIDDEN', message: `Role required: ${roles.join('|')}` }] });
+      if (!request.authContext) {
+        unauthorized(reply, 'Authentication required');
+        return;
+      }
+      if (!roles.includes(request.authContext.role)) {
+        void reply.code(403).send({ status: 'failed', errors: [{ category: 'FORBIDDEN', message: `Role required: ${roles.join('|')}` }] });
+      }
     };
   });
 });

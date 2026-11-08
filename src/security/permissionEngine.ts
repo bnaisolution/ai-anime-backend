@@ -57,8 +57,13 @@ export async function evaluateAuthorization(fastify: FastifyInstance, input: Aut
   }
 
   if (projectId) {
-    const { data: proj } = await fastify.supabase.from('projects').select('id, workspace_id').eq('id', projectId).eq('workspace_id', auth.workspaceId).maybeSingle();
-    if (proj && proj.workspace_id !== auth.workspaceId) return { allowed: false, httpStatus: 403, errorCategory: 'FORBIDDEN', reason: 'Cross-workspace project access denied' };
+    const { data: proj, error: projectError } = await fastify.supabase.from('projects').select('id, user_id').eq('id', projectId).maybeSingle();
+    if (projectError || !proj) {
+      return { allowed: false, httpStatus: 403, errorCategory: 'FORBIDDEN', reason: 'Project access denied' };
+    }
+    if (auth.role !== 'owner_admin' && proj.user_id !== auth.userId) {
+      return { allowed: false, httpStatus: 403, errorCategory: 'FORBIDDEN', reason: 'Project access denied' };
+    }
   }
 
   if (requireApprovalToken || risk === 'protected_system_change') {

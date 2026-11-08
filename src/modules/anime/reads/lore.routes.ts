@@ -43,9 +43,7 @@ async function requireAuthenticatedUserId(request: any): Promise<string> {
   }
   const uid =
     request.user?.sub ||
-    request.user?.id ||
-    request.authContext?.userId ||
-    request.headers?.['x-user-id'];
+    request.authContext?.userId;
 
   if (!uid || typeof uid !== 'string' || !UUID_REGEX.test(uid)) {
     throw new AnimeError({
@@ -91,7 +89,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 1. GET /v1/anime/projects/:id/quota
   app.get(
     '/v1/anime/projects/:id/quota',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
@@ -114,16 +112,15 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       const bible = (projRes.data?.story_bible && typeof projRes.data.story_bible === 'object') ? projRes.data.story_bible : {};
       const configuredLimit = Number(bible.budget_ceiling ?? process.env.DAILY_QUOTA_LIMIT ?? 5000);
 
-      const totalTokensUsed = rows.reduce((acc: number, r: any) => acc + Number(r.tokens_used ?? r.units_used ?? 0), 0);
-      const totalRequests = rows.reduce((acc: number, r: any) => acc + Number(r.request_count ?? 1), 0);
+      const totalUnitsUsed = rows.reduce((acc: number, r: any) => acc + Number(r.accumulated_units ?? 0), 0);
 
       return {
         data: {
           project_id: projectId,
           since_date: yesterday,
           records_count: rows.length,
-          requests_count: totalRequests,
-          tokens_used: totalTokensUsed,
+          requests_count: rows.length,
+          accumulated_units: totalUnitsUsed,
           daily_limit: configuredLimit,
           latest: rows[0] ?? null,
           items: rows,
@@ -135,7 +132,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 2. GET /v1/anime/projects/:id/continuity
   app.get(
     '/v1/anime/projects/:id/continuity',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const { data, error } = await animeSupabase
         .from('continuity_checks')
@@ -166,7 +163,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 3. GET /v1/anime/projects/:id/retries
   app.get(
     '/v1/anime/projects/:id/retries',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const { data, error } = await animeSupabase
         .from('pending_actions')
@@ -185,7 +182,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 4. GET /v1/anime/projects/:id/characters/:cid/reference-history
   app.get(
     '/v1/anime/projects/:id/characters/:cid/reference-history',
-    { schema: { params: CharRefParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: CharRefParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const { id: projectId, cid } = request.params;
       if (cid === 'default' || !cid.trim()) {
@@ -228,7 +225,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   for (const routeCfg of categoryRoutes) {
     app.get(
       `/v1/anime/projects/:id/${routeCfg.slug}`,
-      { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+      { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
       async (request: any) => {
         let q = animeSupabase.from(routeCfg.table).select('*').eq('project_id', request.params.id);
         if (routeCfg.activeCol !== undefined) {
@@ -250,7 +247,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // GET /v1/anime/projects/:id/voices
   app.get(
     '/v1/anime/projects/:id/voices',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async () => {
       const { data, error } = await animeSupabase
         .from('voice_catalog')
@@ -267,7 +264,8 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 16. POST /v1/anime/projects
   app.post(
     '/v1/anime/projects',
-    async (request: any) => {
+    { preHandler: [app.authenticate] },
+    async (request: any, reply: any) => {
       const userId = await requireAuthenticatedUserId(request);
       const body = (request.body ?? {}) as Record<string, any>;
       const name = String(body.name || body.title || '').trim();
@@ -300,14 +298,14 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to create project', cause: createErr });
       }
 
-      return { data: created };
+      return reply.status(201).send({ data: created });
     }
   );
 
   // 17. PATCH /v1/anime/projects/:id
   app.patch(
     '/v1/anime/projects/:id',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const body = (request.body ?? {}) as Record<string, any>;
@@ -372,7 +370,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 18. PATCH /v1/anime/projects/:id/bible
   app.patch(
     '/v1/anime/projects/:id/bible',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const body = (request.body ?? {}) as Record<string, any>;
@@ -412,7 +410,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 19. PATCH /v1/anime/projects/:id/budget
   app.patch(
     '/v1/anime/projects/:id/budget',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const body = (request.body ?? {}) as Record<string, any>;
@@ -445,7 +443,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 20. POST & PATCH Characters
   app.post(
     '/v1/anime/projects/:id/characters',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const body = (request.body ?? {}) as Record<string, any>;
@@ -492,7 +490,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
 
   app.patch(
     '/v1/anime/projects/:id/characters/:cid',
-    { schema: { params: CharRefParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: CharRefParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const { id: projectId, cid } = request.params;
       const body = (request.body ?? {}) as Record<string, any>;
@@ -557,7 +555,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 21. PATCH /v1/anime/projects/:id/episodes/:episodeNo
   app.patch(
     '/v1/anime/projects/:id/episodes/:episodeNo',
-    { schema: { params: EpisodeParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: EpisodeParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const episodeNo = Number(request.params.episodeNo);
@@ -612,7 +610,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 22. PATCH /v1/anime/projects/:id/episodes/:episodeNo/scenes/:sceneId
   app.patch(
     '/v1/anime/projects/:id/episodes/:episodeNo/scenes/:sceneId',
-    { schema: { params: SceneParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: SceneParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const { id: projectId, sceneId } = request.params;
       const body = (request.body ?? {}) as Record<string, any>;
@@ -620,9 +618,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       const patchData: Record<string, any> = {};
       if (typeof body.description === 'string') patchData.description = body.description;
       if (typeof body.visual_prompt === 'string') patchData.visual_prompt = body.visual_prompt;
-      if (typeof body.dialogue === 'string') patchData.dialogue = body.dialogue;
       if (typeof body.status === 'string') patchData.status = body.status;
-      if (typeof body.duration_sec === 'number') patchData.duration_sec = body.duration_sec;
 
       let query = animeSupabase.from('scenes').update(patchData).eq('project_id', projectId);
       if (UUID_REGEX.test(sceneId)) {
@@ -642,18 +638,14 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 23. POST /v1/anime/projects/:id/jobs/:jobId/cancel
   app.post(
     '/v1/anime/projects/:id/jobs/:jobId/cancel',
-    { schema: { params: JobCancelParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: JobCancelParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const { id: projectId, jobId } = request.params;
       const nowIso = new Date().toISOString();
 
       const { data: cancelledCmd, error: cmdErr } = await animeSupabase
         .from('api_commands')
-        .update({
-          status: 'CANCELLED',
-          error_message: 'Cancelled by user from Studio UI',
-          updated_at: nowIso,
-        })
+        .update({ status: 'CANCELLED' })
         .eq('project_id', projectId)
         .eq('id', jobId)
         .select('*')
@@ -665,9 +657,9 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
 
       await animeSupabase
         .from('pending_actions')
-        .update({ status: 'CANCELLED', updated_at: nowIso })
+        .update({ status: 'CANCELLED' })
         .eq('project_id', projectId)
-        .eq('command_id', jobId);
+        .eq('job_id', jobId);
 
       return {
         data: {
@@ -684,7 +676,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 24. GET /v1/anime/projects/:id/media
   app.get(
     '/v1/anime/projects/:id/media',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const [scenesRes, clipsRes, charsRes] = await Promise.all([
@@ -714,7 +706,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 25. POST /v1/anime/projects/:id/canon (A6 & A11 FIXED: Includes fact_type NOT NULL column)
   app.post(
     '/v1/anime/projects/:id/canon',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(WRITE_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
       const body = (request.body ?? {}) as Record<string, any>;
@@ -747,7 +739,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 26. GET /v1/anime/projects/:id/canon/proposals
   app.get(
     '/v1/anime/projects/:id/canon/proposals',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const { data, error } = await animeSupabase
         .from('approval_decisions')
@@ -769,7 +761,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
   // 27. GET /v1/anime/projects/:id/notifications
   app.get(
     '/v1/anime/projects/:id/notifications',
-    { schema: { params: ProjParamsSchema }, preHandler: [requireProjectRole(READ_ROLES)] },
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const { data, error } = await animeSupabase
         .from('audit_log')

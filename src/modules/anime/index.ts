@@ -1,4 +1,3 @@
-import { extractUserId } from './auth/project-guard';
 import { createProjectSynchronous } from './reads/projects.service';
 import { animeSupabase } from './db/anime.supabase';
 import type { FastifyInstance } from 'fastify';
@@ -16,6 +15,7 @@ import { animeRequestIdHook } from './middleware/request-id';
 import { outboxDispatcher } from './outbox/outbox.dispatcher';
 import { registerAnimeAnalyticsRoutes } from './reads/analytics.routes';
 import { registerAnimeCreativeRoutes } from './reads/creative.routes';
+import { registerAnimeLoreRoutes } from './reads/lore.routes';
 import { registerAnimeReadsRoutes } from './reads/reads.routes';
 import { registerAnimeHealthRoutes } from './routes/health.routes';
 import { supervisorWorker } from './supervisor/supervisor.worker';
@@ -45,7 +45,7 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
       url.includes('/quick/image') ||
       url.includes('/quick/video')
     ) {
-      const projectId = body.project_id || request.params?.id || request.headers?.['x-project-id'];
+      const projectId = body.project_id || request.params?.id;
       if (!projectId || projectId === '00000000-0000-0000-0000-000000000000') return;
 
       const intentStr = String(body.intent || '').toUpperCase();
@@ -119,11 +119,20 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
 
   app.addHook('onRequest', animeRequestIdHook);
   app.setErrorHandler(animeErrorHandler);
+  await registerAnimeRoutes(app);
+  outboxDispatcher.start(2000);
+  supervisorWorker.start(3000, 60000);
+  startBrainWorker();
+  startIncidentWorker();
+}
+
+export async function registerAnimeRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimeHealthRoutes);
   await app.register(registerAnimeDevicesRoutes);
   await app.register(registerAnimeCommandsRoutes);
   await app.register(registerAnimeCallbacksRoutes);
   await app.register(registerAnimeReadsRoutes);
+  await app.register(registerAnimeLoreRoutes);
   await app.register(registerAnimeCreativeRoutes);
   await app.register(registerAnimeMediaRoutes);
   await app.register(registerAnimeAnalyticsRoutes);
@@ -136,8 +145,4 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
     const regFn = infraRoutesMod.registerAnimeInfrastructureRoutes || infraRoutesMod.registerInfrastructureRoutes || infraRoutesMod.default;
     if (typeof regFn === 'function') await app.register(regFn);
   } catch (_e) {}
-  outboxDispatcher.start(2000);
-  supervisorWorker.start(3000, 60000);
-  startBrainWorker();
-  startIncidentWorker();
 }

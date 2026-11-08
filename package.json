@@ -4,9 +4,16 @@
   "description": "AI Assistant App Master Backend v3.0",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "node node_modules/typescript/bin/tsc",
     "start": "node dist/server.js",
-    "dev": "ts-node src/server.ts"
+    "dev": "ts-node src/server.ts",
+    "test": "npm run test:unit && npm run test:routes && npm run test:static && npm run test:regression",
+    "test:safe": "npm run test:unit && npm run test:routes && npm run test:static",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:routes": "node --test test/routes/*.test.js",
+    "test:static": "node --test test/static/*.test.js",
+    "test:regression": "node --test test/regression/*.test.js",
+    "test:db": "node --test test/db/*.test.js"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
