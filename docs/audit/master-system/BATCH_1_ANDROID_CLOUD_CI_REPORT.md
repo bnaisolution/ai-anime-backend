@@ -2,7 +2,7 @@
 
 Date: 2026-11-09
 Branch: `opencode/batch-1-foundation`
-Status: **BLOCKED — NO CLOUD RUN**
+Status: **CLOUD CI PASS — JVM, INSTRUMENTATION, MAESTRO, LINT, AND APK BUILD**
 
 ## Scope completed in source
 
@@ -28,15 +28,20 @@ Status: **BLOCKED — NO CLOUD RUN**
 
 ## CI status
 
-No Android workflow run exists for this branch. Android builds and tests remain restricted to GitHub Actions Ubuntu x86_64 runners.
+| Check | Evidence | Result |
+|---|---|---|
+| JVM unit tests | Run `42626123392` | PASS — 24 tests, 0 failed, 0 skipped |
+| Compose instrumentation | Run `42626123392`, API 34 emulator | PASS — 116 tests, 0 failed, 0 skipped |
+| Maestro smoke | Run `42626123392` | PASS — 2/2 flows |
+| Android lint | Run `42626123392` | PASS |
+| Debug APK build | Run `42624653122` | PASS |
 
-Required next steps:
+The first JVM run `42622907233` failed one test because no-context token storage did not cache user role metadata. Commit `19e5890` added in-memory metadata caching. The next instrumentation run `42624028726` failed the owner-navigation test because the secure default role is now `normal_user`; commit `6d1a86b` seeds `owner_admin` explicitly in that test. Run `42626123392` passed all jobs.
 
-1. Push the Android branch.
-2. Open a PR or dispatch `Android Tests` and `Build Anime APK`.
-3. Record JVM, instrumentation, lint, Maestro, and APK outcomes.
-4. Replace `BLOCKED` only when the cloud run exists.
+## Scope note
+
+These results are emulator and JVM evidence only. No physical-device validation was performed.
 
 ## Decision
 
-Android implementation is **NOT TESTED**. Do not claim Android completion, APK readiness, or device behavior.
+Android Batch 1 auth/session changes **PASS** cloud CI. Physical-device behavior remains **NOT TESTED**.

@@ -27,7 +27,7 @@ All changes use `IF NOT EXISTS` or guarded constraint/policy creation.
 |---|---|
 | Migration source review | PASS |
 | Rollback source review | PASS |
-| Static alignment test added | NOT TESTED |
+| Static alignment test | PASS — CI run `42623461727` |
 | Isolated migration replay | BLOCKED |
 | Isolated rollback replay | BLOCKED |
 | Live schema equality after replay | BLOCKED |

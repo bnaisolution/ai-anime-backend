@@ -2,20 +2,22 @@
 
 Date: 2026-11-09
 Branch: `opencode/batch-1-foundation`
-Status: **NOT TESTED IN CLOUD — LOCAL TYPECHECK PASS**
+Status: **CLOUD SAFE AND REGRESSION SUITES PASS — DATABASE INTEGRATION BLOCKED**
 
 ## Executed evidence
 
-| Check | Command | Result |
+| Check | Evidence | Result |
 |---|---|---|
-| TypeScript typecheck | `node node_modules/typescript/bin/tsc --noEmit` | PASS |
-| Unit suites | Cloud CI required | NOT TESTED |
-| Route suites | Cloud CI required | NOT TESTED |
-| Static suites | Cloud CI required | NOT TESTED |
-| Regression suites | Cloud CI required | NOT TESTED |
-| Database integration | Isolated test DB required | BLOCKED |
+| TypeScript typecheck | Local `tsc --noEmit` | PASS |
+| Unit suites | CI run `42623461727` | PASS — 51 tests |
+| Route suites | CI run `42623461727` | PASS — 65 tests |
+| Static local suites | CI run `42623461727` | PASS — 24 tests |
+| Static cross-repo suites | CI run `42623461727` | PASS — 8 tests |
+| Safe total | CI run `42623461727` | PASS — 148 tests |
+| Regression suites | CI run `42623461727` | PASS — 19 tests |
+| Database integration | Isolated test DB required | BLOCKED — skipped |
 
-No backend test suite was executed in Termux. The existing rule remains: backend and integrated tests run on GitHub Actions cloud runners.
+The first CI run `42622905010` failed one hydration assertion because the test expected provider configuration at the wrong nesting level. Commit `aaf7c6d` corrected the assertion to match the workflow contract `user_infrastructure.<provider_type>`. Run `42623461727` passed.
 
 ## Tests added
 
@@ -33,12 +35,11 @@ No backend test suite was executed in Termux. The existing rule remains: backend
 
 `.github/workflows/backend-tests.yml` now includes `test/static/migration.alignment.test.js` in the static-local gate.
 
-## Required next evidence
+## Remaining evidence
 
-1. Push the backend branch and open a PR or dispatch `Backend Tests`.
-2. Record the CI run ID, job outcomes, and test counts.
-3. Update this report from `NOT TESTED` only after the cloud run completes.
+- Isolated Supabase database integration remains `BLOCKED`.
+- No migration replay or RLS validation was performed.
 
 ## Decision
 
-Backend source is type-safe. Automated test status remains **NOT TESTED** until cloud CI runs.
+Backend build, safe suites, and regressions **PASS**. Database integration remains **BLOCKED**.

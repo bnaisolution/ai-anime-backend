@@ -8,14 +8,14 @@ Scope: Batch 1 foundation only
 
 | Area | Status | Evidence |
 |---|---|---|
-| Backend source changes | PASS | `tsc --noEmit` completed without errors |
-| Backend automated suites | NOT TESTED | Not executed locally; cloud CI pending branch push |
-| Android source changes | NOT TESTED | No local Android build or test execution |
-| Android cloud CI | BLOCKED | Branch not yet pushed; no CI run exists |
+| Backend source changes | PASS | `tsc --noEmit` and cloud build passed |
+| Backend automated suites | PASS | Cloud CI run `42623461727`: 148 safe tests and 19 regression tests passed |
+| Android source changes | PASS | Cloud JVM 24/24, instrumentation 116/116, Maestro 2/2, lint, and APK build passed |
+| Android cloud CI | PASS | Runs `42626123392` and `42624653122` |
 | Database migration replay | BLOCKED | No isolated Supabase test database |
 | n8n runtime callback validation | BLOCKED | No disposable n8n runtime |
 | AWS read-only inventory | BLOCKED | No AWS/Termius access |
-| Integrated E2E | BLOCKED | Auth/DB/n8n runtime evidence unavailable |
+| Integrated E2E | BLOCKED | Isolated DB/n8n runtime evidence unavailable |
 
 ## Implemented
 
