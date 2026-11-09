@@ -184,8 +184,9 @@ This document is committed with the other six planning documents on:
 
 - Branch: `opencode/master-system-audit-reports`
 - Repository: `bnaisolution/ai-anime-backend`
-- Commit: recorded in the final task summary after push verification
-- Remote verification: pending until after push
+- Planning commit: `4ecd38a331ff9e5ae01f8a05aa315120f6fd5ef0`
+- Remote verification: `git ls-remote` and a fresh fetch both resolved the branch to the same SHA; the local/remote diff for `docs/audit/master-system` was empty.
+- This verification record is added in a follow-up documentation-only commit.
 
 No `main` push, force-push, implementation change, or unrelated staging is permitted.
 
