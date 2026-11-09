@@ -5,11 +5,17 @@ import { readCommandState } from './supervisor.repo';
 export async function reconcileCommand(input: { project_id: string, command_id: string, callback_payload?: any, request_id?: string }): Promise<any> {
   const snap = await readCommandState(input.project_id, input.command_id);
   if (snap.command === null) return { command_id: input.command_id, next_status: CommandStatus.FAILED };
-  const prev = snap.command.status; const cb = input.callback_payload?.status?.toUpperCase(); const ep = snap.episode_state?.current_state?.toUpperCase();
+  const prev = String(snap.command.status || '').toUpperCase(); const cb = input.callback_payload?.status?.toUpperCase(); const ep = snap.episode_state?.current_state?.toUpperCase();
+  if (['SUCCEEDED', 'FAILED'].includes(prev)) return { command_id: input.command_id, next_status: prev };
   let next = CommandStatus.RECONCILING;
   if (['SUCCEEDED', 'COMPLETED'].includes(cb) || ['COMPLETED', 'PUBLISHED'].includes(ep)) next = CommandStatus.SUCCEEDED;
-  else if (['FAILED', 'ERROR'].includes(cb) || ep?.endsWith('_FAILED')) next = CommandStatus.FAILED;
+  else if (['FAILED', 'ERROR', 'CANCELLED'].includes(cb) || ep?.endsWith('_FAILED')) next = CommandStatus.FAILED;
   else if (cb === 'MANUAL_REVIEW' || snap.pending_actions.length > 0) next = CommandStatus.MANUAL_REVIEW;
+  else if (prev === CommandStatus.RECONCILING) {
+    const ageMs = Date.now() - new Date(snap.command.created_at || 0).getTime();
+    if (ageMs > 30 * 60 * 1000) next = CommandStatus.MANUAL_REVIEW;
+    else return { command_id: input.command_id, next_status: prev };
+  }
   if (next !== prev) {
     await animeSupabase.from('api_commands').update({ status: next }).eq('project_id', input.project_id).eq('id', input.command_id);
     await writeAudit({ project_id: input.project_id, user_id: snap.command.user_id, workflow_name: 'SUPERVISOR_RECONCILER', action: 'COMMAND_STATE_RECONCILED', entity_type: 'API_COMMAND', entity_id: input.command_id, previous_value: { status: prev }, new_value: { status: next }, request_id: input.request_id });

@@ -2,6 +2,7 @@ import fp from 'fastify-plugin';
 import fastifyJwt from '@fastify/jwt';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { env } from '../config/env';
+import { decodeJwt, isSupabaseIssuer, verifySupabaseJwt } from '../modules/auth/supabase.auth';
 
 export interface AuthContext {
   userId: string;
@@ -31,6 +32,8 @@ interface VerifiedJwtPayload {
   aud?: string | string[];
   exp?: number;
   iat?: number;
+  app_metadata?: Record<string, unknown>;
+  user_metadata?: Record<string, unknown>;
 }
 
 function unauthorized(reply: FastifyReply, message: string): void {
@@ -67,7 +70,15 @@ export default fp(async (fastify) => {
 
     let decoded: VerifiedJwtPayload;
     try {
-      decoded = fastify.jwt.verify<VerifiedJwtPayload>(token);
+      const unverified = decodeJwt(token).payload;
+      if (isSupabaseIssuer(unverified.iss)) {
+        decoded = await verifySupabaseJwt(token) as VerifiedJwtPayload;
+      } else if (env.AUTH_INTERNAL_JWT_ENABLED) {
+        decoded = fastify.jwt.verify<VerifiedJwtPayload>(token);
+      } else {
+        unauthorized(reply, 'Invalid or expired token');
+        return false;
+      }
     } catch (_e) {
       unauthorized(reply, 'Invalid or expired token');
       return false;
@@ -78,7 +89,7 @@ export default fp(async (fastify) => {
       unauthorized(reply, 'Token missing subject');
       return false;
     }
-    if (decoded.role === 'trusted_service') {
+    if (decoded.role === 'trusted_service' || decoded.role === 'service_role') {
       unauthorized(reply, 'Service identities cannot authenticate as users');
       return false;
     }
@@ -87,12 +98,21 @@ export default fp(async (fastify) => {
       return false;
     }
 
+    const appMetadata = decoded.app_metadata && typeof decoded.app_metadata === 'object' ? decoded.app_metadata : {};
+    const userMetadata = decoded.user_metadata && typeof decoded.user_metadata === 'object' ? decoded.user_metadata : {};
     const email = typeof decoded.email === 'string' ? decoded.email.trim().toLowerCase() : '';
+    const workspaceId = typeof decoded.workspace_id === 'string'
+      ? decoded.workspace_id
+      : typeof appMetadata.workspace_id === 'string'
+        ? appMetadata.workspace_id
+        : typeof userMetadata.workspace_id === 'string'
+          ? userMetadata.workspace_id
+          : '';
     const isOwner = email !== '' && env.OWNER_EMAILS.includes(email);
 
     request.authContext = {
       userId: sub,
-      workspaceId: typeof decoded.workspace_id === 'string' ? decoded.workspace_id : '',
+      workspaceId,
       email,
       role: isOwner ? 'owner_admin' : 'normal_user',
       isServiceIdentity: false

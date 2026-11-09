@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { writeAudit } from '../audit/audit.writer';
+import { getDecryptedMapForUser } from '../infrastructure/infrastructure.service';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import {
@@ -70,6 +71,7 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
       .from('projects')
       .select('visual_medium, active_system_prompt_id')
       .eq('id', projectId)
+      .eq('user_id', userId)
       .maybeSingle<{ visual_medium?: string; active_system_prompt_id?: string | null }>();
 
     if (projectRow?.visual_medium) {
@@ -87,6 +89,7 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
         .from('user_system_prompts')
         .select('id, title, visual_medium, prompt_text')
         .eq('id', projectRow.active_system_prompt_id)
+        .eq('user_id', userId)
         .limit(1);
     } else {
       promptQuery = promptQuery.eq('user_id', userId);
@@ -103,19 +106,12 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
     }
   } catch (_) {}
 
-  const hydratedInfra: Record<string, unknown> = {};
+  let hydratedInfra: Record<string, unknown> = {};
   try {
-    const { data: infraRows } = await animeSupabase
-      .from('user_infrastructure')
-      .select('provider_type, config, status')
-      .eq('user_id', userId)
-      .eq('status', 'active');
-
-    if (Array.isArray(infraRows)) {
-      for (const row of infraRows) {
-        const pType = String(row.provider_type || '');
-        const cfg = (row.config && typeof row.config === 'object') ? (row.config as Record<string, unknown>) : {};
-        hydratedInfra[pType] = cfg;
+    const providerConfigs = await getDecryptedMapForUser(userId);
+    hydratedInfra = { ...providerConfigs };
+    for (const cfg of Object.values(providerConfigs)) {
+      if (cfg && typeof cfg === 'object') {
         if (cfg.gpu_routing) hydratedInfra.gpu_routing = cfg.gpu_routing;
         if (cfg.telegram_storage) hydratedInfra.telegram_storage = cfg.telegram_storage;
         if (cfg.github_worker) hydratedInfra.github_worker = cfg.github_worker;
@@ -153,7 +149,8 @@ export async function submitAnimeCommand(
   if (existing) {
     if (
       existing.body_hash !== bodyHash ||
-      existing.project_id !== params.body.project_id
+      existing.project_id !== params.body.project_id ||
+      existing.user_id !== params.userId
     ) {
       throw new AnimeError({
         code: AnimeErrorCode.IDEMPOTENCY_CONFLICT,

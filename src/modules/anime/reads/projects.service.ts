@@ -15,21 +15,7 @@ export async function listProjects(userId: string) {
     throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to list projects.', cause: error });
   }
 
-  let allProjects = ownedProjects ?? [];
-
-  // Fallback for legacy projects without user_id
-  if (allProjects.length === 0) {
-    const { data: anyProjects } = await animeSupabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    // Filter out old ghost projects
-    allProjects = (anyProjects ?? []).filter((p: any) => p.name !== 'AI Anime Studio Project');
-  }
-
-  return allProjects;
+  return ownedProjects ?? [];
 }
 
 export async function createProjectSynchronous(params: {
@@ -62,6 +48,9 @@ export async function createProjectSynchronous(params: {
     is_active: true,
     current_season: 1,
     current_episode: 1,
+    genre,
+    visual_medium: visualMedium,
+    description: params.logline || null,
     story_bible: initialBible,
   };
 
@@ -79,9 +68,15 @@ export async function createProjectSynchronous(params: {
 }
 
 export async function getProject(projectId: string, userId: string) {
-  const { data, error } = await animeSupabase.from('projects').select('*').eq('id', projectId).maybeSingle();
+  if (!userId) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Project access denied.' });
+  const { data, error } = await animeSupabase
+    .from('projects')
+    .select('*')
+    .eq('id', projectId)
+    .eq('user_id', userId)
+    .maybeSingle();
   if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Fetch failed', cause: error });
-  if (!data) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Project not found' });
+  if (!data) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Project not found or access denied.' });
   return data;
 }
 export { getProjectOverview } from './overview.service';

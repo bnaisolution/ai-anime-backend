@@ -102,7 +102,7 @@ jobs:
         id: static_local
         if: always()
         working-directory: ai-anime-backend
-        run: node --test --test-reporter=junit --test-reporter-destination=test-results/static-local.xml test/static/schema.contract.test.js test/static/workflows.contract.test.js
+        run: node --test --test-reporter=junit --test-reporter-destination=test-results/static-local.xml test/static/schema.contract.test.js test/static/workflows.contract.test.js test/static/migration.alignment.test.js
       - name: Static cross-repo checks
         id: static_siblings
         if: always() && steps.siblings.outputs.available == 'true'

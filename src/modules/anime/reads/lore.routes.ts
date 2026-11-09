@@ -273,10 +273,12 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Project name is required' });
       }
 
+      const visualMedium = String(body.visual_medium || 'ANIME').toUpperCase();
+      const genre = String(body.genre || 'Action / Fantasy');
       const initialBible = {
         ...(body.story_bible && typeof body.story_bible === 'object' ? body.story_bible : {}),
-        visual_medium: body.visual_medium || 'ANIME',
-        genre: body.genre || 'Action / Fantasy',
+        visual_medium: visualMedium,
+        genre,
         premise: body.premise || body.description || '',
         auto_approve: Boolean(body.auto_approve ?? false),
         budget_ceiling: Number(body.budget_ceiling ?? 1000),
@@ -289,6 +291,9 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
           name,
           user_id: userId,
           is_active: true,
+          genre,
+          visual_medium: visualMedium,
+          description: body.description || body.premise || null,
           story_bible: initialBible,
         })
         .select('*')
@@ -338,6 +343,18 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       };
       if (typeof body.name === 'string' && body.name.trim().length > 0) {
         patchPayload.name = body.name.trim();
+      }
+      if (body.visual_medium !== undefined) {
+        patchPayload.visual_medium = String(body.visual_medium).toUpperCase();
+      }
+      if (body.genre !== undefined) {
+        patchPayload.genre = String(body.genre);
+      }
+      if (body.description !== undefined) {
+        patchPayload.description = body.description === null ? null : String(body.description);
+      }
+      if (body.active_system_prompt_id !== undefined) {
+        patchPayload.active_system_prompt_id = body.active_system_prompt_id;
       }
       if (typeof body.budget_ceiling === 'number' && 'budget_ceiling' in existing) {
         patchPayload.budget_ceiling = body.budget_ceiling;

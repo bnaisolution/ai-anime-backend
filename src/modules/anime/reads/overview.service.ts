@@ -19,7 +19,7 @@ export async function getProjectOverview(projectId: string) {
     animeSupabase.from('scenes').select('id').eq('project_id', projectId),
     animeSupabase
       .from('api_commands')
-      .select('id, intent, status, created_at, updated_at')
+      .select('id, intent, status, created_at')
       .eq('project_id', projectId)
       .order('created_at', { ascending: false })
       .limit(25),
@@ -106,8 +106,8 @@ export async function getProjectOverview(projectId: string) {
   return {
     project: {
       ...project,
-      visual_medium: bible.visual_medium ?? 'ANIME',
-      genre: bible.genre ?? 'Action / Fantasy',
+      visual_medium: project.visual_medium ?? bible.visual_medium ?? 'ANIME',
+      genre: project.genre ?? bible.genre ?? 'Action / Fantasy',
       auto_approve: Boolean(bible.auto_approve ?? false),
       cover_image_url: bible.cover_image_url ?? null,
       budget_ceiling: Number(bible.budget_ceiling ?? project.budget_ceiling ?? 1000),
@@ -138,8 +138,8 @@ export async function getProjectOverview(projectId: string) {
     canon_status: canonStatus,
     continuity_status: continuityStatus,
     continuity_severity: continuitySeverity,
-    visual_medium: bible.visual_medium ?? 'ANIME',
-    genre: bible.genre ?? 'Action / Fantasy',
+    visual_medium: project.visual_medium ?? bible.visual_medium ?? 'ANIME',
+    genre: project.genre ?? bible.genre ?? 'Action / Fantasy',
     auto_approve: Boolean(bible.auto_approve ?? false),
     cover_image_url: bible.cover_image_url ?? null,
     budget_ceiling: Number(bible.budget_ceiling ?? project.budget_ceiling ?? 1000),
