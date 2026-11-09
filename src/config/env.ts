@@ -39,6 +39,10 @@ export interface EnvConfig {
   N8N_WEBHOOK_SECRET: string;
   TELEGRAM_BOT_TOKEN: string;
   TELEGRAM_OWNER_CHAT_ID: string;
+  LOW_TPM_MODE: boolean;
+  AI_TPM_BUDGET: number;
+  AI_MAX_RETRIES: number;
+  AI_REQUEST_TIMEOUT_MS: number;
 }
 
 const SUPABASE_URL = required('SUPABASE_URL').replace(/\/+$/, '');
@@ -72,5 +76,9 @@ export const env: EnvConfig = {
   N8N_BASE_URL: (process.env.N8N_BASE_URL || 'http://n8n:5678').replace(/\/+$/, ''),
   N8N_WEBHOOK_SECRET: (process.env.N8N_WEBHOOK_SECRET || '').trim(),
   TELEGRAM_BOT_TOKEN: (process.env.TELEGRAM_BOT_TOKEN || '').trim(),
-  TELEGRAM_OWNER_CHAT_ID: (process.env.TELEGRAM_OWNER_CHAT_ID || '').trim()
+  TELEGRAM_OWNER_CHAT_ID: (process.env.TELEGRAM_OWNER_CHAT_ID || '').trim(),
+  LOW_TPM_MODE: (process.env.LOW_TPM_MODE || 'true').trim().toLowerCase() === 'true',
+  AI_TPM_BUDGET: parseInt(process.env.AI_TPM_BUDGET || '6000', 10),
+  AI_MAX_RETRIES: parseInt(process.env.AI_MAX_RETRIES || '1', 10),
+  AI_REQUEST_TIMEOUT_MS: parseInt(process.env.AI_REQUEST_TIMEOUT_MS || '20000', 10)
 };

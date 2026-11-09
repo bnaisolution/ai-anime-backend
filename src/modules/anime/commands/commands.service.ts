@@ -126,6 +126,7 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
   let visualMedium = 'ANIME';
   let systemPromptTitle = 'Default Storyteller';
   let customSystemPrompt = '';
+  let imageSystemPrompt = '';
 
   try {
     const { data: projectRow } = await animeSupabase
@@ -141,19 +142,20 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
 
     let promptQuery = animeSupabase
       .from('user_system_prompts')
-      .select('id, title, visual_medium, prompt_text')
+      .select('id, title, visual_medium, prompt_text, prompt_category')
+      .eq('user_id', userId)
+      .eq('prompt_category', 'BIBLE')
+      .or(`project_id.eq.${projectId},project_id.is.null`)
       .order('created_at', { ascending: false })
       .limit(1);
 
     if (projectRow?.active_system_prompt_id) {
       promptQuery = animeSupabase
         .from('user_system_prompts')
-        .select('id, title, visual_medium, prompt_text')
+        .select('id, title, visual_medium, prompt_text, prompt_category')
         .eq('id', projectRow.active_system_prompt_id)
         .eq('user_id', userId)
         .limit(1);
-    } else {
-      promptQuery = promptQuery.eq('user_id', userId);
     }
 
     const { data: promptRows } = await promptQuery;
@@ -164,6 +166,21 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
       if (activePrompt.visual_medium) {
         visualMedium = String(activePrompt.visual_medium).toUpperCase();
       }
+    }
+
+    const { data: imageRows } = await animeSupabase
+      .from('user_system_prompts')
+      .select('id, title, prompt_text')
+      .eq('user_id', userId)
+      .eq('prompt_category', 'IMAGE')
+      .eq('is_archived', false)
+      .or(`project_id.eq.${projectId},project_id.is.null`)
+      .order('is_favorite', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const imagePrompt = Array.isArray(imageRows) ? imageRows[0] : null;
+    if (imagePrompt?.prompt_text) {
+      imageSystemPrompt = imagePrompt.prompt_text;
     }
   } catch (_) {}
 
@@ -184,6 +201,7 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
     visualMedium,
     systemPromptTitle,
     customSystemPrompt,
+    imageSystemPrompt,
     hydratedInfra,
   };
 }
@@ -240,10 +258,19 @@ export async function submitAnimeCommand(
     (typeof payloadObj.custom_system_prompt === 'string' ? payloadObj.custom_system_prompt : null) ??
     dynamicCtx.customSystemPrompt;
 
+  const resolvedImageSystemPrompt =
+    (typeof payloadObj.image_system_prompt === 'string' ? payloadObj.image_system_prompt : null) ??
+    dynamicCtx.imageSystemPrompt;
+
   const systemPromptConfig = {
     visual_medium: resolvedVisualMedium,
     title: resolvedPromptTitle,
     prompt_text: resolvedCustomSystemPrompt,
+  };
+
+  const imagePromptConfig = {
+    visual_medium: resolvedVisualMedium,
+    prompt_text: resolvedImageSystemPrompt,
   };
 
   const projectStyle = {
@@ -253,6 +280,7 @@ export async function submitAnimeCommand(
     visual_medium: resolvedVisualMedium,
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
+    image_system_prompt: resolvedImageSystemPrompt,
   };
 
   const userInfrastructure = {
@@ -283,6 +311,8 @@ export async function submitAnimeCommand(
     visual_medium: resolvedVisualMedium,
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
+    image_system_prompt: resolvedImageSystemPrompt,
+    image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
     user_infrastructure: userInfrastructure,
@@ -307,6 +337,8 @@ export async function submitAnimeCommand(
     visual_medium: resolvedVisualMedium,
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
+    image_system_prompt: resolvedImageSystemPrompt,
+    image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
     user_infrastructure: userInfrastructure,

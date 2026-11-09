@@ -12,7 +12,7 @@ const ALL_DIR = path.join(H.backendRoot, 'n8n-workflows-all');
 const EXPECTED = {
   'StoryWF-00_Main_Router.json': { id: 'U4pLz7pXmG2OqXlt', nodes: 34 },
   'StoryWF-01.json': { id: 'UeEXeimGGwqIh84T', nodes: 33 },
-  'storywf02.json': { id: 'qRUdhg1PNDK2wJk6', nodes: 25 },
+  'storywf02.json': { id: 'qRUdhg1PNDK2wJk6', nodes: 26 },
   'storywf03.json': { id: 's4RGuFSDlevgD5nC', nodes: 38 },
   'storywf04.json': { id: '8q9tF3VE0mLUZQfa', nodes: 30 },
   'storywf05.json': { id: 'ADPseu4KBfVveYrq', nodes: 16 },
@@ -127,4 +127,23 @@ test('command intent workflow map only references canonical workflow numbers', (
   );
   const missing = [...new Set(Object.values(COMMAND_INTENT_WF_MAP))].filter((key) => !available.has(key));
   assert.deepEqual(missing, []);
+});
+
+test('WF-02 dispatches the approved scene plan to WF-03 through executeWorkflow', () => {
+  const wf02 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf02.json');
+  const dispatcher = wf02.json.nodes.find((node) => node.type === 'n8n-nodes-base.executeWorkflow');
+  assert.ok(dispatcher, 'WF-02 has an executeWorkflow node');
+  assert.equal(dispatcher.parameters.source, 'database');
+  assert.match(String(dispatcher.parameters.workflowId), /next_workflow_id/);
+  assert.equal(dispatcher.parameters.options.waitForSubWorkflow, false);
+  const outbound = wf02.json.connections['WF-03 Dispatch & Output Formatter']?.main?.[0] ?? [];
+  assert.deepEqual(outbound.map((connection) => connection.node), [dispatcher.name]);
+});
+
+test('WF-02 forwards the IMAGE prompt contract to WF-03', () => {
+  const wf02 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf02.json');
+  const formatter = wf02.json.nodes.find((node) => node.name === 'WF-03 Dispatch & Output Formatter');
+  assert.ok(formatter);
+  assert.match(formatter.parameters.jsCode, /image_system_prompt/);
+  assert.match(formatter.parameters.jsCode, /image_prompt_config/);
 });

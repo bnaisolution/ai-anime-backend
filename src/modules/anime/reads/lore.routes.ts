@@ -303,6 +303,41 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to create project', cause: createErr });
       }
 
+      const promptIds = Array.isArray(body.prompt_ids)
+        ? body.prompt_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+        : [];
+      if (promptIds.length > 0 && created.id) {
+        const { data: promptRows } = await animeSupabase
+          .from('user_system_prompts')
+          .select('id, prompt_category, visual_medium')
+          .eq('user_id', userId)
+          .in('id', promptIds);
+        const ownedPrompts = Array.isArray(promptRows) ? promptRows : [];
+        if (ownedPrompts.length > 0) {
+          await animeSupabase
+            .from('project_prompt_associations')
+            .upsert(
+              ownedPrompts.map((prompt: any) => ({
+                project_id: created.id,
+                prompt_id: prompt.id,
+                user_id: userId,
+                surface: String(prompt.prompt_category || 'LIBRARY'),
+              })),
+              { onConflict: 'project_id,prompt_id' }
+            );
+          const biblePrompt = ownedPrompts.find(
+            (prompt: any) => String(prompt.prompt_category || 'BIBLE').toUpperCase() === 'BIBLE'
+          );
+          if (biblePrompt) {
+            await animeSupabase
+              .from('projects')
+              .update({ active_system_prompt_id: biblePrompt.id })
+              .eq('id', created.id)
+              .eq('user_id', userId);
+          }
+        }
+      }
+
       return reply.status(201).send({ data: created });
     }
   );
