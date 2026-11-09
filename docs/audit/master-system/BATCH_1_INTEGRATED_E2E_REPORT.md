@@ -19,13 +19,13 @@ Status: **BLOCKED — NO RUNTIME EVIDENCE**
 
 | Segment | Status | Reason |
 |---|---|---|
-| Android login/refresh/logout | NOT TESTED | No cloud Android run |
-| Backend auth route flow | NOT TESTED | No cloud backend run |
-| Cross-user project isolation | NOT TESTED | No isolated database |
-| Encrypted command hydration | NOT TESTED | No isolated database or user fixture |
-| Outbox claim and stale recovery | NOT TESTED | No isolated database |
+| Android login/refresh/logout | PASS — component only | Android cloud run `42626123392`; no live backend integration |
+| Backend auth route flow | PASS — component only | Backend CI run `42635029769` |
+| Cross-user project isolation | PASS — mocked/route only | Isolated database remains BLOCKED |
+| Encrypted command hydration | PASS — mocked only | Isolated database remains BLOCKED |
+| Outbox claim and stale recovery | PASS — mocked only | Isolated database remains BLOCKED |
 | n8n callback execution | BLOCKED | No disposable n8n runtime |
-| Reconciliation terminal-state behavior | NOT TESTED | No runtime command fixtures |
+| Reconciliation terminal-state behavior | PASS — mocked only | No runtime command fixtures |
 | Production verification | NOT AUTHORIZED | Prohibited |
 
 ## Required environment

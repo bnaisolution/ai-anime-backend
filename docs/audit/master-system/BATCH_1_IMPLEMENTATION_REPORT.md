@@ -3,13 +3,14 @@
 Date: 2026-11-09
 Branch: `opencode/batch-1-foundation`
 Scope: Batch 1 foundation only
+Status: **SOURCE AND AUTOMATED CI PASS — RUNTIME GATES BLOCKED**
 
 ## Status
 
 | Area | Status | Evidence |
 |---|---|---|
-| Backend source changes | PASS | `tsc --noEmit` and cloud build passed |
-| Backend automated suites | PASS | Cloud CI run `42623461727`: 148 safe tests and 19 regression tests passed |
+| Backend source changes | PASS | `npm run build` and cloud build passed |
+| Backend automated suites | PASS | Cloud CI run `42635029769`: 155 safe tests and 19 regression tests passed |
 | Android source changes | PASS | Cloud JVM 24/24, instrumentation 116/116, Maestro 2/2, lint, and APK build passed |
 | Android cloud CI | PASS | Runs `42626123392` and `42624653122` |
 | Database migration replay | BLOCKED | No isolated Supabase test database |
@@ -40,10 +41,13 @@ Scope: Batch 1 foundation only
 - Prompt lookup is scoped to the authenticated user.
 - Idempotency replay now rejects a key bound to a different user.
 - Atomic-command fallback now distinguishes missing RPC from real database errors and compensates when outbox insertion fails.
+- Concurrent idempotency replay is revalidated after atomic insert so a racing request cannot reuse another user's key or body hash.
+- Command submission and read responses redact provider credentials and nested secret keys from `payload`.
 
 ### Outbox, callbacks, and supervision
 
 - Added stale `processing` outbox recovery with a lease timestamp and fallback.
+- Recovery now also reclaims processing rows whose lease timestamp is `NULL`.
 - `claim_outbox_batch` now records `processing_started_at`.
 - Callback handling verifies that `command_id` belongs to `project_id` before persisting or enqueuing reconciliation.
 - Callback outbox insertion failure removes the callback inbox row so retries are not silently deduplicated.
@@ -65,12 +69,17 @@ Scope: Batch 1 foundation only
 - Added additive migration `supabase/migrations/002_batch1_schema_alignment.sql`.
 - Added rollback `supabase/migrations/002_batch1_schema_alignment_rollback.sql`.
 - Migration covers `user_system_prompts`, missing project/episode/clip columns, and `outbox_events.processing_started_at`.
+- Rollback restores the exact pre-Batch-1 `claim_outbox_batch` body; the extra parenthesis was removed.
+- The `user_system_prompts` policy is drop/recreated for `service_role` only with `WITH CHECK (true)`.
 
 ## Not claimed
 
-- No cloud test pass is claimed.
-- No Android compile or test pass is claimed.
-- No live database migration or rollback pass is claimed.
-- No n8n runtime callback pass is claimed.
+- No live database migration, rollback, or RLS pass is claimed.
+- No n8n runtime callback, error-path, or reconciliation pass is claimed.
 - No integrated E2E pass is claimed.
+- No physical-device Android pass is claimed.
 - No production action was taken.
+
+## Known residual risk
+
+- Dispatch-time provider configuration is still persisted in the outbox/command payload so n8n can receive it. API responses are redacted, but at-rest TTL/redaction remains a BYOD/Batch 4 requirement.

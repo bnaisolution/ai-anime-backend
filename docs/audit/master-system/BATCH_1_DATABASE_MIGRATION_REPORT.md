@@ -1,7 +1,7 @@
 # Batch 1 Database Migration Report
 
 Date: 2026-11-09
-Status: **MIGRATION AUTHORED — LIVE REPLAY BLOCKED**
+Status: **MIGRATION SOURCE HARDENED — LIVE REPLAY BLOCKED**
 
 ## Migration files
 
@@ -19,7 +19,7 @@ Status: **MIGRATION AUTHORED — LIVE REPLAY BLOCKED**
 - `outbox_events`: `processing_started_at`
 - Function: `claim_outbox_batch` now records the processing lease
 
-All changes use `IF NOT EXISTS` or guarded constraint/policy creation.
+Additive columns use `IF NOT EXISTS` and the foreign key is guarded. The `user_system_prompts` policy is drop/recreated for `service_role` only with `WITH CHECK (true)` so an existing broader policy is not left in place.
 
 ## Evidence
 
@@ -27,11 +27,20 @@ All changes use `IF NOT EXISTS` or guarded constraint/policy creation.
 |---|---|
 | Migration source review | PASS |
 | Rollback source review | PASS |
-| Static alignment test | PASS — CI run `42623461727` |
+| Static alignment test | PASS — CI run `42635029769` |
+| Rollback SQL parentheses balanced | PASS — static test |
+| Rollback restores exact prior claim function | PASS — static test |
+| `user_system_prompts` policy restricted to `service_role` | PASS — static test |
 | Isolated migration replay | BLOCKED |
 | Isolated rollback replay | BLOCKED |
 | Live schema equality after replay | BLOCKED |
 | RLS policy validation | BLOCKED |
+
+## Audit corrections
+
+- Removed the extra closing parenthesis in the rollback `claim_outbox_batch` body that made the rollback SQL invalid.
+- Replaced the broad `USING (true)` policy with a `service_role`-scoped policy and `WITH CHECK (true)`.
+- Added static tests for SQL parenthesis balance, exact rollback function restore, and policy role restriction.
 
 ## Blocker
 

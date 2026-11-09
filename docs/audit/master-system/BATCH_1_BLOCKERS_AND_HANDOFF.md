@@ -5,7 +5,7 @@ Branch: `opencode/batch-1-foundation` in backend and Android repositories
 
 ## Current gate
 
-Batch 1 is **not closed**. Source implementation and cloud CI are complete for the authorized scope, but isolated database, n8n runtime, AWS, and integrated evidence is missing.
+Batch 1 is **not closed**. Source implementation, automated backend CI, and Android cloud CI are complete for the authorized scope, but isolated database, n8n runtime, AWS, and integrated evidence is missing.
 
 ## Blockers
 
@@ -30,9 +30,13 @@ Batch 1 is **not closed**. Source implementation and cloud CI are complete for t
 
 | Repository | Branch | HEAD | Working tree |
 |---|---|---|---|
-| Backend | `opencode/batch-1-foundation` | `aaf7c6d` plus report commit | Batch 1 docs updated |
+| Backend | `opencode/batch-1-foundation` | `504f555` plus report commit | Batch 1 docs updated |
 | Android | `opencode/batch-1-foundation` | `6d1a86b` | Clean |
 | Worker | `main` | `da069d3` | Unchanged |
+
+## Known residual risk
+
+- Dispatch-time provider configuration is still stored in the outbox/command payload for n8n delivery. API responses are redacted, but at-rest TTL/redaction remains a BYOD/Batch 4 requirement.
 
 ## Next actions
 
