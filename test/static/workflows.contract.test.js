@@ -147,3 +147,13 @@ test('WF-02 forwards the IMAGE prompt contract to WF-03', () => {
   assert.match(formatter.parameters.jsCode, /image_system_prompt/);
   assert.match(formatter.parameters.jsCode, /image_prompt_config/);
 });
+
+test('WF-03 composes the IMAGE system prompt into scene visual prompts', () => {
+  const wf03 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf03.json');
+  const normalizer = wf03.json.nodes.find((node) => node.name === 'Normalize Input & Enforce SAVE Mode');
+  const resolver = wf03.json.nodes.find((node) => node.name === 'Cache Evaluator & Stage Resolver');
+  assert.ok(normalizer && resolver);
+  assert.match(normalizer.parameters.jsCode, /image_system_prompt/);
+  assert.match(resolver.parameters.jsCode, /composedPrompt/);
+  assert.match(resolver.parameters.jsCode, /imageSystemPrompt/);
+});
