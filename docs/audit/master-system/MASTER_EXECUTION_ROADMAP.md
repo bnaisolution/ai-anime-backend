@@ -1,456 +1,476 @@
 # Master Execution Roadmap
 
 Date: 2026-11-09
-Status: **ACTIVE EXECUTION PLAN — DOCUMENTATION ONLY; IMPLEMENTATION NOT AUTHORIZED**
-Scope: Four-batch execution sequence derived from the 12 master-system audit reports. No implementation, migration, deployment, workflow activation, credential rotation, or production action was performed.
+Status: **ACTIVE FOUR-BATCH PLAN — DOCUMENTATION ONLY; IMPLEMENTATION NOT AUTHORIZED**
+Scope: Complete-system planning across backend, Android, database, n8n, CPU/GPU workers, providers, BYOD, AWS recovery, and Owner acceptance.
 
 ## 1. Purpose and Authority
 
-This is the permanent execution roadmap for the four batches. It converts the 12 evidence reports into an ordered, testable plan.
+This is the execution roadmap for the four required batches. It converts all approved Owner requirements, the 12 master audit reports, local contracts, current source, current CI, and the implementation handoff into one dependency-ordered plan.
 
-It does not replace:
+Authority order:
 
-- `docs/contracts/OWNER_DECISION_REGISTER.md`;
-- `docs/contracts/MASTER_ACCEPTANCE_MATRIX.md`;
-- the approved six-stage implementation sequence;
-- the requirement for explicit Owner approval before implementation or production action.
+1. `docs/contracts/OWNER_DECISION_REGISTER.md` — authoritative decisions.
+2. `docs/contracts/MASTER_IMPLEMENTATION_HANDOFF.md` — consolidated implementation requirements.
+3. `COMPLETE_OWNER_REQUIREMENTS_TRACEABILITY_MATRIX.md` — requirement-to-work mapping.
+4. Current source, schema, CI, and test evidence.
+5. Historical contracts and reports.
 
-The batches group the remaining work. They do not bypass stage gates. Stage 1–3 artifacts are treated as the audit/test baseline; Batches 1–4 execute the remaining Stage 4–6 work.
+This roadmap does not authorize source changes, schema changes, migrations, workflow changes, credential rotation, APK release, deployment, AWS action, Stage 5 start, or production access.
 
-## 2. Evidence Baseline
+## 2. Current Evidence Baseline
 
-| Component | Revision / scope | Evidence | Status |
+| Component | Revision / scope | Current evidence | Status |
 |---|---|---|---|
-| Android | tested `44bfa15c5e23d09e51a2d3c681c9cca3b219f844`; reports `35d6158` | CI `42577400016`: 20/20 JVM, 116/116 instrumentation, 35/35 control suite, 2/2 Maestro, lint 25 findings / 0 errors | PASS — automated scope |
-| Backend | `c6fc39865c44913eb0ba59065e99abff46f715fd` | build PASS, 123/123 safe, 19/19 regression; CI `42458161277` | PASS — automated scope |
-| Database | live schema snapshot, 73 public tables | 10/10 static contract tests; 4 integration tests skipped | PASS — static; integration BLOCKED |
-| CPU worker | `da069d3bb30d2389992cc8de82a9b5bad1e31eea` | 5/5 contract tests; CI `42457744833` | PASS — contracts; runtime NOT TESTED |
-| n8n | 14 canonical workflows WF-00–WF-13 | 14/14 static validation; unique IDs; webhook path | PASS — static; runtime BLOCKED |
-| GPU worker | configuration code only | no GPU repository, runtime, model, or credentials | NOT TESTED / BLOCKED |
-| Telegram | mocked proxy and security tests | 8 route tests pass | PASS — mocked; live storage BLOCKED |
-| Prompt Studio | Android UI and backend prompt routes | UI tests pass; category/default/tenant defects | FAIL — not accepted |
-| BYOD / multi-user | project authorization tests | 60 route tests; cross-user/null-owner/spoof checks pass | Multi-user auth PASS; BYOD NOT IMPLEMENTED |
-| Accessibility | automated scope | 5/5 automated tests pass; 33/33 screens tagged | PASS — automated; manual NOT TESTED |
+| Android | tested `44bfa15c5e23d09e51a2d3c681c9cca3b219f844`; reports `35d6158` | CI `42577400016`: 20/20 JVM, 116/116 instrumentation, 35/35 control suite, 2/2 Maestro, lint 0 errors | PASS — automated scope |
+| Backend | `c6fc39865c44913eb0ba59065e99abff46f715fd` | build PASS; 123/123 safe; 19/19 regression; current local combined run 142/142 | PASS — automated scope |
+| Database | 73 public tables in snapshot | 10/10 static contract; 4 integration skipped | PASS — static; integration BLOCKED |
+| CPU worker | `da069d3bb30d2389992cc8de82a9b5bad1e31eea` | 5/5 contract tests; runtime not executed | PASS — contracts; runtime NOT TESTED |
+| n8n | 14 canonical workflows | 14/14 static validation; runtime not executed | PASS — static; runtime BLOCKED |
+| GPU worker | configuration code only | no repository, runtime, model, or credentials | NOT TESTED / BLOCKED |
+| Telegram | mocked proxy tests | 8 route/unit tests pass | PASS — mocked; live BLOCKED |
+| Prompt Studio | UI plus backend routes | category/default/tenant defects remain | FAIL — not accepted |
+| BYOD / multi-user | project authorization tests | route-level multi-user PASS; BYOD not implemented | PARTIAL |
+| Accessibility | automated scope | 5/5 automated PASS; manual not performed | PARTIAL |
 | Android → AWS E2E | no isolated environment | no live dependencies contacted | BLOCKED |
-| Full system | aggregate | see `FINAL_SYSTEM_ACCEPTANCE_REPORT.md` | NOT ACCEPTED |
+| AWS existing runtime | no access/logs | not inspected | BLOCKED |
+| Full system | aggregate | multiple gates open | NOT ACCEPTED |
 
-### Current Position
+## 3. Decision and Authorization State
 
-| Item | State |
-|---|---|
-| Android automated scope | CONDITIONALLY ACCEPTED |
-| Backend automated scope | TESTED AND PASSED |
-| Database integration | BLOCKED |
-| n8n runtime | BLOCKED |
-| CPU worker runtime | NOT TESTED |
-| GPU worker runtime | NOT TESTED / BLOCKED |
-| Telegram live storage | BLOCKED |
-| Prompt Studio | NOT ACCEPTED |
-| BYOD | NOT IMPLEMENTED |
-| Manual accessibility | NOT PERFORMED |
-| Full E2E | BLOCKED |
-| Full system | NOT ACCEPTED |
-| Production | NOT TOUCHED |
+| Item | State | Planning consequence |
+|---|---|---|
+| OD-01–OD-13, OD-15, OD-16 | APPROVED | Requirements are in scope; no decision blocker |
+| OD-12A / OD-12B | APPROVED | Versioned key registry and hybrid custody are in scope |
+| OD-14 | OPEN | Stage 5 must not start |
+| Implementation authorization | NOT GRANTED by this planning task | Batches are planned, not executable yet |
+| Isolated environments | NOT PROVISIONED | Runtime work is BLOCKED |
+| AWS access | NOT AVAILABLE | Recovery is BLOCKED |
+| Production approval | OD-15 boundary only | No production action without explicit go-ahead |
 
-## 3. Execution Rules
+Important corrections:
 
-1. **Batch order is strict.** Batch 1 must pass its exit gate before Batch 2 implementation starts, and so on.
-2. **No new n8n workflows.** Preserve exactly WF-00 through WF-13. Changes to existing workflows require explicit Owner approval.
-3. **No production action.** No production deployment, database write, workflow activation/import, credential rotation, or destructive operation without explicit Owner approval.
+- **OD-06 is the backend-controlled access boundary**, not an undecided n8n strategy.
+- All approved decisions remain in force even where older documents still describe them as options.
+- Full Prompt Studio is mandatory and must not be deferred.
+- BYOD implementation is approved in direction but still requires separate implementation authorization and environments.
+- Stage 5 remains blocked by OD-14.
+
+## 4. Execution Rules
+
+1. **Batch order is strict.** A later batch cannot exit while an earlier gate is open.
+2. **No new canonical workflows.** Preserve exactly `WF-00`–`WF-13`; no `WF-14`.
+3. **No production action.** No deployment, production database write, workflow activation/import, credential rotation, or destructive operation without explicit approval.
 4. **No secrets.** Never place tokens, keys, passwords, private URLs, or credentials in source, logs, reports, screenshots, or commits.
-5. **No PASS without evidence.** A passing static test, mocked test, or fake-repository UI test does not prove runtime behavior.
-6. **Use only these test classifications:** `PASS`, `FAIL`, `BLOCKED`, `NOT TESTED`. For work tracking, `NOT STARTED` means no implementation began.
-7. **Inherit existing evidence.** Do not rerun passing suites merely to claim a new PASS. Re-run at a batch exit gate, or when code/configuration/environment changed.
-8. **Isolated environments only.** Database, n8n, workers, Telegram, and E2E tests must use disposable test resources. A URL containing `prod` or `production` must be refused for test database work.
-9. **Android testing stays in cloud CI.** Builds, SDK, AAPT2, lint, emulator, instrumentation, and Maestro run on GitHub Actions Ubuntu x86_64, never in Termux/ARM64.
-10. **No unverified AWS claims.** Existing AWS-originated work must be recovered and verified, not recreated. AWS verification remains BLOCKED until an approved isolated environment exists.
-11. **Evidence before status.** Every completed work item must record the exact command, run ID, artifact path, commit SHA, and result.
-12. **No stage or acceptance claim without Owner approval.** Do not edit `PROJECT_STATE.md` or declare a stage complete without explicit confirmation.
+5. **No PASS without evidence.** Static, mocked, fake-repository, and component tests are not runtime proof.
+6. **Test labels only:** `PASS`, `FAIL`, `BLOCKED`, `NOT TESTED`.
+7. **Isolated environments only.** Use disposable database, n8n, workers, Telegram, and credentials. Refuse URLs containing `prod` or `production` for test database work.
+8. **Android testing stays in cloud CI.** Builds, SDK, AAPT2, lint, emulator, instrumentation, and Maestro run on GitHub Actions Ubuntu x86_64, never in Termux/ARM64.
+9. **AWS recovery, not recreation.** Existing AWS-originated work must be recovered and verified. No AWS resource may be recreated without explicit Owner approval.
+10. **No workflow change without approval.** Existing workflows must remain byte-identical unless the Owner approves a specific change.
+11. **Evidence before status.** Record command, run ID, artifact path, commit SHA, environment, and result.
+12. **No stage or acceptance claim without Owner approval.** Do not edit `PROJECT_STATE.md` or declare a stage complete.
 
-## 4. Four-Batch Overview
+## 5. Four-Batch Overview
 
-| Batch | Objective | Primary Outcome | Entry Gate | Exit Gate |
+| Batch | Objective | Primary outcome | Entry gate | Exit gate |
 |---|---|---|---|---|
-| **1 — Foundation and command spine** | Make authentication, projects, database access, ownership, dispatch, callbacks, and reconciliation testable end to end | The core command loop can start and reach a terminal state in an isolated environment | Evidence baseline accepted; required Owner decisions identified | Batch 1 exit criteria all pass |
-| **2 — Creative pipeline and Prompt Studio** | Make Prompt Studio, Story Bible, characters, lore, canon, continuity, episodes, scenes, and WF-02 → WF-03 functional | A project can create and persist creative content and dispatch an episode plan | Batch 1 exit gate | Batch 2 exit criteria all pass |
-| **3 — Media, workers, and delivery** | Prove GPU/CPU TTS/FFmpeg, worker authorization, callbacks, Telegram storage, and Android media playback | Real media can be generated, stored, delivered, and played in an isolated environment | Batch 2 exit gate; worker/Telegram environments approved | Batch 3 exit criteria all pass |
-| **4 — BYOD, hardening, and full acceptance** | Add BYOD only if authorized, close security/accessibility gaps, run full regression and isolated E2E, and obtain acceptance | Full system accepted or explicitly rejected with evidence | Batch 3 exit gate; BYOD authorization and required decisions | Batch 4 exit criteria all pass; Owner acceptance recorded |
+| **1 — Foundation, identity, and command spine** | Establish authenticated identity, project/DB correctness, ownership, outbox, callbacks, reconciliation, and AWS recovery inventory | Core command loop can start and reach a terminal state in an isolated environment | Planning baseline accepted; implementation authorized; OD-13 environment plan approved | Batch 1 exit criteria pass |
+| **2 — Creative pipeline, Prompt Studio, and memory** | Deliver the full Master Prompt Library, Story Bible/creative flows, WF-02 → WF-03, story/chat memory, and low-TPM behavior | A project can create, persist, reuse, and dispatch creative content | Batch 1 exit gate | Batch 2 exit criteria pass |
+| **3 — Providers, media, workers, and delivery** | Prove OD-16 provider/model/fallback behavior, signed worker authorization, GPU/CPU media, Telegram storage, and Android playback | Real media and fallback paths work in an isolated environment | Batch 2 exit gate; worker/provider environments approved | Batch 3 exit criteria pass |
+| **4 — BYOI, Android completion, hardening, and acceptance** | Complete BYOI/Platform-Managed, Owner dashboard, Android security/UX, encryption lifecycle, AWS verification, full runtime, and Owner acceptance | Full system accepted or explicitly rejected with evidence | Batch 3 exit gate; BYOI authorization/environments | Batch 4 exit criteria pass; Owner acceptance recorded |
 
-## 5. Batch 1 — Foundation and Command Spine
+## 6. Batch 1 — Foundation, Identity, and Command Spine
 
 ### Objective
 
-Make the core loop start and terminate correctly: approved authentication, project creation, registered routes, schema alignment, ownership enforcement, outbox dispatch, callback delivery, and reconciliation.
+Make the core system correct and testable: approved authentication, project creation/selection, schema alignment, ownership enforcement, outbox dispatch, callbacks, reconciliation, infrastructure hydration, and AWS recovery inventory.
 
 ### Entry
 
-- 12 reports accepted as the evidence baseline.
-- Required Owner decisions identified, especially OD-03 and OD-13.
-- Isolated test database plan approved.
+- Implementation authorized.
+- OD-13 isolated database plan approved.
 - No production system contacted.
+- AWS recovery inventory approach approved (read-only).
 
 ### Work Items
 
-| ID | Work Item | Depends On | Required Evidence |
-|---|---|---|---|
-| B1-01 | Resolve login behavior under OD-03; no password bypass; define clean-install login path | OD-03 | Decision record; auth route tests; clean-install Android login result |
-| B1-02 | Fix project creation and route registration; remove zero-UUID; register required project/read/creative routes; eliminate Android 404s | B1-01 | Project create 201; route tests; Android project create/select result |
-| B1-03 | Align code with live schema; fix `api_commands`, `pending_actions`, `quota_usage`, `scenes`, `clips` mismatches; reconcile migration drift | B1-02 | Schema contract; migration replay/rollback; no undocumented drift |
-| B1-04 | Verify ownership/RBAC against an isolated database; deny null-owner and cross-user access; reject identity spoofing; no auto-claim | B1-03 | Cross-user, null-owner, role, header/body/query spoof tests |
-| B1-05 | Harden outbox dispatch: atomic claim, idempotency, timeout/retry behavior, duplicate prevention, terminal-state mapping | B1-03 | Dispatch tests; timeout/retry test; duplicate-work evidence |
-| B1-06 | Implement callback and reconciliation path in existing WF-00–WF-13 only; add error handling; verify HMAC; prevent stuck `DISPATCHED`/`RECONCILING` | B1-05; OD-06 | Callback signature test; terminal-state test; workflow diff approval |
-| B1-07 | Fix `user_infrastructure.config_encrypted` hydration in command and media paths | B1-03 | Hydration test; no plaintext `config` fallback |
-| B1-08 | Run Batch 1 regression and record evidence | B1-01–B1-07 | Build, safe, regression, DB integration, command lifecycle |
+| ID | Work item | Requirement links | Depends on | Required evidence |
+|---|---|---|---|---|
+| B1-01 | Implement approved Supabase Auth flow; backend JWT verification; refresh/logout/revocation; no password bypass | AUTH-01, AUTH-02, AUTH-04 | Authorization | Auth route tests; clean-install login; expiry/revocation tests |
+| B1-02 | Fix project creation/registration, remove all-zero project fallback, ensure required project/read routes return registered responses | AUTH-03, GOV-03 | B1-01 | Project create 201; route tests; Android project create/select |
+| B1-03 | Align code with live schema; fix `api_commands`, `pending_actions`, `quota_usage`, `scenes`, `clips` mismatches; reconcile migration drift | DB-06 | B1-02 | Schema contract; migration replay/rollback; documented drift |
+| B1-04 | Enforce user/project ownership end to end; fix `getProject`, remove arbitrary list fallback; deny null-owner/cross-user/spoof | AUTH-03, DB-01 | B1-03 | Cross-user, null-owner, role, spoof tests |
+| B1-05 | Harden outbox: atomic claim, idempotency, timeout/retry, duplicate prevention, terminal-state mapping | GOV-03 | B1-03 | Dispatch/timeout/retry/duplicate tests |
+| B1-06 | Add callback, error, and reconciliation handling inside existing WF-00–WF-13 only; verify HMAC and no stuck states | N8N-02, AUTH-10 | B1-05; workflow approval | Callback signature; terminal-state; workflow diff approval |
+| B1-07 | Fix `user_infrastructure.config_encrypted` hydration in all command/media paths | DB-06 | B1-03 | Hydration test; no plaintext `config` fallback |
+| B1-08 | Read-only AWS runtime recovery inventory: account, region, resources, deployment, logs, backups, DNS, secrets references, ownership tags | TEST-08 | Owner access | Completed checklist; no resource changes |
+| B1-09 | Run Batch 1 regression and record evidence | TEST-01, TEST-11 | B1-01–B1-08 | Build, safe, regression, DB integration, command lifecycle |
 
 ### Exit Criteria
 
-- [ ] OD-03 is recorded and the implemented login behavior matches it; no password bypass exists. If OD-03 is undecided, Batch 1 cannot exit.
-- [ ] Project creation succeeds against an isolated database; no all-zero project UUID is sent; creation returns the documented success status.
-- [ ] Every Android-required project/read/creative route returns a registered response, not an unintended 404.
-- [ ] The 4 database integration tests pass against the isolated test database.
-- [ ] Migration replay and rollback pass; remaining drift is either fixed or explicitly documented and accepted.
-- [ ] A command can move from submission through outbox dispatch, workflow execution, callback, and terminal state without getting stuck.
-- [ ] Callback HMAC verification passes; unsigned or invalid callbacks are rejected.
-- [ ] A timeout/retry does not create duplicate work for the tested command path.
+- [ ] Approved auth works; login no longer returns `503`; no password bypass.
+- [ ] Project creation/registration is correct; no all-zero project UUID is sent.
+- [ ] Required Android routes return registered responses, not unintended 404s.
+- [ ] Database integration tests pass against the isolated test database.
+- [ ] Migration replay/rollback passes; remaining drift is fixed or explicitly accepted.
 - [ ] Cross-user, null-owner, role, and identity-spoof tests pass against the isolated database.
-- [ ] `config_encrypted` hydration returns the stored configuration.
-- [ ] Evidence is recorded and no production system was touched.
+- [ ] A command reaches a terminal state through outbox, workflow, callback, and reconciliation.
+- [ ] Callback HMAC and replay rejection pass; no unsigned callback is accepted.
+- [ ] `config_encrypted` hydration works; no plaintext fallback remains.
+- [ ] AWS recovery inventory is complete; no AWS resource was changed.
+- [ ] Evidence recorded; no production system touched.
 
-## 6. Batch 2 — Creative Pipeline and Prompt Studio
+## 7. Batch 2 — Creative Pipeline, Prompt Studio, and Memory
 
 ### Objective
 
-Make the creative layer usable and persistent: Prompt Studio, Story Bible, characters, lore, canon, continuity, episodes, scenes, and the WF-02 → WF-03 handoff.
+Deliver the full creative layer: Master Prompt Library, category persistence, versioning, search/filter/favorites, genre/format templates, Story Bible, characters/lore/canon/continuity, episodes/scenes, WF-02 → WF-03, real memory, and low-TPM behavior.
 
 ### Entry
 
 - Batch 1 exit gate passed.
-- Isolated n8n and database environments available.
-- OD-06 approval for any existing workflow change.
+- Isolated n8n and database available.
+- Any workflow change explicitly approved.
+- Schema change for `prompt_category` explicitly approved.
 
 ### Work Items
 
-| ID | Work Item | Depends On | Required Evidence |
-|---|---|---|---|
-| B2-01 | Persist `prompt_category`; add a real update path; stop edits from creating duplicate rows | B1-03 | Prompt create/update/read round-trip |
-| B2-02 | Stop `set_active` from overwriting project defaults; pass the selected project medium from Android instead of hardcoded `ANIME` | B2-01 | Project default unchanged after save; Android medium test |
-| B2-03 | Add `user_id` and project filters to prompt pre-validation and active-prompt lookup | B2-01 | Cross-tenant and cross-project prompt tests |
-| B2-04 | Verify Story Bible and project creative routes end to end | B1-02 | Bible save/read; command result; DB rows |
-| B2-05 | Verify characters, lore, canon, and continuity routes and workflows | B1-02 | Route tests; WF-04/WF-06/WF-09 isolated runs |
-| B2-06 | Verify episode/scene planning through WF-02 | B2-04 | Episode plan; scene/clip rows; command state |
-| B2-07 | Make WF-02 invoke WF-03; verify dispatch with a deterministic stub before real media exists | B2-06; OD-06 | WF-02 → WF-03 dispatch evidence; expected pending state |
-| B2-08 | Resolve workflow ID/env preflight mismatches; confirm exactly WF-00–WF-13; no WF-14 | B2-07 | ID map; env preflight; 14/14 static pass |
-| B2-09 | Run Batch 2 regression and record evidence | B2-01–B2-08 | Prompt, creative, workflow, and regression evidence |
-
-### Scope Decision
-
-Prompt Studio genre templates, search, filters, favorites, versioning, and compatibility validation are NOT IMPLEMENTED in the reports. They are deferred unless the Owner explicitly adds them to Batch 2 scope. They are not part of the default exit gate.
+| ID | Work item | Requirement links | Depends on | Required evidence |
+|---|---|---|---|---|
+| B2-01 | Add approved `prompt_category` persistence and update/PATCH path; stop duplicate-row edits | PROMPT-01, PROMPT-02 | B1-03; schema approval | Create/update/read round-trip |
+| B2-02 | Stop prompt save from mutating project medium/default; Android sends selected medium | PROMPT-03 | B2-01 | Project default unchanged; Android medium test |
+| B2-03 | Add user/project/tenant filters to prompt pre-validation and active-prompt lookup | PROMPT-04 | B2-01 | Cross-tenant/cross-project prompt tests |
+| B2-04 | Build Master Prompt Library: genres, formats, custom prompts, organization | PROMPT-08, PROMPT-09, PROMPT-17 | B2-01 | Library UI/API tests |
+| B2-05 | Add search, filters, favorites, versioning | PROMPT-05, PROMPT-06, PROMPT-07 | B2-04 | Search/filter/favorite/version tests |
+| B2-06 | Add multi-select at project creation, auto-associate with Story Bible, and shared-library access from all four surfaces | PROMPT-10, PROMPT-11, PROMPT-15 | B2-04 | Creation/Bible/episode/studio tests |
+| B2-07 | Add compatibility validation for genre/format/medium/model | PROMPT-16 | B2-04 | Negative/positive compatibility tests |
+| B2-08 | Verify Story Bible, characters, lore, canon, and continuity routes/workflows | GOV-01 | B1-02 | Route tests; WF-01/04/06/09 isolated runs |
+| B2-09 | Verify episode/scene planning through WF-02; episode overrides do not corrupt defaults | PROMPT-12 | B2-06 | Episode plan; scene/clip rows; override test |
+| B2-10 | Make WF-02 invoke WF-03; verify deterministic dispatch before real media | PROMPT-14, N8N-03 | B2-09; workflow approval | WF-02 → WF-03 dispatch evidence |
+| B2-11 | Wire IMAGE prompts into image generation and verify WF-03 usage | PROMPT-13 | B2-10 | IMAGE prompt reaches generation |
+| B2-12 | Replace random story embeddings with real tested retrieval or disable until correct | MEM-01 | B1-03 | Semantic retrieval/isolation test |
+| B2-13 | Improve Chat memory retrieval, scopes, correction/dedup, deletion, and local/server reconciliation | MEM-02–MEM-05 | B2-12 | Memory correctness/isolation/delete tests |
+| B2-14 | Implement low-TPM budgets, rate limits, backoff/jitter, header handling, retry-storm prevention | MEM-06 | B1-03 | Low-TPM/rate-limit/fallback tests |
+| B2-15 | Run Batch 2 regression and record evidence | TEST-01 | B2-01–B2-14 | Prompt, creative, memory, workflow, regression evidence |
 
 ### Exit Criteria
 
-- [ ] Prompt create/update/read persists category correctly.
-- [ ] Saving a prompt does not overwrite `projects.visual_medium` or `projects.active_system_prompt_id`.
-- [ ] Android sends the selected project medium; no hardcoded `ANIME`.
-- [ ] Prompt reads and active-prompt lookup are isolated by user and project.
-- [ ] Story Bible save/read works in the isolated environment.
-- [ ] Characters, lore, canon, and continuity pass route and isolated workflow tests.
-- [ ] Episode planning produces the expected episode/scene/clip records.
-- [ ] WF-02 invokes WF-03 and the job reaches the expected pending state; this does not claim real render completion.
-- [ ] Workflow IDs and environment preflight resolve; exactly 14 workflows remain; no WF-14.
-- [ ] Evidence is recorded and no production system was touched.
+- [ ] Prompt category persists and round-trips.
+- [ ] Create, update, delete, search, filter, favorite, and version prompts work.
+- [ ] Saving a prompt does not change project medium or active default.
+- [ ] No cross-tenant or cross-project prompt is returned or injected.
+- [ ] Genre templates, formats, custom prompts, and multi-select project creation work.
+- [ ] Shared library is reachable from project creation, Story Bible, episode production, and Prompt Studio.
+- [ ] Compatibility validation rejects incompatible combinations.
+- [ ] Story Bible/creative routes and workflows pass isolated tests.
+- [ ] Episode overrides do not corrupt project defaults.
+- [ ] WF-02 invokes WF-03; IMAGE prompts reach image generation.
+- [ ] Story/Chat memory is real, scoped, correctable, deletable, and isolated.
+- [ ] Low-TPM behavior passes budget/rate-limit/fallback/retry tests.
+- [ ] Exactly 14 canonical workflows remain; no WF-14.
+- [ ] Evidence recorded; no production system touched.
 
-## 7. Batch 3 — Media, Workers, and Delivery
+## 8. Batch 3 — Providers, Media, Workers, and Delivery
 
 ### Objective
 
-Prove real media generation and delivery: GPU and CPU workers, signed worker authorization, callbacks, Telegram storage, and Android media playback.
+Prove OD-16 provider/model/fallback behavior and real media delivery: GPU/CPU workers, signed worker authorization, callbacks, TTS/FFmpeg, Telegram storage, and Android media playback.
 
 ### Entry
 
 - Batch 2 exit gate passed.
-- GPU and CPU worker environments approved.
-- Telegram test bot and storage chat approved.
-- OD-09 worker trust decision recorded.
+- GPU/CPU/Telegram/provider test environments approved.
+- OD-09 signed worker authorization implementation authorized.
+- OD-16 provider credentials available for isolated testing.
 
 ### Work Items
 
-| ID | Work Item | Depends On | Required Evidence |
-|---|---|---|---|
-| B3-01 | Obtain GPU worker source/runtime; verify health, model load, and VRAM/model compatibility | OD-09; GPU environment | Health output; model load; compatibility result |
-| B3-02 | Verify GPU job dispatch, fallback, and checkpoint/resume behavior | B3-01 | Job output; fallback test; resume test |
-| B3-03 | Run CPU TTS runtime for Svara and Supertonic | CPU environment | Audio artifacts; hashes; duration/quality check |
-| B3-04 | Run CPU FFmpeg render runtime, including scenes, subtitles, concatenation, and upload | B3-03 | Video artifacts; render logs; output hash |
-| B3-05 | Add and verify signed job-scoped worker authorization, replay protection, revocation, and no service-role use | OD-09 | Unsigned/replay/wrong-job rejection tests; revocation test |
-| B3-06 | Verify backend → worker → backend callbacks and terminal state | B3-05 | Callback signatures; job state; no stuck command |
-| B3-07 | Verify live Telegram upload, playback, ownership, quota, retention, and deletion | Telegram environment | Upload/playback evidence; quota/retention results |
-| B3-08 | Verify Android media playback, authenticated media access, and cache behavior | B3-07 | Emulator/device playback; private-media denial test |
-| B3-09 | Run Batch 3 regression and record evidence | B3-01–B3-08 | Worker, Telegram, Android media, and regression evidence |
+| ID | Work item | Requirement links | Depends on | Required evidence |
+|---|---|---|---|---|
+| B3-01 | Implement provider registry for Groq, Gemini, NVIDIA NIM, compatible APIs; primary/secondary/priority/model selection | PROV-01, PROV-02 | B1-03 | Provider config/selection tests |
+| B3-02 | Implement Auto/Simple/Advanced and task-specific model selection | PROV-11, PROV-12 | B3-01 | Model selection tests |
+| B3-03 | Implement compatibility filtering by GPU, VRAM, dependencies, weights | PROV-13 | B3-02; GPU metadata | Compatibility test matrix |
+| B3-04 | Implement universal fallback: primary-only, manual/automatic, priority, no silent paid fallback, checkpoint/resume | PROV-07–PROV-10 | B3-01 | Fallback/resume/no-paid tests |
+| B3-05 | Obtain GPU source/runtime; verify health, model load, VRAM, compatibility | PROV-03 | GPU environment | GPU health/model evidence |
+| B3-06 | Implement signed job-scoped worker auth, replay protection, revocation, no service-role | AUTH-09, AUTH-10 | OD-09 authorization | Positive/negative/replay/revocation tests |
+| B3-07 | Verify CPU TTS Svara/Supertonic and FFmpeg render | PROV-04, TEST-06 | CPU environment | Audio/video artifacts and hashes |
+| B3-08 | Verify GPU dispatch, fallback, checkpoint/resume | PROV-03, PROV-10 | B3-05 | GPU job/fallback/resume evidence |
+| B3-09 | Verify backend → worker → backend callbacks and terminal state | AUTH-10 | B3-06 | Callback signatures; job state |
+| B3-10 | Verify live Telegram upload, playback, ownership, quota, retention, deletion | PROV-05 | Telegram environment | Upload/playback/quota/delete evidence |
+| B3-11 | Verify Android media playback, authenticated access, cache behavior | PROV-05 | B3-10 | Emulator/device playback; denial test |
+| B3-12 | Run Batch 3 regression and record evidence | TEST-01 | B3-01–B3-11 | Provider, worker, Telegram, Android, regression evidence |
 
 ### Exit Criteria
 
-- [ ] GPU worker runtime is verified with real GPU evidence. If no GPU is available, Batch 3 is BLOCKED; a deterministic substitute may prove pipeline wiring but cannot satisfy GPU readiness.
-- [ ] CPU TTS produces valid audio for both Svara and Supertonic.
-- [ ] FFmpeg produces a valid rendered episode with expected scenes, subtitles, and output.
-- [ ] Signed job-scoped authorization passes; unsigned, replayed, and wrong-job requests are rejected; no service-role credential is embedded.
-- [ ] Worker callbacks reach the backend and move commands to the expected terminal state.
-- [ ] Live Telegram upload and playback work; private media is denied to non-owners; quota/retention/deletion behavior is verified.
-- [ ] Android plays generated media with authenticated access and correct cache behavior.
-- [ ] Evidence is recorded and no production system was touched.
+- [ ] Primary-only provider configuration works without any secondary.
+- [ ] Manual/automatic fallback works and is observable.
+- [ ] No silent paid fallback; paid fallback requires explicit permission.
+- [ ] Job state survives safe fallback; checkpoint/resume works.
+- [ ] Provider/model compatibility filtering works.
+- [ ] GPU runtime is verified with real GPU evidence; no substitute is labeled GPU-ready.
+- [ ] CPU TTS and FFmpeg produce valid artifacts.
+- [ ] Signed job-scoped worker authorization passes; unsigned/replayed/wrong-job requests fail.
+- [ ] Worker callbacks reach terminal state; no service-role credential is embedded.
+- [ ] Live Telegram upload/playback/quota/retention/deletion work.
+- [ ] Android plays generated media with authenticated access.
+- [ ] Evidence recorded; no production system touched.
 
-## 8. Batch 4 — BYOD, Hardening, and Full Acceptance
+## 9. Batch 4 — BYOI, Android Completion, Hardening, and Acceptance
 
 ### Objective
 
-Add BYOD only if authorized, close security and accessibility gaps, run full regression and isolated E2E, and obtain final acceptance.
+Complete BYOI/Platform-Managed, Owner dashboard, Android security/UX, encryption lifecycle, AWS recovery verification, full runtime, accessibility, and Owner acceptance.
 
 ### Entry
 
 - Batch 3 exit gate passed.
 - BYOD implementation authorized.
-- OD-05, OD-07, OD-08, OD-10, OD-11, and OD-12 decisions recorded.
 - Isolated multi-tenant environment approved.
+- AWS read-only recovery access or approved verification environment available.
+- Android device/emulator and manual accessibility session available.
 
 ### Work Items
 
-| ID | Work Item | Depends On | Required Evidence |
-|---|---|---|---|
-| B4-01 | Record BYOD authorization and remaining decisions | Owner | Authorization record; decision updates |
-| B4-02 | Implement tenant resolver, registry, and contracts with fail-closed behavior | B4-01 | Isolation tests; no client override |
-| B4-03 | Implement onboarding/binding and per-tenant credential isolation | B4-02 | Create/validate/bind/unbind/rotate/revoke tests |
-| B4-04 | Implement tenant-safe n8n strategy and worker cutover | B4-03; OD-06; OD-09 | Tenant-context workflow tests; signed worker tests |
-| B4-05 | Move Android tokens to Keystore-backed storage; disable backup; add network security config; add BYOD onboarding UI if authorized | OD-11 | Security tests; backup exclusion; onboarding test |
-| B4-06 | Add encryption-key versioning; remove fallback secrets; verify rotation/revocation | OD-12 | Key-version tests; no fallback-secret use |
-| B4-07 | Verify quotas, budget, audit, and server-side owner/admin gating | B1-03 | Quota/audit tests; server-side role denial |
-| B4-08 | Complete manual accessibility: TalkBack, Switch Access, font scaling, contrast, RTL, touch targets, focus order | Device/emulator access | Manual test record; fixed semantics; scanner results |
-| B4-09 | Run full regression across Android, backend, workers, and n8n static | B4-02–B4-08 | Fresh exit-gate evidence |
-| B4-10 | Run all 14 workflows in the isolated n8n runtime | B2-08; B4-04 | WF-00–WF-13 runtime evidence; no WF-14 |
-| B4-11 | Run full isolated E2E: Android → backend → database → n8n → workers → Telegram → playback; verify AWS only if an approved environment exists | B4-09; B4-10 | E2E trace; callbacks; media; DB rows; AWS result or BLOCKED |
-| B4-12 | Produce final acceptance decision and Owner sign-off | B4-11 | Updated final report; explicit acceptance or rejection |
+| ID | Work item | Requirement links | Depends on | Required evidence |
+|---|---|---|---|---|
+| B4-01 | Implement tenant resolver/registry/contracts with fail-closed behavior | DB-01–DB-04, INFRA-07 | Authorization | Isolation tests; no client override |
+| B4-02 | Implement BYOI onboarding/binding/rotation/revocation and per-tenant credential isolation | INFRA-01, DB-11 | B4-01 | Create/validate/bind/unbind/rotate/revoke tests |
+| B4-03 | Implement `projects` split and `documents` ownership migration with shadow/reconciliation/rollback | DB-03, DB-04, DB-08 | B4-01; migration approval | Migration/rollback/reconciliation evidence |
+| B4-04 | Implement Platform-Managed pool, metering/billing, queue/concurrency/capacity, disabled “Coming Soon” mode | INFRA-02–INFRA-06 | B4-01 | Mode-disabled, metering, capacity tests |
+| B4-05 | Implement independent GPU/CPU selection in both modes | INFRA-03 | B4-02, B4-04 | Selection matrix tests |
+| B4-06 | Implement Owner Admin Dashboard controls for providers/models/infrastructure/modes/approvals/audit | INFRA-05 | B4-02, B4-04 | Owner-only, masked-secret, audit tests |
+| B4-07 | Implement secondary database/replication checks and safe failover rules | PROV-06, PROV-14 | B4-03 | Replication/failover tests |
+| B4-08 | Move Android tokens to Keystore; disable/exclude backup; add migration/revocation tests | AUTH-05, AUTH-06 | Android auth implementation | Security/backup/migration/logout tests |
+| B4-09 | Implement draggable chat bubble: persistence, snapping, safe areas, accessibility, non-interference | AND-01–AND-03 | Android UI work | Drag/persistence/rotation/accessibility tests |
+| B4-10 | Complete Owner screens and Platform-Managed disabled behavior | AND-04 | B4-04, B4-06 | UI/control tests |
+| B4-11 | Implement versioned encryption registry, rotation/re-encryption/recovery, KMS-ready custody | DB-09, DB-10 | B4-03 | Key-version/rotation/recovery tests |
+| B4-12 | Verify quotas, budget, audit, server-side Owner/admin gating | GOV-01 | B1-03 | Quota/audit/role tests |
+| B4-13 | Recover/verify existing AWS runtime against the Owner checklist; no recreation | TEST-08 | AWS access | Completed checklist; evidence or BLOCKED |
+| B4-14 | Run all 14 workflows in isolated n8n runtime | N8N-06 | B2-10; isolated n8n | WF-00–WF-13 runtime evidence |
+| B4-15 | Run full isolated E2E: Android → backend → DB → n8n → workers → storage → playback | TEST-07 | B4-08–B4-14 | E2E trace; callbacks; media; DB rows |
+| B4-16 | Complete manual accessibility, device/tablet testing, APK verification | AND-05–AND-07 | Device/emulator | Manual record; APK artifact |
+| B4-17 | Run full regression with fresh exit-gate evidence | TEST-01, TEST-11 | B4-01–B4-16 | Fresh Android/backend/worker/n8n evidence |
+| B4-18 | Owner practical testing, defect correction, explicit acceptance | TEST-09, TEST-10 | B4-17 | Owner test record; acceptance/rejection |
+| B4-19 | Record OD-14 Stage 5 scope decision only after acceptance | GOV-09 | B4-18 | Decision record |
+| B4-20 | Production deployment only with separate explicit OD-15 go-ahead | GOV-10 | B4-19 | Separate approval record |
 
 ### Exit Criteria
 
-- [ ] BYOD is either explicitly authorized and isolation-tested, or explicitly deferred and not claimed.
-- [ ] Tenant resolution is fail-closed; no client header/body/query can override tenant identity.
-- [ ] Onboarding/binding/rotation/revocation pass in an isolated multi-tenant environment.
-- [ ] Tenant-safe n8n and worker paths pass; no service-role default; no data movement without approved rollback.
-- [ ] Android tokens are Keystore-backed; backup is disabled; network security config exists; BYOD onboarding works if in scope.
-- [ ] Encryption keys are versioned; fallback secrets are removed; rotation/revocation is verified.
-- [ ] Quotas, budget, audit, and server-side owner/admin gating pass.
-- [ ] Manual accessibility and automated accessibility pass; no WCAG claim beyond tested evidence.
-- [ ] Full regression passes with fresh exit-gate evidence.
-- [ ] All 14 workflows run successfully in the isolated n8n runtime; no new workflow exists.
-- [ ] Full isolated E2E passes; AWS verification is either completed in an approved environment or remains explicitly BLOCKED.
-- [ ] Owner acceptance is recorded; full system acceptance is not claimed before this point.
-- [ ] No production system was touched.
+- [ ] BYOI is implemented and isolation-tested, or explicitly deferred with no completion claim.
+- [ ] Tenant resolution is fail-closed; no client override can change tenant identity.
+- [ ] BYOI onboarding/binding/rotation/revocation pass.
+- [ ] `projects` split and `documents` ownership migration pass with rollback/reconciliation.
+- [ ] Platform-Managed mode is fully implemented, disabled, and displays “Coming Soon.”
+- [ ] Metering/billing/queue/capacity controls work.
+- [ ] Owner dashboard controls work and secrets are masked.
+- [ ] Secondary database replication/failover checks work; no blind failover.
+- [ ] Android tokens are Keystore-backed; backup excludes tokens; migration/logout pass.
+- [ ] Draggable bubble works across screens, rotations, safe areas, and accessibility checks.
+- [ ] Encryption keys are versioned; rotation/recovery pass.
+- [ ] Quotas, budget, audit, and server-side Owner/admin gating pass.
+- [ ] AWS runtime is recovered and verified, or explicitly remains BLOCKED.
+- [ ] All 14 workflows run in isolated n8n; no WF-14 exists.
+- [ ] Full isolated E2E passes.
+- [ ] Manual accessibility and device/tablet acceptance pass, or are explicitly not claimed.
+- [ ] Full regression passes with fresh evidence.
+- [ ] Owner explicitly accepts or rejects the complete system.
+- [ ] OD-14 is recorded after acceptance; Stage 5 remains blocked until then.
+- [ ] No production action occurs without separate OD-15 approval.
 
-## 9. Feature Traceability Matrix
+## 10. Requirement Traceability
 
-Backend route names are taken from the reports and current route inventory. Where the exact table or route is not confirmed by the reports, the row says “verify exact object” and the batch work item must confirm it.
+The complete matrix is `COMPLETE_OWNER_REQUIREMENTS_TRACEABILITY_MATRIX.md`.
 
-| ID | Feature | Android Surface / Action | Backend Route / Service | Database Objects | n8n Workflow | Worker / Storage | Evidence / Status |
-|---|---|---|---|---|---|---|---|
-| F-01 | Authentication and session | `AuthScreen` login; `TokenManager` | `POST /api/v1/auth/login`, `GET /api/v1/auth/me`; auth routes/plugin | Auth tables per OD-03; live snapshot lacks `users`/workspace tables | None | None | JWT/route tests pass; login `503`; runtime BLOCKED |
-| F-02 | Project create/list/detail/settings | `StudioDashboardScreen`, `ProjectDetailScreen`, `SettingsScreen` | `POST/GET /v1/anime/projects`, `PATCH /v1/anime/projects/:id`; projects service | `projects` | WF-00 bootstrap; WF-01 | None | UI tests pass; zero-UUID and runtime BLOCKED |
-| F-03 | Ownership and RBAC | All project-scoped screens | `requireProjectRole`; project guard | `projects` | All project workflows | None | 60 route tests pass; live DB BLOCKED |
-| F-04 | Story Bible | `BibleScreen` save/chat | `PATCH /v1/anime/projects/:id/bible`; creative service | `projects` plus Bible persistence objects (verify exact object) | WF-01 | None | UI pass; runtime NOT TESTED |
-| F-05 | Budget and ledger | `BudgetLedgerScreen` | `PATCH /v1/anime/projects/:id/budget`; budget/ledger service | `quota_usage` (`accumulated_units`), budget/ledger tables (verify exact object) | WF-12 quota; WF-08 analytics | None | UI pass; runtime BLOCKED |
-| F-06 | Characters, lore, canon | `CharacterListScreen`, `CharacterDetailScreen`, `CharacterDeepDiveScreen`, `LoreExplorerScreen`, `CanonViewerScreen` | `/v1/anime/characters`, `/characters/:cid`, reference-history, `/canon`, `/canon/proposals`; lore/canon services | `characters`, `canon_facts`, lore tables | WF-04, WF-09 | None | Route/UI pass; runtime BLOCKED |
-| F-07 | Continuity | `ContinuityCheckerScreen` | `GET /v1/anime/continuity`; continuity service | Continuity objects (verify exact object) | WF-06 | None | Route/UI pass; runtime BLOCKED |
-| F-08 | Episode planning and scenes | `EpisodePlannerScreen`, `SceneDetailScreen`, `ProductionScreen` | `PATCH /v1/anime/projects/:id/episodes/:episodeNo`, `PATCH .../scenes/:sceneId`; episode service | `episodes`, `scenes` (`dialogue_speaker_id`), `clips` (`voice_text`) | WF-02 | None | UI/route pass; WF-02 → WF-03 missing |
-| F-09 | Prompt Studio | `PromptStudioScreen` tabs/save/reset | `GET/POST/DELETE /v1/anime/prompts`; infrastructure prompt routes; active-prompt lookup | `user_system_prompts`, `projects.visual_medium`, `projects.active_system_prompt_id` | WF-03 image path | None | UI pass; category/default/tenant FAIL |
-| F-10 | Command submission and outbox | Studio/production actions | `POST /v1/anime/commands`; command service; outbox dispatcher | `api_commands`, `pending_actions` (`job_id`) | WF-00 `api/v1/router` | None | Route tests pass; callback/runtime BLOCKED |
-| F-11 | Jobs, status, cancel, retry | `JobsMonitorScreen`, `ProductionScreen`, `AdminQueuesScreen` | `GET /v1/anime/jobs`, `/jobs/:id`, `/commands/:id`, `POST /jobs/:id/cancel`, `/retries`; jobs service | `api_commands`, `pending_actions` | WF-13 retry; WF-10 deadlock/state | None | UI/route pass; terminal-state BLOCKED |
-| F-12 | Callback and reconciliation | None | `/internal/anime/n8n/callbacks`, worker callbacks; HMAC verifier; supervisor | `api_commands`, `pending_actions`, audit tables | All 14 workflows (no callback/error nodes) | Workers | HMAC unit pass; workflow delivery FAIL |
-| F-13 | Quick image/video | `QuickToolsScreen` | Command intents; command service | `api_commands`, `clips` | WF-03 | GPU worker | UI pass; runtime BLOCKED |
-| F-14 | Vision analysis | `VisionAnalysisScreen` | Vision route/command; vision service | Vision/analysis objects (verify exact object) | WF-05 | External AI/worker | UI pass; runtime BLOCKED |
-| F-15 | Publish, review, QC | `PublishScreen`, `ReviewInboxScreen`, `QCScreen` | `PUBLISH_NOW` command; review/QC routes | `episodes`, `clips`, publish/review tables | WF-07, WF-04 gate, WF-11 | Telegram storage | UI pass; runtime BLOCKED |
-| F-16 | Media library and playback | `MediaLibraryScreen` | `GET /v1/anime/media`, `GET /v1/media/telegram/:file_id`; media proxy | `clips`, `user_infrastructure.config_encrypted` | None | CPU worker Telegram upload; Telegram storage | Proxy tests pass; live BLOCKED; hydration FAIL |
-| F-17 | Telegram proxy and storage | Media playback | Media proxy/security routes | `user_infrastructure`, media metadata | None | CPU worker upload | 8 tests pass; live BLOCKED |
-| F-18 | Infrastructure and GPU setup | `SettingsScreen`, `WorkerManagerScreen` | `/v1/anime/infrastructure`, `/infrastructure/gpu`; infrastructure service | `user_infrastructure` | WF-03 `primary_gpu_url` | GPU worker | Auth/encryption tests pass; GPU runtime BLOCKED |
-| F-19 | Quota | `QuotaDashboardScreen` | `GET /v1/anime/quota`; quota service | `quota_usage.accumulated_units` | WF-12 | None | UI pass; runtime BLOCKED |
-| F-20 | Notifications | `NotificationScreen` | `GET /v1/anime/notifications`; notification service | Notification objects (verify exact object) | None | Telegram alert path | UI pass; runtime BLOCKED |
-| F-21 | Analytics, audit, owner/admin | `AnalyticsScreen`, `AuditLogScreen`, `OwnerOverviewScreen`, `AdminQueuesScreen`, `WorkerManagerScreen`, `WorkflowManagerScreen`, `DatabaseScreen`, `AIBrainScreen` | Registered analytics/audit/admin routes; owner gating | `audit_log`, analytics objects | WF-08 analytics; WF-13 | None | UI/route pass; client-only owner gating; live data BLOCKED |
-| F-22 | BYOD | No Android onboarding | Tenant resolver/registry/onboarding (planned) | Tenant registry; per-tenant routing (planned) | Per-tenant strategy (planned) | Per-tenant worker auth (planned) | NOT IMPLEMENTED |
-| F-23 | Accessibility | All screens | None | None | None | None | 5/5 automated PASS; manual NOT TESTED |
-| F-24 | Android token and backup security | Auth/`TokenManager`; manifest | None | None | None | None | FAIL: plaintext `SharedPreferences`, `allowBackup="true"` |
-| F-25 | Full E2E | All surfaces | All services | All objects | All 14 workflows | All workers/storage | BLOCKED |
+| Requirement family | Mapped rows | Current planning position |
+|---|---:|---|
+| Governance and constraints | 10 | Mostly satisfied constraints; complete system not built |
+| Authentication and session | 10 | Login/auth replacement is the first critical blocker |
+| Database and key lifecycle | 11 | Isolated DB, migrations, BYOD, and key versioning open |
+| Prompt Studio and library | 17 | Full library is mandatory; current implementation broken/partial |
+| Providers, models, fallback | 14 | Mostly not implemented; primary blocker for media |
+| BYOI/Platform-Managed/Owner | 8 | Partial config only; full implementation required |
+| Memory and low-TPM | 6 | Placeholder memory; low-TPM partial |
+| Android completion | 7 | Bubble, Keystore, manual accessibility, device testing open |
+| Workflow reliability | 6 | 14 workflows preserved; callbacks/WF-02→WF-03/runtime open |
+| Verification, AWS, acceptance | 12 | Runtime/E2E/AWS/Owner acceptance blocked |
+| **Total** | **101** | **15 PASS, 34 PARTIAL, 38 NOT IMPLEMENTED, 8 BLOCKED, 6 NOT TESTED** |
 
-## 10. Existing Test Evidence and Non-Repeat List
+## 11. Existing Test Evidence and Non-Repeat List
 
-These results are inherited. Do not rerun them to claim a new PASS. Re-run only at a batch exit gate, or when code, configuration, or environment changed.
+Inherited results must not be rerun merely to claim a new PASS. Re-run at a batch exit gate or when code/configuration/environment changes.
 
-| Evidence | Scope | Result | Reuse Rule |
+| Evidence | Scope | Result | Reuse rule |
 |---|---|---|---|
-| Android CI `42577400016` at `44bfa15c5e23d09e51a2d3c681c9cca3b219f844` | JVM, instrumentation, control suite, Maestro, lint | 20/20, 116/116, 35/35, 2/2, 0 errors | Inherit for automated scope |
-| Android reports commit `35d6158` | Reports and evidence | Pushed | Inherit |
-| Backend build and suites | Build, 123 safe, 19 regression | PASS | Inherit |
-| Backend CI `42458161277` | Unit/routes/static/regression | 36/60/27/19 PASS; 4 DB skipped | Inherit automated scope |
-| CPU worker CI `42457744833` | Contract tests | 5/5 PASS | Inherit contract scope |
-| n8n static validation `2026-11-09` | 14 workflows | 14/14 PASS | Inherit static scope |
-| Database static contract | 73 tables | 10/10 PASS | Inherit static scope |
-| Telegram proxy tests | 8 route tests | PASS | Inherit mocked scope |
-| Multi-user authorization tests | 60 route tests | PASS | Inherit route scope |
-| Accessibility automated tests | 5 tests | 5/5 PASS | Inherit automated scope |
-| Prompt Studio Android UI | Instrumentation/control suite | PASS | Inherit UI only; persistence FAIL |
-| Master reports commit `78949e7` | 12 reports | Pushed | Inherit documentation baseline |
+| Android CI `42577400016` at `44bfa15` | JVM, instrumentation, control suite, Maestro, lint | 20/20, 116/116, 35/35, 2/2, 0 errors | Inherit automated scope |
+| Backend CI `42458161277` at `c6fc398` | Unit/routes/static/regression | 36/60/27/19 PASS; 4 DB skipped | Inherit automated scope |
+| Backend current local combined | Unit/routes/static/regression | 142/142 PASS | Fresh local evidence |
+| Worker CI `42457744833` at `da069d3` | Contract tests | 5/5 PASS | Inherit contract scope |
+| n8n static `2026-11-09` | 14 workflows | 14/14 PASS | Inherit static scope |
+| Database static | 73 tables | 10/10 PASS | Inherit static scope |
+| Telegram proxy | 8 tests | PASS | Inherit mocked scope |
+| Multi-user authorization | 60 route tests | PASS | Inherit route scope |
+| Accessibility automated | 5 tests | 5/5 PASS | Inherit automated scope |
+| Prompt Studio UI | Instrumentation/control suite | PASS | UI only; persistence FAIL |
+| 12 master reports `78949e7` | Documentation | Pushed | Inherit evidence baseline |
+| Preliminary roadmap `98ffc0d` | Documentation | Pushed | Superseded by this revision |
 
-Non-repeat rule:
+Non-repeat rules:
 
-- Do not present fake-repository Android UI tests as backend persistence proof.
-- Do not present mocked Telegram tests as live storage proof.
-- Do not present n8n static validation as runtime proof.
-- Do not present contract tests as TTS/FFmpeg runtime proof.
-- Do not present static schema contracts as database integration proof.
-- Do not present component passes as E2E proof.
+- Fake-repository UI tests are not backend persistence proof.
+- Mocked Telegram tests are not live storage proof.
+- n8n static validation is not runtime proof.
+- Worker contract tests are not TTS/FFmpeg runtime proof.
+- Static schema contracts are not database integration proof.
+- Component passes are not E2E proof.
+- Historical failures remain history, not current acceptance evidence.
 
-## 11. Blockers and Dependencies
+## 12. Blockers and Dependencies
 
-| Blocker / Dependency | Blocks | Required Resolution |
+| Blocker / dependency | Blocks | Required resolution |
 |---|---|---|
-| OD-03 auth strategy undecided; login `503` | B1, all runtime E2E | Record and implement the approved auth strategy; no password bypass |
-| OD-13 isolated test database unavailable | B1, B2, B4 | Provision disposable Supabase test project and test-only credentials |
-| Disposable n8n instance unavailable | B1, B2, B4 | Provision isolated n8n and approve existing-workflow changes |
-| OD-06 n8n strategy / workflow-change approval | B1, B2, B4 | Owner approval for callback/error/WF-02 changes; no new workflows |
-| OD-09 worker trust undecided | B3, B4 | Approve signed job-scoped worker authorization model |
-| GPU worker repository/runtime absent | B3 | Provide GPU source/runtime or keep Batch 3 BLOCKED |
-| Telegram bot token/storage chat absent | B3 | Provide isolated Telegram test bot and storage chat |
-| No isolated multi-tenant environment | B4 | Provision approved multi-tenant test environment |
-| BYOD not authorized; OD-05/07/08/10 undecided | B4 | Record authorization and decisions before any BYOD work |
-| OD-11 Android token/onboarding undecided | B4 | Approve Keystore storage, backup exclusion, onboarding |
-| OD-12 encryption-key lifecycle undecided | B4 | Approve key versioning and rotation/revocation |
-| Manual accessibility device/emulator unavailable | B4 | Provide test device/emulator access |
-| AWS credentials/logs/deployment state absent | B4 | Recover and verify existing work in an approved isolated environment |
-| Prompt Studio defects | B2 | Fix category persistence, default mutation, medium, tenant filters |
-| Worker endpoints unauthenticated | B3 | Implement signed job-scoped authorization |
-| `config_encrypted` hydration bug | B1, B3 | Read and verify `config_encrypted` in all paths |
-| Migration/live schema drift | B1 | Reconcile migration and test replay/rollback |
-| No callback/error nodes in workflows | B1 | Add to existing workflows only with approval |
-| WF-02 does not invoke WF-03 | B2 | Fix existing WF-02; no new workflow |
+| Implementation not authorized | All batches | Separate Owner authorization |
+| Login `503` | B1, all runtime E2E | Implement approved Supabase Auth |
+| Isolated test database unavailable | B1, B2, B4 | Provision OD-13 test project |
+| Disposable n8n unavailable | B1, B2, B4 | Provision isolated n8n |
+| Workflow changes not approved | B1-06, B2-10 | Explicit approval for existing-workflow changes |
+| GPU repository/runtime absent | B3 | Provide GPU source/runtime/credentials |
+| Provider credentials absent | B3 | Provide isolated Groq/Gemini/NVIDIA test credentials |
+| Telegram bot/storage absent | B3 | Provide isolated test bot/chat |
+| Worker signed auth not implemented | B3 | Implement OD-09 |
+| Android Keystore/backup defects | B4 | Implement OD-11 |
+| Encryption key lifecycle not implemented | B4 | Implement OD-12A/12B |
+| BYOD not implemented | B4 | Implement tenant resolver/onboarding |
+| Platform-Managed mode not implemented | B4 | Implement OD-05 pool/metering/controls |
+| Manual accessibility/device unavailable | B4 | Provide device/emulator and session |
+| AWS access/logs absent | B1-08, B4-13 | Owner-provided read-only access or approved verification environment |
+| OD-14 open | Stage 5 | Owner decision after acceptance |
+| Production approval not granted | Production | Separate OD-15 go-ahead |
 
-## 12. Permanent Progress Register
+## 13. Permanent Progress Register
 
-Update this register only with verified evidence. Do not mark an item PASS because a related component passes. Use `NOT STARTED` for work that has not begun.
+Update only with verified evidence. Do not mark PASS from intent.
 
 ### Baseline Register
 
-| ID | Item | Status | Evidence / Note | Last Updated |
-|---|---|---|---|---|
-| C-01 | Android automated scope | PASS | CI `42577400016`; conditional acceptance | 2026-11-09 |
-| C-02 | Backend build/safe/regression | PASS | Local + CI `42458161277` | 2026-11-09 |
-| C-03 | CPU worker contracts | PASS | CI `42457744833`; 5/5 | 2026-11-09 |
-| C-04 | n8n static validation | PASS | 14/14; runtime BLOCKED | 2026-11-09 |
-| C-05 | Database static contract | PASS | 10/10; 73 tables; integration BLOCKED | 2026-11-09 |
-| C-06 | Telegram proxy/security | PASS | 8 mocked route tests; live BLOCKED | 2026-11-09 |
-| C-07 | Multi-user project authorization | PASS | 60 route tests; BYOD NOT IMPLEMENTED | 2026-11-09 |
-| C-08 | Accessibility automated | PASS | 5/5; manual NOT TESTED | 2026-11-09 |
-| C-09 | Full system acceptance | BLOCKED | `FINAL_SYSTEM_ACCEPTANCE_REPORT.md` | 2026-11-09 |
+| ID | Item | Status | Evidence / note |
+|---|---|---|---|
+| C-01 | Android automated scope | PASS | CI `42577400016`; conditional acceptance |
+| C-02 | Backend build/safe/regression | PASS | CI `42458161277`; local 142/142 |
+| C-03 | CPU worker contracts | PASS | CI `42457744833`; 5/5 |
+| C-04 | n8n static validation | PASS | 14/14; runtime BLOCKED |
+| C-05 | Database static contract | PASS | 10/10; 73 tables; integration BLOCKED |
+| C-06 | Telegram proxy/security | PASS | 8 mocked tests; live BLOCKED |
+| C-07 | Multi-user project authorization | PASS | 60 route tests; BYOD NOT IMPLEMENTED |
+| C-08 | Accessibility automated | PASS | 5/5; manual NOT TESTED |
+| C-09 | Full system acceptance | BLOCKED | `FINAL_SYSTEM_ACCEPTANCE_REPORT.md` |
+| C-10 | AWS runtime recovery | BLOCKED | No access/logs |
+| C-11 | Implementation authorization | NOT AUTHORIZED | Planning task only |
 
 ### Batch Register
 
-| ID | Batch | Work Item | Status | Evidence / Blocker | Last Updated |
-|---|---|---|---|---|---|
-| B1-01 | 1 | Auth strategy and login behavior | BLOCKED | OD-03 undecided; login `503` | 2026-11-09 |
-| B1-02 | 1 | Project creation and route registration | NOT STARTED | Zero-UUID and 404 defects recorded | 2026-11-09 |
-| B1-03 | 1 | Schema alignment and migration replay | NOT STARTED | Drift recorded | 2026-11-09 |
-| B1-04 | 1 | Ownership/RBAC live verification | BLOCKED | Route tests pass; no isolated DB | 2026-11-09 |
-| B1-05 | 1 | Outbox dispatch and idempotency | NOT STARTED | Callback/runtime unverified | 2026-11-09 |
-| B1-06 | 1 | Callback and reconciliation | FAIL | No callback/error nodes in 14 workflows | 2026-11-09 |
-| B1-07 | 1 | `config_encrypted` hydration | FAIL | Commands/media read `config` | 2026-11-09 |
-| B1-08 | 1 | Batch 1 regression | NOT STARTED | Awaiting B1-01–B1-07 | 2026-11-09 |
-| B2-01 | 2 | Prompt category persistence/update | FAIL | `CreatePromptBody` drops category; no update route | 2026-11-09 |
-| B2-02 | 2 | Project-default safety and Android medium | FAIL | `set_active` mutates project; Android hardcodes `ANIME` | 2026-11-09 |
-| B2-03 | 2 | Prompt tenant isolation | FAIL | Missing `user_id` filters | 2026-11-09 |
-| B2-04 | 2 | Story Bible end to end | NOT TESTED | UI/route only; no runtime | 2026-11-09 |
-| B2-05 | 2 | Characters/lore/canon/continuity | NOT TESTED | Route/UI only; no runtime | 2026-11-09 |
-| B2-06 | 2 | Episodes/scenes/WF-02 | NOT TESTED | No isolated n8n | 2026-11-09 |
-| B2-07 | 2 | WF-02 → WF-03 dispatch | FAIL | WF-02 only builds payload | 2026-11-09 |
-| B2-08 | 2 | Workflow IDs/env preflight | FAIL | Stale fallback IDs recorded | 2026-11-09 |
-| B2-09 | 2 | Batch 2 regression | NOT STARTED | Awaiting B2-01–B2-08 | 2026-11-09 |
-| B3-01 | 3 | GPU runtime and model/VRAM | BLOCKED | No GPU repo/runtime/credentials | 2026-11-09 |
-| B3-02 | 3 | GPU dispatch/fallback/checkpoint | NOT TESTED | Depends B3-01 | 2026-11-09 |
-| B3-03 | 3 | CPU TTS runtime | NOT TESTED | Contract tests only | 2026-11-09 |
-| B3-04 | 3 | CPU FFmpeg runtime | NOT TESTED | Contract tests only | 2026-11-09 |
-| B3-05 | 3 | Signed worker authorization | FAIL | No signed job-scoped auth | 2026-11-09 |
-| B3-06 | 3 | Worker callbacks | NOT TESTED | No worker runtime | 2026-11-09 |
-| B3-07 | 3 | Live Telegram storage | BLOCKED | No token/chat | 2026-11-09 |
-| B3-08 | 3 | Android media playback | NOT TESTED | No live media environment | 2026-11-09 |
-| B3-09 | 3 | Batch 3 regression | NOT STARTED | Awaiting B3-01–B3-08 | 2026-11-09 |
-| B4-01 | 4 | BYOD authorization/decisions | BLOCKED | BYOD not authorized; decisions pending | 2026-11-09 |
-| B4-02 | 4 | Tenant resolver/registry/contracts | NOT STARTED | No source implementation | 2026-11-09 |
-| B4-03 | 4 | Onboarding/binding/credentials | NOT STARTED | No source implementation | 2026-11-09 |
-| B4-04 | 4 | Tenant n8n/worker cutover | NOT STARTED | Depends B4-02/B4-03 | 2026-11-09 |
-| B4-05 | 4 | Android Keystore/backup/BYOD onboarding | FAIL | Plaintext `SharedPreferences`; `allowBackup="true"` | 2026-11-09 |
-| B4-06 | 4 | Encryption key versioning/secret hygiene | FAIL | Single/versionless key; fallback secrets | 2026-11-09 |
-| B4-07 | 4 | Quota/budget/audit/owner gating | BLOCKED | Route tests only; no live DB | 2026-11-09 |
-| B4-08 | 4 | Manual and automated accessibility | PASS (automated) / NOT TESTED (manual) | 5/5 automated; manual not performed | 2026-11-09 |
-| B4-09 | 4 | Full regression | PASS (baseline) | Re-run required at exit gate | 2026-11-09 |
-| B4-10 | 4 | All 14 workflow runtime | BLOCKED | No disposable n8n | 2026-11-09 |
-| B4-11 | 4 | Full isolated E2E / AWS verification | BLOCKED | No isolated environment; AWS not verified | 2026-11-09 |
-| B4-12 | 4 | Final acceptance and Owner sign-off | BLOCKED | Full system not accepted | 2026-11-09 |
-
-## 13. Required Owner Decisions
-
-| Decision | Required For | Rule |
-|---|---|---|
-| OD-03 Auth strategy | B1-01, all runtime E2E | No login implementation while undecided |
-| OD-06 n8n strategy / workflow changes | B1-06, B2-07, B4-04 | No workflow modification without approval |
-| OD-09 Worker trust | B3-05, B4-04 | No worker auth implementation while undecided |
-| OD-13 Test environments | B1–B4 | No runtime PASS without approved isolated environment |
-| OD-05 Data-plane option | B4-01/B4-02 | No BYOD resolver work before decision |
-| OD-07 `projects`/`documents` ownership | B4-01/B4-02 | No BYOD data movement before decision |
-| OD-08 Credential model | B4-03 | No tenant credential implementation before decision |
-| OD-10 Migration/rollback | B4-03/B4-04 | No tenant data movement without rollback |
-| OD-11 Android token/onboarding | B4-05 | No BYOD Android implementation before decision |
-| OD-12 Encryption key lifecycle | B4-06 | No key lifecycle change before decision |
-| OD-14 Stage 5 start | B2/B4 | Do not start Stage 5 work without approval |
-| OD-15 Production approval | Release only | No production action |
+| ID | Batch | Work item | Status | Evidence / blocker |
+|---|---|---|---|---|
+| B1-01 | 1 | Supabase Auth/JWT/session | NOT IMPLEMENTED | Login `503` |
+| B1-02 | 1 | Project creation/routes/zero-UUID | PARTIAL | App zero UUID removed; route/runtime unverified |
+| B1-03 | 1 | Schema/migration alignment | PARTIAL | Drift remains; no isolated DB |
+| B1-04 | 1 | Ownership end to end | PARTIAL | Guard passes; `getProject`/list fallback remain |
+| B1-05 | 1 | Outbox/idempotency/terminal state | PARTIAL | Unit/route only; runtime BLOCKED |
+| B1-06 | 1 | Callback/error/reconciliation | NOT IMPLEMENTED | No callback/error nodes |
+| B1-07 | 1 | `config_encrypted` hydration | PARTIAL | Infrastructure fixed; commands still `config` |
+| B1-08 | 1 | AWS recovery inventory | BLOCKED | No AWS access |
+| B1-09 | 1 | Batch 1 regression | BLOCKED | Awaiting B1-01–B1-08 |
+| B2-01 | 2 | Prompt category/update | NOT IMPLEMENTED | Category omitted; no update route |
+| B2-02 | 2 | Project-default safety/medium | NOT IMPLEMENTED | `set_active` mutates; Android hardcodes `ANIME` |
+| B2-03 | 2 | Prompt tenant isolation | NOT IMPLEMENTED | Missing user filters |
+| B2-04 | 2 | Master Prompt Library | PARTIAL | Basic editor only |
+| B2-05 | 2 | Search/filter/favorites/versioning | NOT IMPLEMENTED | No source surface |
+| B2-06 | 2 | Multi-select/Story Bible/four surfaces | PARTIAL | Bible/creation selectors missing |
+| B2-07 | 2 | Compatibility validation | NOT IMPLEMENTED | No validation |
+| B2-08 | 2 | Story Bible/creative flows | NOT TESTED | UI/route only |
+| B2-09 | 2 | Episode overrides | PARTIAL | Override exists; persistence incomplete |
+| B2-10 | 2 | WF-02 → WF-03 | NOT IMPLEMENTED | Payload only |
+| B2-11 | 2 | IMAGE prompt → image generation | PARTIAL | WF-03 ignores custom prompt |
+| B2-12 | 2 | Story memory real retrieval | NOT IMPLEMENTED | Random embeddings |
+| B2-13 | 2 | Chat memory/scopes/delete | PARTIAL | Local 60-message cache |
+| B2-14 | 2 | Low-TPM behavior | PARTIAL | Partial limits only |
+| B2-15 | 2 | Batch 2 regression | BLOCKED | Awaiting B2-01–B2-14 |
+| B3-01 | 3 | Provider registry/priority | PARTIAL | Groq/Gemini config only |
+| B3-02 | 3 | Model modes/task models | NOT IMPLEMENTED | No modes |
+| B3-03 | 3 | Model compatibility filtering | NOT IMPLEMENTED | No filter |
+| B3-04 | 3 | Universal fallback/resume | NOT IMPLEMENTED | No engine |
+| B3-05 | 3 | GPU runtime | BLOCKED | No repo/runtime/credentials |
+| B3-06 | 3 | Signed worker auth | NOT IMPLEMENTED | No worker auth |
+| B3-07 | 3 | CPU TTS/FFmpeg runtime | NOT TESTED | Contracts only |
+| B3-08 | 3 | GPU dispatch/fallback/resume | NOT TESTED | Depends B3-05 |
+| B3-09 | 3 | Worker callbacks | NOT TESTED | No runtime |
+| B3-10 | 3 | Live Telegram storage | BLOCKED | No bot/chat |
+| B3-11 | 3 | Android media playback | NOT TESTED | No live media |
+| B3-12 | 3 | Batch 3 regression | BLOCKED | Awaiting B3-01–B3-11 |
+| B4-01 | 4 | Tenant resolver/registry | NOT IMPLEMENTED | No BYOD source |
+| B4-02 | 4 | BYOI onboarding/credentials | NOT IMPLEMENTED | No onboarding |
+| B4-03 | 4 | Projects split/documents migration | NOT IMPLEMENTED | No migration |
+| B4-04 | 4 | Platform-Managed pool/metering | NOT IMPLEMENTED | No full mode |
+| B4-05 | 4 | Independent GPU/CPU modes | PARTIAL | Partial config only |
+| B4-06 | 4 | Owner Admin Dashboard | PARTIAL | Static/partial screens |
+| B4-07 | 4 | Secondary DB/replication | NOT IMPLEMENTED | No replication |
+| B4-08 | 4 | Android Keystore/backup | NOT IMPLEMENTED | Plaintext; backup enabled |
+| B4-09 | 4 | Draggable chat bubble | NOT IMPLEMENTED | Fixed FAB only |
+| B4-10 | 4 | Owner Android screens/Coming Soon | PARTIAL | UI only |
+| B4-11 | 4 | Encryption versioning/rotation | NOT IMPLEMENTED | Single key |
+| B4-12 | 4 | Quota/audit/owner gating | PARTIAL | Route tests only |
+| B4-13 | 4 | AWS runtime verification | BLOCKED | No access |
+| B4-14 | 4 | All 14 workflow runtime | BLOCKED | No n8n |
+| B4-15 | 4 | Full isolated E2E | BLOCKED | No environment |
+| B4-16 | 4 | Manual accessibility/device/APK | PARTIAL | Automated/APK pass; manual not tested |
+| B4-17 | 4 | Full regression | PARTIAL | Baseline passes; fresh exit gate required |
+| B4-18 | 4 | Owner acceptance | BLOCKED | No complete system |
+| B4-19 | 4 | OD-14 Stage 5 decision | OPEN | Owner decision |
+| B4-20 | 4 | Production OD-15 approval | BLOCKED | No separate go-ahead |
 
 ## 14. Risks and Controls
 
 | Risk | Impact | Control |
 |---|---|---|
-| Declaring full acceptance from component passes | Unsafe release | Batch exit gates and E2E evidence |
-| Treating mocks/fakes as runtime proof | False confidence | Status definitions and non-repeat rules |
-| Starting BYOD before foundation is stable | Compounding defects | Strict batch order; B4 entry gate |
-| Modifying workflows without approval | Governance violation | OD-06 approval; existing workflows only |
-| Contacting production | Data/security incident | Isolated environments; URL guard; no production credentials |
-| Migration drift causing data loss | Broken deployment | Replay/rollback before B1 exit |
-| Secret leakage in reports or commits | Security exposure | No-secrets rule; review before commit |
-| Login `503` hidden or bypassed | Auth bypass | OD-03 gate; no password bypass |
-| Re-running inherited tests to claim progress | Misleading status | Non-repeat rule; fresh evidence only at gates |
-| GPU unavailable but pipeline labeled ready | False GPU readiness | GPU-specific exit evidence; no substitute PASS |
-| AWS work recreated instead of verified | Duplicate/unsafe deployment | Recover and verify existing work only |
+| Declaring acceptance from component passes | Unsafe release | Batch gates and E2E evidence |
+| Treating mocks/static/fake UI as runtime proof | False confidence | Status definitions and non-repeat rules |
+| Starting BYOD before foundation is stable | Compounding defects | Strict batch order |
+| Modifying frozen workflows | Governance violation | 14-workflow rule; explicit approval |
+| Recreating AWS instead of recovering | Duplicate/unsafe deployment | Read-only inventory first |
+| Migration drift/data loss | Broken deployment | Replay/rollback before data movement |
+| Secret leakage | Security exposure | No-secrets rule; scan before commit |
+| Login bypass | Authentication failure | No password bypass; Supabase Auth only |
+| GPU unavailable but labeled ready | False readiness | GPU-specific evidence; no substitute PASS |
+| Prompt Studio deferred | Missing Owner requirement | Full scope in Batch 2 |
+| OD-14 started early | Stage gate violation | Stage 5 remains blocked |
 
 ## 15. Next-Session Instruction
 
-1. Read this roadmap and the 12 reports in `docs/audit/master-system/`.
-2. Verify the backend repository is on `opencode/master-system-audit-reports` and record the current HEAD.
-3. Check the required decisions and environments: OD-03, OD-06, OD-09, OD-13, and the Batch 1 isolated database.
-4. If any required decision or environment is missing, update the progress register with `BLOCKED` and stop. Do not implement around the blocker.
-5. If Batch 1 is authorized, start only with B1-01. Before editing, provide the proposed changes and affected files as required by `AGENTS.md`.
-6. After each work item, run the relevant build/tests, record exact evidence, and update the progress register. Do not mark PASS from intent.
-7. Do not start Batch 2, 3, or 4 until the preceding batch exit criteria pass.
+1. Read this roadmap, the traceability matrix, the reconciliation report, and the AWS checklist.
+2. Confirm implementation authorization and isolated-environment approval.
+3. If authorization or environments are missing, keep work `BLOCKED`; do not implement around it.
+4. Start with B1-01 only after authorization.
+5. Before editing, provide proposed changes and affected files as required by `AGENTS.md`.
+6. After each work item, run relevant build/tests, record exact evidence, and update the register.
+7. Do not start Batch 2, 3, or 4 until the preceding exit gate passes.
 8. Do not modify workflows, contact production, rotate credentials, or move BYOD data without explicit approval.
-9. At each batch exit, run the required regression and update this roadmap only with verified results.
-10. The next implementation action after approvals is B1-01, not GPU work and not BYOD.
+9. Do not start Stage 5 while OD-14 is open.
+10. Do not claim full acceptance before Owner practical testing and explicit acceptance.
 
 ## 16. Evidence Index
 
-- `docs/audit/master-system/COMPLETE_FEATURE_INVENTORY.md`
-- `docs/audit/master-system/ANDROID_ALL_SCREENS_BUTTONS_TEST_REPORT.md`
-- `docs/audit/master-system/BYOD_MULTI_USER_TEST_REPORT.md`
-- `docs/audit/master-system/PROMPT_STUDIO_FULL_TEST_REPORT.md`
-- `docs/audit/master-system/GPU_WORKER_TEST_REPORT.md`
-- `docs/audit/master-system/CPU_WORKER_TEST_REPORT.md`
-- `docs/audit/master-system/TELEGRAM_STORAGE_TEST_REPORT.md`
-- `docs/audit/master-system/BACKEND_DATABASE_TEST_REPORT.md`
-- `docs/audit/master-system/N8N_RUNTIME_TEST_REPORT.md`
-- `docs/audit/master-system/ANDROID_AWS_END_TO_END_TEST_REPORT.md`
-- `docs/audit/master-system/ACCESSIBILITY_TEST_REPORT.md`
-- `docs/audit/master-system/FINAL_SYSTEM_ACCEPTANCE_REPORT.md`
-- `docs/audit/BASELINE_AUDIT_2026-11-06.md`
+- `UNIFIED_AUDIT_REPORT_INVENTORY.md`
+- `UNIFIED_EVIDENCE_RECONCILIATION_REPORT.md`
+- `COMPLETE_OWNER_REQUIREMENTS_TRACEABILITY_MATRIX.md`
+- `AWS_OWNER_RUNTIME_RECOVERY_CHECKLIST.md`
+- `MASTER_READINESS_AND_BLOCKERS_REPORT.md`
+- `FINAL_PLANNING_REVIEW.md`
 - `docs/contracts/OWNER_DECISION_REGISTER.md`
+- `docs/contracts/MASTER_IMPLEMENTATION_HANDOFF.md`
 - `docs/contracts/MASTER_ACCEPTANCE_MATRIX.md`
+- `docs/contracts/P0_SECURITY_REMEDIATION_FINAL.md`
+- `PROMPT_STUDIO_AUDIT_2026-11-07.md`
+- `Story_database.txt`
 
 ## 17. Safety Statement
 
@@ -459,6 +479,6 @@ Update this register only with verified evidence. Do not mark an item PASS becau
 - No schema was changed.
 - No n8n workflow was modified or activated.
 - No credential was rotated.
-- No production system was contacted.
+- No AWS or production system was contacted.
 - No stage was marked complete.
 - No full-system acceptance was claimed.
