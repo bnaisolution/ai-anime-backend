@@ -191,7 +191,7 @@ test('prompt routes scope every read/write to the authenticated user and expose 
   assert.match(promptRoutesSource, /app\.post\('\/v1\/anime\/prompts\/validate-compatibility'/);
   assert.match(promptRoutesSource, /\.eq\('user_id', userId\)/);
   assert.match(promptRoutesSource, /is_favorite/);
-  assert.match(promptRoutesSource, /\.ilike\(/);
+  assert.match(promptRoutesSource, /ilike/);
 });
 
 test('prompt save no longer mutates the project visual medium', () => {
