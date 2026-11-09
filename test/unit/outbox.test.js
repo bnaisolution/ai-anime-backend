@@ -21,13 +21,14 @@ test('recoverStaleProcessing requeues stale processing leases', async () => {
   assert.equal(update.payload.status, 'pending');
   assert.equal(update.payload.processing_started_at, null);
   assert.ok(update.filters.some((filter) => filter.op === 'eq' && filter.col === 'status' && filter.value === 'processing'));
-  assert.ok(update.filters.some((filter) => filter.op === 'lt' && filter.col === 'processing_started_at'));
+  assert.ok(update.filters.some((filter) => filter.op === 'or' && filter.value.includes('processing_started_at.lt.')));
+  assert.ok(update.filters.some((filter) => filter.op === 'or' && filter.value.includes('processing_started_at.is.null')));
 });
 
 test('recoverStaleProcessing falls back to created_at when the lease column is absent', async () => {
   const { state } = installFakeSupabase(async (call) => {
     if (call.table === 'outbox_events' && call.action === 'update') {
-      const usesLease = call.filters.some((filter) => filter.col === 'processing_started_at');
+      const usesLease = call.filters.some((filter) => filter.op === 'or' && filter.value.includes('processing_started_at'));
       if (usesLease) return { data: null, error: { code: '42703', message: 'column processing_started_at does not exist' } };
       return { data: [{ id: 'event-1' }], error: null };
     }

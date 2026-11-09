@@ -10,7 +10,7 @@ export async function recoverStaleProcessing(staleMinutes = STALE_PROCESSING_MIN
     .from('outbox_events')
     .update({ status: 'pending', processing_started_at: null, next_attempt_at: now, last_error: 'Recovered stale processing lease' })
     .eq('status', 'processing')
-    .lt('processing_started_at', cutoff)
+    .or(`processing_started_at.lt.${cutoff},processing_started_at.is.null`)
     .select('id');
   if (result.error) {
     result = await animeSupabase

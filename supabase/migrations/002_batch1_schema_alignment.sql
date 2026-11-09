@@ -50,20 +50,13 @@ CREATE INDEX IF NOT EXISTS outbox_events_processing_started_at_idx ON public.out
 
 ALTER TABLE public.user_system_prompts ENABLE ROW LEVEL SECURITY;
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE schemaname = 'public'
-          AND tablename = 'user_system_prompts'
-          AND policyname = 'Allow service role full access on user_system_prompts'
-    ) THEN
-        CREATE POLICY "Allow service role full access on user_system_prompts"
-            ON public.user_system_prompts
-            FOR ALL
-            USING (true);
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Allow service role full access on user_system_prompts" ON public.user_system_prompts;
+CREATE POLICY "Allow service role full access on user_system_prompts"
+    ON public.user_system_prompts
+    FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
 
 CREATE OR REPLACE FUNCTION public.claim_outbox_batch(p_type text, p_batch_size integer DEFAULT 10) RETURNS SETOF public.outbox_events
     LANGUAGE plpgsql SECURITY DEFINER

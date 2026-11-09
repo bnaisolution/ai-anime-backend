@@ -40,7 +40,7 @@ BEGIN
         OR (p_type = 'dispatch_n8n' AND oe.type LIKE 'ANIME_COMMAND_DISPATCH:%')
       )
     ORDER BY oe.next_attempt_at ASC, oe.created_at ASC
-    LIMIT GREATEST(1, LEAST(p_batch_size, 100)))
+    LIMIT GREATEST(1, LEAST(p_batch_size, 100))
     FOR UPDATE SKIP LOCKED
   )
   UPDATE public.outbox_events target

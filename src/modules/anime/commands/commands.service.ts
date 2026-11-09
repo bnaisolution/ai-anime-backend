@@ -61,6 +61,67 @@ export function computeCommandBodyHash(body: CreateCommandBody): string {
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
 
+const SENSITIVE_PAYLOAD_KEYS = new Set([
+  'user_infrastructure',
+  'gpu_routing',
+  'telegram_storage',
+  'api_key',
+  'apikey',
+  'access_key',
+  'secret_key',
+  'secret',
+  'token',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'api_token',
+  'auth_token',
+  'bearer_token',
+  'session_token',
+  'client_secret',
+  'bot_token',
+  'password',
+  'authorization',
+  'private_key',
+  'connection_string',
+  'config_encrypted',
+]);
+
+function sanitizePayload(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => sanitizePayload(item));
+  if (value === null || typeof value !== 'object') return value;
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (SENSITIVE_PAYLOAD_KEYS.has(key.toLowerCase())) continue;
+    sanitized[key] = sanitizePayload(child);
+  }
+  return sanitized;
+}
+
+function sanitizeCommandForResponse(command: ApiCommandRecord): ApiCommandRecord {
+  return {
+    ...command,
+    payload: sanitizePayload(command.payload) as Record<string, unknown>,
+  };
+}
+
+function assertIdempotencyMatch(
+  existing: ApiCommandRecord,
+  bodyHash: string,
+  params: SubmitCommandParams
+): void {
+  if (
+    existing.body_hash !== bodyHash ||
+    existing.project_id !== params.body.project_id ||
+    existing.user_id !== params.userId
+  ) {
+    throw new AnimeError({
+      code: AnimeErrorCode.IDEMPOTENCY_CONFLICT,
+      message: 'Idempotency-Key has already been used with a different request payload or project.',
+    });
+  }
+}
+
 async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
   let visualMedium = 'ANIME';
   let systemPromptTitle = 'Default Storyteller';
@@ -147,18 +208,9 @@ export async function submitAnimeCommand(
   const bodyHash = computeCommandBodyHash(params.body);
   const existing = await findCommandByIdempotencyKey(rawKey);
   if (existing) {
-    if (
-      existing.body_hash !== bodyHash ||
-      existing.project_id !== params.body.project_id ||
-      existing.user_id !== params.userId
-    ) {
-      throw new AnimeError({
-        code: AnimeErrorCode.IDEMPOTENCY_CONFLICT,
-        message: 'Idempotency-Key has already been used with a different request payload or project.',
-      });
-    }
+    assertIdempotencyMatch(existing, bodyHash, params);
     return {
-      command: existing,
+      command: sanitizeCommandForResponse(existing),
       wf_key: COMMAND_INTENT_WF_MAP[existing.intent],
       idempotent_replay: true,
     };
@@ -278,6 +330,15 @@ export async function submitAnimeCommand(
     outbox_payload: outboxPayload,
   });
 
+  if (createdOrExisting.id !== commandId) {
+    assertIdempotencyMatch(createdOrExisting, bodyHash, params);
+    return {
+      command: sanitizeCommandForResponse(createdOrExisting),
+      wf_key: COMMAND_INTENT_WF_MAP[createdOrExisting.intent],
+      idempotent_replay: true,
+    };
+  }
+
   await writeAudit({
     project_id: params.body.project_id,
     user_id: params.userId,
@@ -297,7 +358,7 @@ export async function submitAnimeCommand(
   });
 
   return {
-    command: createdOrExisting,
+    command: sanitizeCommandForResponse(createdOrExisting),
     wf_key: wfKey,
     idempotent_replay: false,
   };
@@ -327,6 +388,6 @@ export async function getAnimeCommandForUser(
       });
     }
   }
-  return command;
+  return sanitizeCommandForResponse(command);
 }
 
