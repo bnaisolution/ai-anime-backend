@@ -29,7 +29,7 @@ test('command hydration decrypts config_encrypted and never forwards plaintext c
     if (call.table === 'user_system_prompts' && call.action === 'select') return { data: [], error: null };
     if (call.table === 'user_infrastructure' && call.action === 'select') {
       return {
-        data: [{ provider_type: 'gpu', config_encrypted: encrypted, status: 'active' }],
+        data: [{ provider_type: 'groq', config_encrypted: encrypted, status: 'active' }],
         error: null,
       };
     }
@@ -64,10 +64,10 @@ test('command hydration decrypts config_encrypted and never forwards plaintext c
   });
 
   assert.ok(rpcArgs, 'atomic insert RPC was called');
-  assert.equal(rpcArgs.p_outbox_payload.user_infrastructure.api_key, 'provider-secret');
+  assert.equal(rpcArgs.p_outbox_payload.user_infrastructure.groq.api_key, 'provider-secret');
   assert.deepEqual(rpcArgs.p_outbox_payload.gpu_routing, { mode: 'KAGGLE_AUTO' });
   assert.deepEqual(rpcArgs.p_outbox_payload.telegram_storage, { chat_id: '123' });
-  assert.equal(rpcArgs.p_payload.user_infrastructure.api_key, 'provider-secret');
+  assert.equal(rpcArgs.p_payload.user_infrastructure.groq.api_key, 'provider-secret');
   const infraSelect = state.calls.find((call) => call.table === 'user_infrastructure' && call.action === 'select');
   assert.ok(infraSelect.filters.some((filter) => filter.op === 'eq' && filter.col === 'user_id' && filter.value === USER));
 });
