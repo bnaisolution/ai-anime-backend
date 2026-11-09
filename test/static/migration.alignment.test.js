@@ -208,3 +208,23 @@ test('story memory no longer writes random embeddings', () => {
   assert.match(memorySource, /getEmbedding/);
   assert.match(memorySource, /ilike\('content'/);
 });
+
+const chatMemorySource = fs.readFileSync(
+  path.join(H.backendRoot, 'src/modules/memory/memory.routes.ts'),
+  'utf8'
+);
+
+test('chat memory supports scopes, dedup, correction, deletion, and reconciliation', () => {
+  for (const fragment of [
+    "body.scope",
+    "ilike('content'",
+    'deduplicated',
+    "fastify.post('/correct'",
+    "fastify.post('/delete'",
+    "fastify.post('/reconcile'",
+    'by_scope',
+    'by_status',
+  ]) {
+    assert.ok(chatMemorySource.includes(fragment), `missing chat memory fragment: ${fragment}`);
+  }
+});
