@@ -30,6 +30,11 @@ export async function claimBatch(type: string, batchSize = 10): Promise<any[]> {
   if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Claim failed', cause: error });
   return data ?? [];
 }
+export async function redactExpiredPayloads(retentionHours = 24): Promise<number> {
+  const { data, error } = await animeSupabase.rpc('redact_expired_payloads', { p_retention_hours: retentionHours });
+  if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Expired payload redaction failed', cause: error });
+  return typeof data === 'number' ? data : 0;
+}
 export async function markDispatched(outboxId: string): Promise<void> { await animeSupabase.from('outbox_events').update({ status: 'dispatched', dispatched_at: new Date().toISOString(), processing_started_at: null, last_error: null }).eq('id', outboxId); }
 export async function markFailed(outboxId: string, attempts: number, nextAttemptAtIso: string, lastError: string): Promise<void> { await animeSupabase.from('outbox_events').update({ status: 'pending', attempts, next_attempt_at: nextAttemptAtIso, processing_started_at: null, last_error: lastError.slice(0, 1000) }).eq('id', outboxId); }
 export async function markDeadLetter(outboxId: string, attempts: number, lastError: string): Promise<void> { await animeSupabase.from('outbox_events').update({ status: 'dead_letter', attempts, processing_started_at: null, last_error: lastError.slice(0, 1000) }).eq('id', outboxId); }

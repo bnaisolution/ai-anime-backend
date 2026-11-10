@@ -10,11 +10,12 @@ process.env.ANIME_ENCRYPTION_KEY = MASTER_KEY;
 
 const { encryptConfig } = H.dist('modules/anime/infrastructure/infrastructure.crypto.js');
 const { submitAnimeCommand } = H.dist('modules/anime/commands/commands.service.js');
+const { hydrateDispatchPayload } = H.dist('modules/anime/outbox/outbox.dispatcher.js');
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '22222222-2222-4222-8222-222222222222';
 
-test('command hydration decrypts config_encrypted and never forwards plaintext config rows', async () => {
+test('command persistence redacts provider config and dispatch hydrates it from encrypted storage', async () => {
   const encrypted = encryptConfig(JSON.stringify({
     api_key: 'provider-secret',
     gpu_routing: { mode: 'KAGGLE_AUTO' },
@@ -64,10 +65,18 @@ test('command hydration decrypts config_encrypted and never forwards plaintext c
   });
 
   assert.ok(rpcArgs, 'atomic insert RPC was called');
-  assert.equal(rpcArgs.p_outbox_payload.user_infrastructure.groq.api_key, 'provider-secret');
-  assert.deepEqual(rpcArgs.p_outbox_payload.gpu_routing, { mode: 'KAGGLE_AUTO' });
-  assert.deepEqual(rpcArgs.p_outbox_payload.telegram_storage, { chat_id: '123' });
-  assert.equal(rpcArgs.p_payload.user_infrastructure.groq.api_key, 'provider-secret');
+  assert.equal(rpcArgs.p_outbox_payload.user_infrastructure, undefined);
+  assert.equal(rpcArgs.p_outbox_payload.gpu_routing, undefined);
+  assert.equal(rpcArgs.p_outbox_payload.telegram_storage, undefined);
+  assert.equal(rpcArgs.p_outbox_payload.payload.user_infrastructure, undefined);
+  assert.equal(rpcArgs.p_payload.user_infrastructure, undefined);
   const infraSelect = state.calls.find((call) => call.table === 'user_infrastructure' && call.action === 'select');
   assert.ok(infraSelect.filters.some((filter) => filter.op === 'eq' && filter.col === 'user_id' && filter.value === USER));
+
+  const dispatchPayload = await hydrateDispatchPayload(rpcArgs.p_outbox_payload);
+  assert.equal(dispatchPayload.user_infrastructure.groq.api_key, 'provider-secret');
+  assert.deepEqual(dispatchPayload.gpu_routing, { mode: 'KAGGLE_AUTO' });
+  assert.deepEqual(dispatchPayload.telegram_storage, { chat_id: '123' });
+  assert.equal(dispatchPayload.payload.user_infrastructure.groq.api_key, 'provider-secret');
+  assert.equal(rpcArgs.p_outbox_payload.user_infrastructure, undefined, 'hydration does not mutate stored payload');
 });

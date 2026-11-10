@@ -99,3 +99,16 @@ export async function getDecryptedMapForUser(userId: string): Promise<Record<str
   }
   return out;
 }
+
+export async function getHydratedInfrastructureForUser(userId: string): Promise<Record<string, unknown>> {
+  const providerConfigs = await getDecryptedMapForUser(userId);
+  const hydratedInfra: Record<string, unknown> = { ...providerConfigs };
+  for (const cfg of Object.values(providerConfigs)) {
+    if (cfg && typeof cfg === 'object') {
+      if (cfg.gpu_routing) hydratedInfra.gpu_routing = cfg.gpu_routing;
+      if (cfg.telegram_storage) hydratedInfra.telegram_storage = cfg.telegram_storage;
+      if (cfg.github_worker) hydratedInfra.github_worker = cfg.github_worker;
+    }
+  }
+  return hydratedInfra;
+}
