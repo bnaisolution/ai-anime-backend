@@ -808,7 +808,25 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Output Validator, Rule 37 & JSON Sanitizer');\nconst sj = state.script_json;\nconst scenes = sj.scenes || [];\nconst priorityCounts = { P0: 0, P1: 0, P2: 0, P3: 0, P4: 0, P5: 0 };\nconst emotionCounts = { neutral: 0, anger: 0, joy: 0, sadness: 0, fear: 0 };\nfor (const sc of scenes) {\n  if (priorityCounts[sc.gpu_priority] !== undefined) priorityCounts[sc.gpu_priority]++;\n  if (emotionCounts[sc.emotion] !== undefined) emotionCounts[sc.emotion]++;\n}\nconst cpuSceneCount = priorityCounts.P0 + priorityCounts.P1;\nconst gpuSceneCount = priorityCounts.P2 + priorityCounts.P3 + priorityCounts.P4 + priorityCounts.P5;\nconst summaryMessage = [\n  `🎬 **WF-02: Episode ${state.episode_no} Story & Scene Plan Ready!**`,\n  `📌 **Title:** ${sj.title}`,\n  `📝 **Logline:** ${sj.logline}`,\n  `🔒 **Mode:** ${state.mode} | **State:** \\`SCENE_PLAN_READY\\``,\n  `📊 **Routing Breakdown (${scenes.length} Scenes):** CPU: ${cpuSceneCount} | GPU: ${gpuSceneCount}`,\n  state.validation_warnings.length > 0 ? `\\n⚠️ **Governance Auto-Corrections (${state.validation_warnings.length}):**\\n` + state.validation_warnings.slice(0, 5).map(w => `• ${w}`).join('\\n') : ''\n].filter(Boolean).join('\\n');\nreturn { json: { ok: true, status: 'SCENE_PLAN_READY', workflow_name: 'WF-02', execution_id: $execution.id, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, season_no: state.season_no, mode: state.mode, current_state: 'SCENE_PLAN_READY', next_workflow_id: (($env.WF_03_PROD_ID || 'IfZyvmWlEijJ6Ccj') || 'IfZyvmWlEijJ6Ccj'), wf03_dispatch_payload: { user_infrastructure: __getNodeJson('When Executed by Another Workflow').user_infrastructure, project_style: __getNodeJson('When Executed by Another Workflow').project_style, project_id: state.project_id, episode_no: state.episode_no, season_no: state.season_no, mode: 'SAVE', current_state: 'SCENE_PLAN_READY', total_scenes: scenes.length, cpu_scenes: cpuSceneCount, gpu_scenes: gpuSceneCount, priority_breakdown: priorityCounts, scenes: scenes }, output: summaryMessage, text: summaryMessage } };"
+        "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Output Validator, Rule 37 & JSON Sanitizer');\nconst sj = state.script_json;\nconst scenes = sj.scenes || [];\nconst priorityCounts = { P0: 0, P1: 0, P2: 0, P3: 0, P4: 0, P5: 0 };\nconst emotionCounts = { neutral: 0, anger: 0, joy: 0, sadness: 0, fear: 0 };\nfor (const sc of scenes) {\n  if (priorityCounts[sc.gpu_priority] !== undefined) priorityCounts[sc.gpu_priority]++;\n  if (emotionCounts[sc.emotion] !== undefined) emotionCounts[sc.emotion]++;\n}\nconst cpuSceneCount = priorityCounts.P0 + priorityCounts.P1;\nconst gpuSceneCount = priorityCounts.P2 + priorityCounts.P3 + priorityCounts.P4 + priorityCounts.P5;\nconst summaryMessage = [\n  `🎬 **WF-02: Episode ${state.episode_no} Story & Scene Plan Ready!**`,\n  `📌 **Title:** ${sj.title}`,\n  `📝 **Logline:** ${sj.logline}`,\n  `🔒 **Mode:** ${state.mode} | **State:** \\`SCENE_PLAN_READY\\``,\n  `📊 **Routing Breakdown (${scenes.length} Scenes):** CPU: ${cpuSceneCount} | GPU: ${gpuSceneCount}`,\n  state.validation_warnings.length > 0 ? `\\n⚠️ **Governance Auto-Corrections (${state.validation_warnings.length}):**\\n` + state.validation_warnings.slice(0, 5).map(w => `• ${w}`).join('\\n') : ''\n].filter(Boolean).join('\\n');\nreturn { json: { ok: true, status: 'SCENE_PLAN_READY', workflow_name: 'WF-02', execution_id: $execution.id, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, season_no: state.season_no, mode: state.mode, current_state: 'SCENE_PLAN_READY', next_workflow_id: (($env.WF_03_PROD_ID || 'IfZyvmWlEijJ6Ccj') || 'IfZyvmWlEijJ6Ccj'), wf03_dispatch_payload: { user_infrastructure: __getNodeJson('When Executed by Another Workflow').user_infrastructure, project_style: __getNodeJson('When Executed by Another Workflow').project_style, image_system_prompt: __getNodeJson('When Executed by Another Workflow').image_system_prompt, image_prompt_config: __getNodeJson('When Executed by Another Workflow').image_prompt_config, project_id: state.project_id, episode_no: state.episode_no, season_no: state.season_no, mode: 'SAVE', current_state: 'SCENE_PLAN_READY', total_scenes: scenes.length, cpu_scenes: cpuSceneCount, gpu_scenes: gpuSceneCount, priority_breakdown: priorityCounts, scenes: scenes }, output: summaryMessage, text: summaryMessage } };"
+      }
+    },
+    {
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Execute WF-03 Media Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        5680,
+        80
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $json.next_workflow_id }}",
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
       }
     }
   ],
@@ -1085,6 +1103,17 @@
         [
           {
             "node": "WF-03 Dispatch & Output Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WF-03 Dispatch & Output Formatter": {
+      "main": [
+        [
+          {
+            "node": "Execute WF-03 Media Pipeline",
             "type": "main",
             "index": 0
           }

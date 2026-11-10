@@ -22,6 +22,7 @@ class FakeQuery {
 
   select(columns) { this.columns = columns || '*'; return this; }
   insert(payload) { this.action = 'insert'; this.payload = payload; return this; }
+  upsert(payload, options) { this.action = 'upsert'; this.payload = payload; this.upsertOptions = options; return this; }
   update(payload) { this.action = 'update'; this.payload = payload; return this; }
   delete() { this.action = 'delete'; return this; }
   eq(col, value) { this.filters.push({ op: 'eq', col, value }); return this; }
@@ -31,6 +32,7 @@ class FakeQuery {
   gte(col, value) { this.filters.push({ op: 'gte', col, value }); return this; }
   lt(col, value) { this.filters.push({ op: 'lt', col, value }); return this; }
   or(expression) { this.filters.push({ op: 'or', value: expression }); return this; }
+  ilike(col, value) { this.filters.push({ op: 'ilike', col, value }); return this; }
   order(col, options) { this.orders.push({ col, options }); return this; }
   limit(value) { this.limitValue = value; return this; }
   maybeSingle() { this.mode = 'maybeSingle'; return this; }
@@ -50,6 +52,7 @@ class FakeQuery {
       limit: this.limitValue,
       payload: this.payload,
       mode: mode || this.mode,
+      upsertOptions: this.upsertOptions,
     };
     this.state.calls.push(call);
     const handler = this.state.handler || defaultHandler;

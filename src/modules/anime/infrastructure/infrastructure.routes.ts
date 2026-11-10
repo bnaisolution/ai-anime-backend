@@ -43,13 +43,172 @@ const GpuSetupBody = Type.Object({
   github_worker_url: Type.Optional(Type.String()),
 });
 
+const PROMPT_CATEGORIES = ['BIBLE', 'EPISODE', 'IMAGE', 'AI_DIRECTOR'] as const;
+const PROMPT_MEDIA = ['ANIME', 'REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC', 'MANHWA', '3D', 'HYBRID'] as const;
+const PROMPT_FORMATS = ['SERIES', 'MOVIE', 'SHORT', 'MUSIC_VIDEO', 'TRAILER'] as const;
+const PROMPT_MODELS = ['DEFAULT', 'SDXL', 'FLUX', 'ANIMATEDIFF', 'RUNWAY', 'KLING', 'SORA'] as const;
+const PROMPT_GENRES = [
+  'Action', 'Horror', 'Thriller', 'Romance', 'Comedy', 'Mythology',
+  'Fantasy', 'Dark Fantasy', 'Sci-Fi', 'Mystery', 'Slice of Life', 'Music',
+] as const;
+
+const PROMPT_GENRE_TEMPLATES = [
+  {
+    id: 'horror',
+    genre: 'Horror',
+    title: 'Horror Atmosphere Template',
+    visual_medium: 'CINEMATIC',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['horror', 'atmosphere', 'tension'],
+    prompt_text: 'Build dread through restrained pacing, negative space, unsettling sound design, and a persistent visual motif. Keep the threat partially unseen until the final act.',
+  },
+  {
+    id: 'thriller',
+    genre: 'Thriller',
+    title: 'Thriller Escalation Template',
+    visual_medium: 'CINEMATIC',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['thriller', 'suspense', 'escalation'],
+    prompt_text: 'Drive the story with escalating stakes, a ticking clock, and information asymmetry. Every scene must change the balance of power or reveal a new cost.',
+  },
+  {
+    id: 'romance',
+    genre: 'Romance',
+    title: 'Romance Emotional Beat Template',
+    visual_medium: 'ANIME',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['romance', 'emotion', 'character'],
+    prompt_text: 'Center emotional honesty and gradual intimacy. Use recurring visual motifs, meaningful silence, and choices that reveal character rather than exposition.',
+  },
+  {
+    id: 'comedy',
+    genre: 'Comedy',
+    title: 'Comedy Timing Template',
+    visual_medium: 'ANIME',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['comedy', 'timing', 'ensemble'],
+    prompt_text: 'Build comedy from character logic, escalating misunderstandings, and clean visual punctuation. Keep jokes grounded in the established cast and world rules.',
+  },
+  {
+    id: 'action',
+    genre: 'Action',
+    title: 'Action Choreography Template',
+    visual_medium: 'ANIME',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['action', 'choreography', 'stakes'],
+    prompt_text: 'Stage action with readable geography, clear objectives, and escalating consequences. Alternate wide establishing shots with decisive close-ups and never lose character intent.',
+  },
+  {
+    id: 'mythology',
+    genre: 'Mythology',
+    title: 'Mythology Worldbuilding Template',
+    visual_medium: 'CINEMATIC',
+    format: 'MOVIE',
+    model_hint: 'DEFAULT',
+    tags: ['mythology', 'worldbuilding', 'symbolism'],
+    prompt_text: 'Treat myth as lived belief: define ritual, taboo, divine cost, and contradictory accounts. Use symbolic imagery and recurring motifs without explaining away the mystery.',
+  },
+] as const;
+
+const PromptCategoryEnum = Type.Union(PROMPT_CATEGORIES.map((value) => Type.Literal(value)));
+const PromptMediumEnum = Type.Union(PROMPT_MEDIA.map((value) => Type.Literal(value)));
+const PromptFormatEnum = Type.Union(PROMPT_FORMATS.map((value) => Type.Literal(value)));
+const PromptModelEnum = Type.Union(PROMPT_MODELS.map((value) => Type.Literal(value)));
+
 const CreatePromptBody = Type.Object({
   project_id: Type.Optional(Type.String()),
   title: Type.String({ minLength: 1, maxLength: 120 }),
-  visual_medium: Type.Union([Type.Literal('ANIME'), Type.Literal('REAL_HUMAN')]),
+  visual_medium: PromptMediumEnum,
+  prompt_category: Type.Optional(PromptCategoryEnum),
+  genre: Type.Optional(Type.String({ maxLength: 80 })),
+  format: Type.Optional(PromptFormatEnum),
+  model_hint: Type.Optional(PromptModelEnum),
+  tags: Type.Optional(Type.Array(Type.String({ maxLength: 40 }), { maxItems: 20 })),
+  is_favorite: Type.Optional(Type.Boolean()),
   prompt_text: Type.String({ minLength: 1 }),
   set_active: Type.Optional(Type.Boolean()),
 });
+
+const UpdatePromptBody = Type.Object({
+  title: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+  visual_medium: Type.Optional(PromptMediumEnum),
+  prompt_category: Type.Optional(PromptCategoryEnum),
+  genre: Type.Optional(Type.String({ maxLength: 80 })),
+  format: Type.Optional(PromptFormatEnum),
+  model_hint: Type.Optional(PromptModelEnum),
+  tags: Type.Optional(Type.Array(Type.String({ maxLength: 40 }), { maxItems: 20 })),
+  is_favorite: Type.Optional(Type.Boolean()),
+  is_archived: Type.Optional(Type.Boolean()),
+  prompt_text: Type.Optional(Type.String({ minLength: 1 })),
+});
+
+const PromptListQuery = Type.Object({
+  project_id: Type.Optional(Type.String()),
+  prompt_category: Type.Optional(PromptCategoryEnum),
+  genre: Type.Optional(Type.String()),
+  format: Type.Optional(PromptFormatEnum),
+  is_favorite: Type.Optional(Type.String()),
+  q: Type.Optional(Type.String({ maxLength: 120 })),
+  include_archived: Type.Optional(Type.String()),
+});
+
+const CompatibilityBody = Type.Object({
+  genre: Type.Optional(Type.String()),
+  format: Type.Optional(PromptFormatEnum),
+  visual_medium: Type.Optional(PromptMediumEnum),
+  model_hint: Type.Optional(PromptModelEnum),
+});
+
+const CompatibilityRules: Record<string, { formats?: string[]; media?: string[]; models?: string[] }> = {
+  HORROR: { media: ['ANIME', 'REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC', 'MANHWA', '3D', 'HYBRID'] },
+  THRILLER: { media: ['ANIME', 'REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC', 'MANHWA', '3D', 'HYBRID'] },
+  ROMANCE: { formats: ['SERIES', 'MOVIE', 'SHORT'] },
+  COMEDY: { models: ['DEFAULT', 'SDXL', 'FLUX', 'ANIMATEDIFF'] },
+  MYTHOLOGY: { formats: ['SERIES', 'MOVIE', 'SHORT', 'TRAILER'] },
+  MUSIC: { formats: ['MUSIC_VIDEO', 'SHORT', 'SERIES'] },
+  ACTION: { formats: ['SERIES', 'MOVIE', 'SHORT', 'TRAILER', 'MUSIC_VIDEO'] },
+};
+
+function evaluatePromptCompatibility(input: {
+  genre?: string;
+  format?: string;
+  visual_medium?: string;
+  model_hint?: string;
+}) {
+  const reasons: string[] = [];
+  const genre = (input.genre || '').toUpperCase();
+  const format = (input.format || '').toUpperCase();
+  const medium = (input.visual_medium || '').toUpperCase();
+  const model = (input.model_hint || 'DEFAULT').toUpperCase();
+  const rule = CompatibilityRules[genre];
+  if (rule?.formats && format && !rule.formats.includes(format)) {
+    reasons.push(`Genre ${genre} is not compatible with format ${format}.`);
+  }
+  if (rule?.media && medium && !rule.media.includes(medium)) {
+    reasons.push(`Genre ${genre} is not compatible with medium ${medium}.`);
+  }
+  if (rule?.models && model && !rule.models.includes(model)) {
+    reasons.push(`Genre ${genre} is not compatible with model ${model}.`);
+  }
+  if (medium === 'REAL_HUMAN' && model === 'ANIMATEDIFF') {
+    reasons.push('REAL_HUMAN medium cannot be rendered with ANIMATEDIFF.');
+  }
+  if (medium === 'ANIME' && model === 'RUNWAY') {
+    reasons.push('ANIME medium requires an anime-capable model; RUNWAY is not approved for anime.');
+  }
+  return { compatible: reasons.length === 0, reasons };
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+
 
 function buildKaggleLocalTunnelScript(
   supabaseUrl: string,
@@ -529,26 +688,76 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     };
   });
 
-  app.get('/v1/anime/prompts', { preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_READ_ROLES)] }, async (request: any) => {
+  app.get('/v1/anime/prompts/library/meta', { preHandler: [app.authenticate] }, async (request: any) => {
+    return {
+      data: {
+        categories: PROMPT_CATEGORIES,
+        media: PROMPT_MEDIA,
+        formats: PROMPT_FORMATS,
+        models: PROMPT_MODELS,
+        genres: PROMPT_GENRES,
+        genre_templates: PROMPT_GENRE_TEMPLATES,
+      },
+      meta: { request_id: request.anime?.request_id },
+    };
+  });
+
+  app.post('/v1/anime/prompts/validate-compatibility', { schema: { body: CompatibilityBody }, preHandler: [app.authenticate] }, async (request: any) => {
+    const result = evaluatePromptCompatibility(request.body);
+    return { data: result, meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.get('/v1/anime/prompts', { schema: { querystring: PromptListQuery }, preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_READ_ROLES)] }, async (request: any) => {
     const userId = authCheck(request);
-    const projectId = request.query?.project_id as string | undefined;
-    let query = animeSupabase
+    const query = request.query ?? {};
+    const projectId = query.project_id as string | undefined;
+    let dbQuery = animeSupabase
       .from('user_system_prompts')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (projectId) query = query.eq('project_id', projectId);
+      .order('is_favorite', { ascending: false })
+      .order('updated_at', { ascending: false });
 
-    const { data, error } = await query;
+    if (projectId) {
+      dbQuery = dbQuery.or(`project_id.eq.${projectId},project_id.is.null`);
+    }
+    if (query.prompt_category) dbQuery = dbQuery.eq('prompt_category', String(query.prompt_category).toUpperCase());
+    if (query.genre) dbQuery = dbQuery.eq('genre', query.genre);
+    if (query.format) dbQuery = dbQuery.eq('format', String(query.format).toUpperCase());
+    if (query.is_favorite === 'true') dbQuery = dbQuery.eq('is_favorite', true);
+    if (query.is_favorite === 'false') dbQuery = dbQuery.eq('is_favorite', false);
+    if (query.include_archived !== 'true') dbQuery = dbQuery.eq('is_archived', false);
+    const searchTerm = query.q ? String(query.q).toLowerCase() : null;
+    if (searchTerm && !projectId) {
+      const term = escapeLike(searchTerm);
+      dbQuery = dbQuery.or(`title.ilike.%${term}%,prompt_text.ilike.%${term}%,genre.ilike.%${term}%`);
+    }
+
+    const { data, error } = await dbQuery;
     if (error) {
       return { data: [], meta: { request_id: request.anime?.request_id, warning: error.message } };
     }
-    return { data: data ?? [], meta: { request_id: request.anime?.request_id } };
+    let rows = data ?? [];
+    if (searchTerm && projectId) {
+      rows = rows.filter((row: any) => ['title', 'prompt_text', 'genre']
+        .some((field) => String(row?.[field] ?? '').toLowerCase().includes(searchTerm)));
+    }
+    return { data: rows, meta: { request_id: request.anime?.request_id } };
   });
 
   app.post('/v1/anime/prompts', { schema: { body: CreatePromptBody }, preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_WRITE_ROLES)] }, async (request: any, reply: any) => {
     const userId = authCheck(request);
     const { project_id, title, visual_medium, prompt_text, set_active } = request.body;
+    const promptCategory = String(request.body.prompt_category || 'BIBLE').toUpperCase();
+    const compatibility = evaluatePromptCompatibility({
+      genre: request.body.genre,
+      format: request.body.format,
+      visual_medium,
+      model_hint: request.body.model_hint,
+    });
+    if (!compatibility.compatible) {
+      throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: compatibility.reasons.join(' ') });
+    }
 
     const { data, error } = await animeSupabase
       .from('user_system_prompts')
@@ -557,8 +766,14 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
         project_id: project_id || null,
         title,
         visual_medium,
+        prompt_category: promptCategory,
+        genre: request.body.genre || null,
+        format: request.body.format || null,
+        model_hint: request.body.model_hint || null,
+        tags: request.body.tags || [],
+        is_favorite: Boolean(request.body.is_favorite),
         prompt_text,
-        is_default: Boolean(set_active),
+        is_default: false,
       }])
       .select()
       .single();
@@ -570,11 +785,125 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     if (set_active && project_id && data?.id) {
       await animeSupabase
         .from('projects')
-        .update({ visual_medium, active_system_prompt_id: data.id })
-        .eq('id', project_id);
+        .update({ active_system_prompt_id: data.id })
+        .eq('id', project_id)
+        .eq('user_id', userId);
+      await animeSupabase
+        .from('project_prompt_associations')
+        .upsert([{ project_id, prompt_id: data.id, user_id: userId, surface: promptCategory }], { onConflict: 'project_id,prompt_id' });
     }
 
     void reply.status(201);
+    return { data, meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.patch('/v1/anime/prompts/:id', { schema: { params: IdParams, body: UpdatePromptBody }, preHandler: [app.authenticate] }, async (request: any) => {
+    const userId = authCheck(request);
+    const patch: Record<string, any> = {};
+    for (const key of ['title', 'visual_medium', 'genre', 'format', 'model_hint', 'tags', 'is_favorite', 'is_archived', 'prompt_text']) {
+      if (request.body[key] !== undefined) patch[key] = request.body[key];
+    }
+    if (request.body.prompt_category !== undefined) patch.prompt_category = String(request.body.prompt_category).toUpperCase();
+    if (Object.keys(patch).length === 0) {
+      throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'No prompt fields to update.' });
+    }
+
+    const { data: existing, error: fetchError } = await animeSupabase
+      .from('user_system_prompts')
+      .select('*')
+      .eq('id', request.params.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (fetchError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: fetchError.message });
+    if (!existing) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Prompt not found.' });
+
+    const compatibility = evaluatePromptCompatibility({
+      genre: patch.genre ?? existing.genre,
+      format: patch.format ?? existing.format,
+      visual_medium: patch.visual_medium ?? existing.visual_medium,
+      model_hint: patch.model_hint ?? existing.model_hint,
+    });
+    if (!compatibility.compatible) {
+      throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: compatibility.reasons.join(' ') });
+    }
+
+    const { data, error } = await animeSupabase
+      .from('user_system_prompts')
+      .update(patch)
+      .eq('id', request.params.id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: error.message });
+    return { data, meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.post('/v1/anime/prompts/:id/favorite', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any) => {
+    const userId = authCheck(request);
+    const { data: existing, error: fetchError } = await animeSupabase
+      .from('user_system_prompts')
+      .select('id, is_favorite')
+      .eq('id', request.params.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (fetchError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: fetchError.message });
+    if (!existing) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Prompt not found.' });
+
+    const next = !Boolean(existing.is_favorite);
+    const { data, error } = await animeSupabase
+      .from('user_system_prompts')
+      .update({ is_favorite: next })
+      .eq('id', request.params.id)
+      .eq('user_id', userId)
+      .select()
+      .single();
+    if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: error.message });
+    return { data, meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.get('/v1/anime/prompts/:id/versions', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any) => {
+    const userId = authCheck(request);
+    const { data: prompt } = await animeSupabase
+      .from('user_system_prompts')
+      .select('id')
+      .eq('id', request.params.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!prompt) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Prompt not found.' });
+
+    const { data, error } = await animeSupabase
+      .from('prompt_versions')
+      .select('*')
+      .eq('prompt_id', request.params.id)
+      .eq('user_id', userId)
+      .order('version', { ascending: false });
+    if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: error.message });
+    return { data: data ?? [], meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.post('/v1/anime/prompts/:id/associate', { schema: { params: IdParams }, preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_WRITE_ROLES)] }, async (request: any) => {
+    const userId = authCheck(request);
+    const projectId = String(request.body?.project_id || '');
+    if (!projectId) throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'project_id is required.' });
+    const { data: prompt } = await animeSupabase
+      .from('user_system_prompts')
+      .select('id, prompt_category')
+      .eq('id', request.params.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (!prompt) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Prompt not found.' });
+
+    const { data, error } = await animeSupabase
+      .from('project_prompt_associations')
+      .upsert([{
+        project_id: projectId,
+        prompt_id: request.params.id,
+        user_id: userId,
+        surface: String(request.body?.surface || prompt.prompt_category || 'LIBRARY'),
+      }], { onConflict: 'project_id,prompt_id' })
+      .select()
+      .single();
+    if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: error.message });
     return { data, meta: { request_id: request.anime?.request_id } };
   });
 
