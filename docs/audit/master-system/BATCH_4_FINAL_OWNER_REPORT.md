@@ -2,15 +2,19 @@
 
 Date: 2026-11-10
 Branch: `opencode/batch-4-byd-security`
-Head: `00d6e037a2c9c333181537751ffb0c6b3b9c8769`
+Head: `7ef3016f995b5859c230de0d6b99a63740025f56`
+Android head: `c39a5d5ad65b34e32ed729b5afdc80f3fa365626`
 PR: `https://github.com/bnaisolution/ai-anime-backend/pull/4`
-Verdict: **PROVIDER PAYLOAD AT-REST HARDENING PASS — BYOD, TENANT, AWS, LIVE N8N, WORKER, AND MANUAL ANDROID GATES REMAIN BLOCKED**
+Android PR: `https://github.com/bnaisolution/ai-anime-android/pull/4`
+Verdict: **SAFE BATCH 4 IMPLEMENTATION COMPLETE — RUNTIME, EXTERNAL, AND OWNER GATES REMAIN BLOCKED**
 
 ## 1. Executive Verdict
 
-Batch 4 recovered the complete `B4-01`..`B4-20` scope from the master roadmap and implemented the one authorized hardening item that could be completed safely without BYOD authorization, an isolated multi-tenant environment, AWS access, a disposable n8n instance, or a physical Android device.
+Batch 4 recovered the complete `B4-01`..`B4-20` scope from the master roadmap and implemented every safe item that did not require BYOD authorization, an isolated multi-tenant database, AWS access, a disposable n8n instance, paid providers, or a physical Android device.
 
-The completed change removes provider configuration from command/outbox persistence, hydrates it from encrypted infrastructure storage only at dispatch time, redacts callback and n8n-response payloads, and adds database trigger/TTL defense-in-depth with rollback.
+The completed work includes provider-payload at-rest hardening, a tenant registry/resolver with fail-closed project enforcement, an additive tenant/project/documents migration, BYOI encryption versioning plus rotate/revoke/bind/validate lifecycle routes, disabled-by-default Platform-Managed interfaces, independent GPU/CPU/audio/LLM compute selection, an interface-only replication/failover adapter, Owner Batch 4 APIs, quota enforcement/audit, and Android draggable-assistant and Owner Overview controls.
+
+Backend CI `42769809823` and Android CI `42772706167` are green. Android CI includes 58 JVM tests, 122 Compose instrumentation tests, lint, and 2/2 Maestro emulator flows. Maestro evidence is recorded in section 16.
 
 No PR was merged. No production database, n8n workflow, credential, Android device, worker runtime, AWS resource, or paid workload was touched.
 
@@ -28,16 +32,21 @@ Completed:
 - Audited the command/outbox/callback provider-config lifecycle.
 - Implemented backend provider-payload at-rest redaction and dispatch-time hydration.
 - Added migration, rollback, TTL cleanup, unit tests, static tests, and CI.
+- Implemented tenant registry/resolver, tenant APIs, project tenant enforcement, and additive tenant/project/documents ownership migration.
+- Implemented BYOI lifecycle: encryption versioning, previous-key fallback, rotate, revoke, bind, validate, and lifecycle status.
+- Implemented disabled-by-default Platform-Managed status, compute selection, replication interface/mock failover, Owner Batch 4 APIs, and quota guard/audit.
+- Implemented Android draggable bounded assistant FAB with persisted offset and JVM coverage.
+- Implemented Android Owner Overview Platform-Managed, replication, and quota states with API/repository hooks.
 - Recorded all unavailable gates as `BLOCKED`, `PARTIAL`, `NOT RUN`, or `OWNER DECISION REQUIRED`.
 
 Not performed:
 
-- No BYOD/tenant resolver implementation.
-- No Platform-Managed pool, metering, billing, or capacity implementation.
-- No production/isolated database migration execution.
+- No production/isolated database migration execution or RLS/cross-tenant replay.
+- No real Platform-Managed pool, provider billing, metering, or paid capacity.
+- No real secondary database, replication, or failover execution.
 - No live n8n import, activation, execution, or workflow modification.
 - No worker runtime or worker authentication change.
-- No Android UI/Keystore/device change in Batch 4.
+- No physical-device backup, manual accessibility, or manual gesture testing.
 - No AWS recovery action.
 - No production deployment, credential rotation, release, or PR merge.
 - No AI Assistant App, AI App Factory, or Super App change.
@@ -51,14 +60,14 @@ Not performed:
 - n8n work is static/contract-only; no live instance was used.
 - Android SDK/Gradle/emulator work was not run locally on Termux.
 - Existing Batch 2 and Batch 3 branches/PRs remain intact and unmerged.
-- The only production-code changes are backend security hardening and callback/outbox sanitization.
+- Production-code changes are limited to backend Batch 4 security/tenant/platform controls and Android Batch 4 owner/FAB controls; no production runtime was exercised.
 
 ## 4. Repositories, Branches, PRs, and Commits
 
 | Repository | Local path | Batch 4 branch | Base | Head | PR |
 |---|---|---|---|---|---|
-| Backend | `/data/data/com.termux/files/home/anime-audit/ai-anime-backend` | `opencode/batch-4-byd-security` | `opencode/batch-3-test-framework` | `00d6e037a2c9c333181537751ffb0c6b3b9c8769` | `#4` OPEN, `CLEAN` |
-| Android | `/data/data/com.termux/files/home/anime-audit/ai-anime-android` | No Batch 4 branch | `opencode/batch-3-test-framework` | `7087f332e8639f4fff7ceb9e9504324d37264326` | `#3` OPEN, `CLEAN` |
+| Backend | `/data/data/com.termux/files/home/anime-audit/ai-anime-backend` | `opencode/batch-4-byd-security` | `opencode/batch-3-test-framework` | `7ef3016f995b5859c230de0d6b99a63740025f56` | `#4` OPEN, `CLEAN` |
+| Android | `/data/data/com.termux/files/home/anime-audit/ai-anime-android` | `opencode/batch-4-owner-controls` | `opencode/batch-3-test-framework` | `c39a5d5ad65b34e32ed729b5afdc80f3fa365626` | `#4` OPEN, `CLEAN` |
 | Worker | `/data/data/com.termux/files/home/anime-audit/anime-cpu-worker` | No Batch 4 branch | `opencode/batch-3-test-framework` | `c3a0435e92ae53fc8d47a382662f4040e903b93b` | `#1` OPEN, `CLEAN` |
 
 Batch 2 remains unmerged:
@@ -66,9 +75,12 @@ Batch 2 remains unmerged:
 - Backend PR #2: OPEN, `CLEAN`, head `935b2dc3c61c934240f18bf5cbf7cd193e4653f2`, base `opencode/batch-1-foundation`.
 - Android PR #2: OPEN, `CLEAN`, head `e26890d6e406206eda07552ca906e4ba8718a1ec`, base `opencode/batch-1-foundation`.
 
-Batch 4 commit:
+Batch 4 commits:
 
-- `00d6e03` `feat(security): redact provider payloads at rest`
+- Backend `00d6e03` `feat(security): redact provider payloads at rest` (preserved).
+- Backend `7ef3016` `feat: implement batch 4 tenant and platform controls`.
+- Android `1fe7b7e` `feat: implement batch 4 owner and draggable assistant controls`.
+- Android `c39a5d5` `fix(android): preserve owner and assistant accessibility controls`.
 
 ## 5. Batch 4 Scope Recovery
 
@@ -82,18 +94,18 @@ The roadmap status table is stale for `B4-08`: the Android source already uses K
 
 | ID | Status | Evidence / reason |
 |---|---|---|
-| B4-01 | BLOCKED / NOT IMPLEMENTED | No tenant resolver/registry; requires BYOD authorization and isolated multi-tenant environment. |
-| B4-02 | PARTIAL / BLOCKED | `user_infrastructure` encrypted CRUD exists; BYOI onboarding/binding/rotation/revocation and isolation tests are absent. |
-| B4-03 | BLOCKED / NOT IMPLEMENTED | No `projects` split/documents ownership migration; requires migration approval and isolated DB. |
-| B4-04 | BLOCKED / NOT IMPLEMENTED | No Platform-Managed pool, metering, billing, queue/capacity, or disabled “Coming Soon” mode. |
-| B4-05 | PARTIAL / BLOCKED | Partial provider/GPU config only; no independent mode selection matrix. |
-| B4-06 | PARTIAL / BLOCKED | Owner backend routes and Android Owner screens exist; full provider/model/infrastructure/mode/approval controls are not complete. |
-| B4-07 | BLOCKED / NOT IMPLEMENTED | No secondary DB/replication/failover implementation or isolated DB. |
+| B4-01 | IMPLEMENTED / RUNTIME VERIFICATION BLOCKED | Tenant registry, resolver, routes, membership checks, project guard, and additive migration exist. No isolated DB replay/RLS/cross-tenant test. |
+| B4-02 | IMPLEMENTED / RUNTIME VERIFICATION BLOCKED | BYOI bind/rotate/revoke/validate/lifecycle routes, versioned encryption, previous-key fallback, and public DTO exist. No isolated DB execution. |
+| B4-03 | IMPLEMENTED MIGRATION / REPLAY BLOCKED | Additive `005` migration adds tenant/project ownership and BYOI metadata with rollback. No production/isolated replay. |
+| B4-04 | SAFE INTERFACE / OWNER AUTHORIZATION BLOCKED | Disabled-by-default Platform-Managed status and owner activation API exist; no real pool, billing, metering, or paid capacity. |
+| B4-05 | IMPLEMENTED / RUNTIME VERIFICATION BLOCKED | Independent GPU/CPU/audio/LLM compute selector with fallback and fail-closed behavior; no live worker/provider execution. |
+| B4-06 | IMPLEMENTED SAFE SURFACE / RUNTIME BLOCKED | Owner Batch 4 APIs and Android Platform-Managed/replication/quota cards exist; full provider/model/approval control matrix remains future work. |
+| B4-07 | INTERFACE ONLY / BLOCKED | `NoneReplicationAdapter` and explicit mock failover exist; failover fails closed when unconfigured. No real secondary DB. |
 | B4-08 | SOURCE COMPLETE / DEVICE EVIDENCE BLOCKED | `TokenManager.kt:261` uses `MasterKey` + `EncryptedSharedPreferences`; `AndroidManifest.xml:4` sets `allowBackup="false"`. No physical backup/migration test. |
-| B4-09 | PARTIAL / BLOCKED | `TokenManager.kt:181` persists FAB offsets, but `AppNavGraph.kt:358` still uses a fixed FAB; no drag/snap/accessibility implementation. |
-| B4-10 | PARTIAL / BLOCKED | `ui/owner/*` screens exist; Platform-Managed disabled behavior and full Owner controls are absent. |
-| B4-11 | BLOCKED / NOT IMPLEMENTED | Single `ANIME_ENCRYPTION_KEY`; no versioned registry, rotation, re-encryption, or KMS-ready custody. |
-| B4-12 | PARTIAL / VERIFIED LOCALLY | Quota/audit/owner route tests pass; full GOV-01 runtime evidence is not complete. |
+| B4-09 | IMPLEMENTED / DEVICE EVIDENCE BLOCKED | Bounded draggable FAB, persisted offset, visibility rules, test tag, and `FabOffsetTest` JVM coverage exist. Android CI green; no manual gesture/accessibility session. |
+| B4-10 | IMPLEMENTED / RUNTIME BLOCKED | Owner Overview dynamically renders Platform-Managed status, replication status, and quota; API/repository hooks and test tags exist. Android CI green. |
+| B4-11 | IMPLEMENTED / ROTATION RUNTIME BLOCKED | `v2:` ciphertext prefix, legacy decrypt, previous-key fallback, rotation/revocation/binding lifecycle exist. No live key-rotation drill. |
+| B4-12 | IMPLEMENTED / RUNTIME VERIFICATION BLOCKED | Tenant quota status/assert, command guard, owner-only APIs, and `QUOTA_DENIED` audit exist. No full GOV-01 runtime evidence. |
 | B4-13 | BLOCKED | No AWS read-only access or approved verification environment. |
 | B4-14 | BLOCKED | No isolated n8n runtime; workflows were parsed/validated statically only. |
 | B4-15 | BLOCKED | No integrated Android → backend → DB → n8n → worker → storage environment. |
@@ -177,16 +189,38 @@ Rollback cannot restore credentials already removed by the forward migration. Th
 - The dispatcher calls `redact_expired_payloads` on each tick and logs failures without blocking dispatch.
 - The TTL path is defense-in-depth for legacy/unknown sensitive keys; new writes are redacted before persistence and by database trigger.
 
-## 14. Backend Test Evidence
+## 14. Batch 4 Tenant, Platform, and Owner Implementation
+
+Backend:
+
+- `005_batch4_tenant_platform.sql` and rollback add `anime_tenants`, `anime_tenant_members`, `anime_platform_settings`, additive `projects.tenant_id`, `documents.tenant_id/project_id`, `quota_usage.tenant_id`, and BYOI metadata (`key_version`, `bound_tenant_id`, `last_rotated_at`, `revoked_at`, `fingerprint`) with legacy backfill and service-role RLS policies.
+- Tenant module (`tenant.types`, `tenant.repo`, `tenant.service`, `tenant.routes`) resolves active memberships fail-closed, validates `x-tenant-id`/body/query consistency, rejects client user override, and exposes `/v1/anime/tenants`, `/current`, and `/:id/default`.
+- Project guard selects `id, user_id, tenant_id`, rejects tenant-header/project mismatch, enforces membership when a project has a tenant, and sets `request.anime.tenant_id`.
+- Error codes added: `TENANT_FORBIDDEN`, `TENANT_REQUIRED`, `QUOTA_EXCEEDED`, `PLATFORM_MANAGED_DISABLED`, `REPLICATION_NOT_CONFIGURED`.
+- BYOI lifecycle uses `v2:` ciphertext, legacy decrypt, `ANIME_ENCRYPTION_KEY_PREVIOUS` fallback, and `/rotate`, `/revoke`, `/bind`, `/lifecycle`, `/validate`.
+- Platform-Managed is disabled unless both `ANIME_PLATFORM_MANAGED_ENABLED=true` and `ANIME_PLATFORM_MANAGED_OWNER_APPROVED=true`; routes expose status/actions.
+- Compute selection is independent for GPU, CPU, audio, and LLM with fallback and fail-closed behavior.
+- Replication is interface-only: unconfigured failover throws `REPLICATION_NOT_CONFIGURED`; mock failover returns `simulated: true` and performs no destructive SQL.
+- Owner Batch 4 routes expose platform-managed status/activate, replication status/failover, quota, and tenants; they are owner-only and reject service identity.
+- Quota guard enforces tenant quota on `POST /v1/anime/commands` and audits `QUOTA_DENIED`.
+
+Android:
+
+- `FabOffset.kt` implements bounded offset clamping and route visibility; the global FAB is draggable via `detectDragGestures`, persisted with `TokenManager.saveFabOffset`, and hidden on `ai_brain`/`studio`.
+- Owner Overview fetches platform, replication, and owner quota status and renders `ENABLED` vs `COMING SOON`, replication state, and quota summary.
+- New API/repository methods are test-safe defaults on `AnimeRepositoryApi` so existing fakes remain valid.
+- `FabOffsetTest` covers bounds and visibility.
+
+## 15. Backend Test Evidence
 
 Local results:
 
 | Suite | Result |
 |---|---|
 | `npm run build` | PASS |
-| `npm run test:unit` | PASS — 69 |
+| `npm run test:unit` | PASS — 92 |
 | `npm run test:routes` | PASS — 81 |
-| `npm run test:static` | PASS — 80 |
+| `npm run test:static` | PASS — 89 |
 | `npm run test:regression` | PASS — 19 |
 | `npm run test:db` | BLOCKED — 4 skipped without isolated DB |
 
@@ -195,34 +229,52 @@ New coverage:
 - `test/unit/payload.redaction.test.js`
 - `test/unit/commands.hydration.test.js` updated for redaction + dispatch hydration
 - `test/static/payload.security.test.js`
+- `test/unit/tenant.service.test.js`
+- `test/unit/compute.selector.test.js`
+- `test/unit/infrastructure.crypto.test.js`
+- `test/unit/platform.replication.test.js`
+- `test/static/batch4.tenant.platform.test.js`
 
-## 15. CI Evidence
+## 16. CI Evidence
 
 - Backend CI run `42765154897`: PASS on `00d6e037a2c9c333181537751ffb0c6b3b9c8769`.
 - Report-only CI run `42765554847`: PASS on `ec10bf24a4d97836ddf5d4f68c7f6764d23cafdb`; tested code unchanged.
-- Safe suites job: PASS.
-- Regression job: PASS.
-- Isolated database job: SKIPPED by the safety gate.
-- PR #4: OPEN, `CLEAN`, base `opencode/batch-3-test-framework`.
+- Report-only CI run `42765739905`: PASS on `cb450127e987a6677a244de0f2e618bd145cdc98`.
+- Backend implementation CI run `42769809823`: PASS on `7ef3016f995b5859c230de0d6b99a63740025f56`.
+- Backend safe suites and regression jobs: PASS.
+- Backend isolated database job: SKIPPED by the safety gate.
+- Backend PR #4: OPEN, `CLEAN`, base `opencode/batch-3-test-framework`.
 
-No new Batch 4 Android or worker CI run was created because neither repository was changed.
+Android CI run `42772706167`: PASS on `c39a5d5ad65b34e32ed729b5afdc80f3fa365626`.
 
-## 16. Android Status
+- JVM unit tests: PASS — 58 tests, 0 failures.
+- Compose instrumentation: PASS — 122 tests on API 34 emulator.
+- Android Lint: PASS (informational).
+- Maestro smoke: PASS — 2/2 flows executed on `emulator-5554`:
+  - `01-launch`: launch, visible `AI Cinematic Anime Studio`, visible `Sign In to Studio`.
+  - `02-auth-validation`: tap `Sign In to Studio`, visible `Email and password are required.`
+  - Artifact `android-maestro-artifacts` contains per-flow `commands.json`, `manifest.json`, screenshots, screen hierarchy, Maestro logs, and emulator logcat.
+  - The only non-completed command is an intentional optional `tapOnElement("Wait")` marked `WARNED`; all required assertions are `COMPLETED`.
+- Android test summary: PASS.
 
-- Batch 3 Android evidence remains valid: `7087f33`, CI `42757794603`, 54 JVM, 122 instrumentation, 2/2 Maestro, lint/APK.
-- `B4-08` source appears complete: Keystore-backed encrypted preferences and backup disabled.
-- `B4-09` remains partial: offset persistence exists, draggable bubble UI/accessibility does not.
-- `B4-10` remains partial: Owner screens exist, Platform-Managed disabled behavior does not.
+No new Batch 4 worker CI run was created because the worker was not changed.
+
+## 17. Android Status
+
+- Batch 4 Android CI `42772706167` is PASS on `c39a5d5`: 58 JVM, 122 instrumentation, lint, 2/2 Maestro emulator flows.
+- `B4-08` source remains complete: Keystore-backed encrypted preferences and backup disabled.
+- `B4-09` is implemented: bounded draggable FAB, persisted offset, route visibility, test tag, and JVM coverage. Manual gesture/snap/accessibility evidence remains `NOT RUN`.
+- `B4-10` is implemented: Owner Overview renders dynamic Platform-Managed, replication, and quota states. Full provider/model/approval control matrix remains future work.
 - Manual accessibility/device/tablet testing remains `NOT RUN`.
 
-## 17. Worker Status
+## 18. Worker Status
 
 - Batch 3 worker evidence remains valid: `c3a0435`, CI `42757780077`, 20 tests.
 - No Batch 4 worker code change was made.
 - Worker endpoint authentication gap remains a separate security decision.
 - No TTS/FFmpeg/GPU/Telegram runtime was executed.
 
-## 18. n8n Status
+## 19. n8n Status
 
 - Canonical workflows remain exactly 14.
 - Static contract validation passes.
@@ -230,14 +282,14 @@ No new Batch 4 Android or worker CI run was created because neither repository w
 - `n8n-workflows-all/` remains auxiliary.
 - The existing all-`active: true` export state and WF-00 environment-ID references remain configuration review items.
 
-## 19. Database Status
+## 20. Database Status
 
 - No database connection was opened.
+- `005_batch4_tenant_platform.sql` is additive and paired with rollback; static migration ordering and destructive-command checks pass.
 - Migration replay, trigger execution, TTL RPC execution, RLS, and cross-tenant behavior remain `BLOCKED`.
-- Static migration ordering, rollback pairing, and destructive-command checks pass.
-- The migration is additive except for irreversible payload redaction of existing rows.
+- The payload migration is additive except for irreversible redaction of existing sensitive rows.
 
-## 20. Security Findings
+## 21. Security Findings
 
 - Provider config no longer intentionally rests in command/outbox payloads.
 - Redaction covers nested objects/arrays and common secret key forms.
@@ -245,43 +297,48 @@ No new Batch 4 Android or worker CI run was created because neither repository w
 - n8n response and callback payloads are redacted before persistence.
 - Residual risk: request-body provider config is ignored for dispatch; this is intentional but must be communicated.
 - Residual risk: worker endpoint authentication is still unresolved.
-- Residual risk: encryption key versioning/rotation (`B4-11`) is not implemented.
+- Residual risk: encryption key versioning/rotation is implemented but not exercised against a live key ring or KMS.
+- Residual risk: tenant/platform/replication paths are implemented but not replayed against an isolated database or real provider.
 
-## 21. Blocked Gates
+## 22. Blocked Gates
 
 | Gate | Status | Reason |
 |---|---|---|
 | BYOD/tenant resolver and isolation | BLOCKED | No authorization/isolated multi-tenant environment |
 | Isolated DB migration/RLS/trigger replay | BLOCKED | No isolated Supabase project/secrets |
-| Platform-Managed mode | BLOCKED | No implementation authorization/environment |
+| Platform-Managed mode | SAFE INTERFACE ONLY | Disabled-by-default code exists; real providers/billing require Owner authorization |
 | AWS runtime recovery | BLOCKED | No AWS read-only access |
 | Live n8n 14-workflow runtime | BLOCKED | No disposable n8n instance |
 | Worker runtime/auth verification | BLOCKED | No runtime services; auth decision pending |
 | Manual Android accessibility/device | NOT RUN | No physical device/manual session |
 | Full E2E and Owner acceptance | BLOCKED | No complete isolated system |
 | OD-14/OD-15 decisions | OPEN/BLOCKED | Owner decisions not recorded |
+| Real Platform-Managed capacity | BLOCKED | No provider/billing authorization or paid environment |
+| Real replication/failover | BLOCKED | No isolated secondary database |
 
-## 22. Owner Actions
+## 23. Owner Actions
 
 1. Review the intentional behavior change: per-command `user_infrastructure` is no longer persisted or dispatched; configure provider credentials through the encrypted infrastructure API.
 2. Approve or reject Batch 4 PR #4; it stacks on Batch 3, which stacks on Batch 2.
 3. Provide an isolated Supabase project to execute migration/trigger/TTL/RLS replay.
-4. Provide BYOD authorization and an isolated multi-tenant environment before `B4-01`..`B4-07`.
+4. Provide an isolated multi-tenant environment to replay `B4-01`..`B4-07` and validate RLS/cross-tenant behavior.
 5. Provide a disposable n8n instance for `B4-14`.
 6. Provide AWS read-only access or an approved verification environment for `B4-13`.
 7. Schedule physical Android accessibility/device testing for `B4-16`.
-8. Decide whether worker endpoint authentication and encryption-key versioning are separate follow-up batches.
+8. Decide whether worker endpoint authentication and live key-rotation/KMS drills are separate follow-up batches.
 
-## 23. Final PR Status
+## 24. Final PR Status
 
-- Backend PR #4: `https://github.com/bnaisolution/ai-anime-backend/pull/4` — OPEN, `CLEAN`, base `opencode/batch-3-test-framework`, head `00d6e037a2c9c333181537751ffb0c6b3b9c8769`.
+- Backend PR #4: `https://github.com/bnaisolution/ai-anime-backend/pull/4` — OPEN, `CLEAN`, base `opencode/batch-3-test-framework`, head `7ef3016f995b5859c230de0d6b99a63740025f56`.
+- Android PR #4: `https://github.com/bnaisolution/ai-anime-android/pull/4` — OPEN, `CLEAN`, base `opencode/batch-3-test-framework`, head `c39a5d5ad65b34e32ed729b5afdc80f3fa365626`.
 - Backend PR #3: OPEN, `CLEAN`, head `550f0ef526553f4ebc33c1ec6c6d4d88e42eb4fd`.
 - Android PR #3: OPEN, `CLEAN`, head `7087f332e8639f4fff7ceb9e9504324d37264326`.
 - Worker PR #1: OPEN, `CLEAN`, head `c3a0435e92ae53fc8d47a382662f4040e903b93b`.
 
-## 24. Final Status
+## 25. Final Status
 
 **Batch 4 provider-config at-rest security hardening: PASS.**
-**Batch 4 BYOD, tenant isolation, Platform-Managed, AWS recovery, live n8n runtime, worker runtime, manual Android accessibility, full E2E, Owner acceptance, and production approval: BLOCKED / NOT RUN.**
+**Batch 4 safe tenant/platform/BYOI/owner implementation: PASS in CI.**
+**Batch 4 isolated DB replay, real Platform-Managed capacity, real replication, AWS recovery, live n8n runtime, worker runtime, manual Android accessibility, full E2E, Owner acceptance, and production approval: BLOCKED / NOT RUN.**
 
 No production system was touched, no database migration was executed, no workflow was activated, and no PR was merged.
