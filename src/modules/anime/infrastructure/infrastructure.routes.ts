@@ -44,9 +44,76 @@ const GpuSetupBody = Type.Object({
 });
 
 const PROMPT_CATEGORIES = ['BIBLE', 'EPISODE', 'IMAGE', 'AI_DIRECTOR'] as const;
-const PROMPT_MEDIA = ['ANIME', 'REAL_HUMAN', 'MANHWA', '3D', 'HYBRID'] as const;
+const PROMPT_MEDIA = ['ANIME', 'REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC', 'MANHWA', '3D', 'HYBRID'] as const;
 const PROMPT_FORMATS = ['SERIES', 'MOVIE', 'SHORT', 'MUSIC_VIDEO', 'TRAILER'] as const;
 const PROMPT_MODELS = ['DEFAULT', 'SDXL', 'FLUX', 'ANIMATEDIFF', 'RUNWAY', 'KLING', 'SORA'] as const;
+const PROMPT_GENRES = [
+  'Action', 'Horror', 'Thriller', 'Romance', 'Comedy', 'Mythology',
+  'Fantasy', 'Dark Fantasy', 'Sci-Fi', 'Mystery', 'Slice of Life', 'Music',
+] as const;
+
+const PROMPT_GENRE_TEMPLATES = [
+  {
+    id: 'horror',
+    genre: 'Horror',
+    title: 'Horror Atmosphere Template',
+    visual_medium: 'CINEMATIC',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['horror', 'atmosphere', 'tension'],
+    prompt_text: 'Build dread through restrained pacing, negative space, unsettling sound design, and a persistent visual motif. Keep the threat partially unseen until the final act.',
+  },
+  {
+    id: 'thriller',
+    genre: 'Thriller',
+    title: 'Thriller Escalation Template',
+    visual_medium: 'CINEMATIC',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['thriller', 'suspense', 'escalation'],
+    prompt_text: 'Drive the story with escalating stakes, a ticking clock, and information asymmetry. Every scene must change the balance of power or reveal a new cost.',
+  },
+  {
+    id: 'romance',
+    genre: 'Romance',
+    title: 'Romance Emotional Beat Template',
+    visual_medium: 'ANIME',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['romance', 'emotion', 'character'],
+    prompt_text: 'Center emotional honesty and gradual intimacy. Use recurring visual motifs, meaningful silence, and choices that reveal character rather than exposition.',
+  },
+  {
+    id: 'comedy',
+    genre: 'Comedy',
+    title: 'Comedy Timing Template',
+    visual_medium: 'ANIME',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['comedy', 'timing', 'ensemble'],
+    prompt_text: 'Build comedy from character logic, escalating misunderstandings, and clean visual punctuation. Keep jokes grounded in the established cast and world rules.',
+  },
+  {
+    id: 'action',
+    genre: 'Action',
+    title: 'Action Choreography Template',
+    visual_medium: 'ANIME',
+    format: 'SERIES',
+    model_hint: 'DEFAULT',
+    tags: ['action', 'choreography', 'stakes'],
+    prompt_text: 'Stage action with readable geography, clear objectives, and escalating consequences. Alternate wide establishing shots with decisive close-ups and never lose character intent.',
+  },
+  {
+    id: 'mythology',
+    genre: 'Mythology',
+    title: 'Mythology Worldbuilding Template',
+    visual_medium: 'CINEMATIC',
+    format: 'MOVIE',
+    model_hint: 'DEFAULT',
+    tags: ['mythology', 'worldbuilding', 'symbolism'],
+    prompt_text: 'Treat myth as lived belief: define ritual, taboo, divine cost, and contradictory accounts. Use symbolic imagery and recurring motifs without explaining away the mystery.',
+  },
+] as const;
 
 const PromptCategoryEnum = Type.Union(PROMPT_CATEGORIES.map((value) => Type.Literal(value)));
 const PromptMediumEnum = Type.Union(PROMPT_MEDIA.map((value) => Type.Literal(value)));
@@ -98,8 +165,11 @@ const CompatibilityBody = Type.Object({
 });
 
 const CompatibilityRules: Record<string, { formats?: string[]; media?: string[]; models?: string[] }> = {
-  HORROR: { media: ['ANIME', 'REAL_HUMAN', 'MANHWA', '3D', 'HYBRID'] },
+  HORROR: { media: ['ANIME', 'REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC', 'MANHWA', '3D', 'HYBRID'] },
+  THRILLER: { media: ['ANIME', 'REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC', 'MANHWA', '3D', 'HYBRID'] },
+  ROMANCE: { formats: ['SERIES', 'MOVIE', 'SHORT'] },
   COMEDY: { models: ['DEFAULT', 'SDXL', 'FLUX', 'ANIMATEDIFF'] },
+  MYTHOLOGY: { formats: ['SERIES', 'MOVIE', 'SHORT', 'TRAILER'] },
   MUSIC: { formats: ['MUSIC_VIDEO', 'SHORT', 'SERIES'] },
   ACTION: { formats: ['SERIES', 'MOVIE', 'SHORT', 'TRAILER', 'MUSIC_VIDEO'] },
 };
@@ -625,7 +695,8 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
         media: PROMPT_MEDIA,
         formats: PROMPT_FORMATS,
         models: PROMPT_MODELS,
-        genres: ['Action', 'Fantasy', 'Dark Fantasy', 'Sci-Fi', 'Horror', 'Comedy', 'Romance', 'Mystery', 'Slice of Life', 'Music'],
+        genres: PROMPT_GENRES,
+        genre_templates: PROMPT_GENRE_TEMPLATES,
       },
       meta: { request_id: request.anime?.request_id },
     };

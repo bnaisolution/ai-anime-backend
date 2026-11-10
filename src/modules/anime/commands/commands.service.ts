@@ -122,11 +122,49 @@ function assertIdempotencyMatch(
   }
 }
 
-async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
+async function resolveEpisodePromptOverride(
+  userId: string,
+  projectId: string,
+  episodeNo: number
+): Promise<{ id: string; title: string; visual_medium?: string; prompt_text: string; prompt_category?: string } | null> {
+  if (!Number.isInteger(episodeNo) || episodeNo < 1) return null;
+  const { data: episodeRow } = await animeSupabase
+    .from('episodes')
+    .select('script_json')
+    .eq('project_id', projectId)
+    .eq('episode_no', episodeNo)
+    .maybeSingle<{ script_json?: Record<string, unknown> | null }>();
+  const scriptJson = episodeRow?.script_json;
+  const promptId = scriptJson && typeof scriptJson === 'object'
+    ? scriptJson.prompt_id
+    : null;
+  if (typeof promptId !== 'string' || !promptId) return null;
+
+  const { data: promptRows } = await animeSupabase
+    .from('user_system_prompts')
+    .select('id, title, visual_medium, prompt_text, prompt_category')
+    .eq('id', promptId)
+    .eq('user_id', userId)
+    .eq('is_archived', false)
+    .limit(1);
+  const prompt = Array.isArray(promptRows) ? promptRows[0] : null;
+  if (!prompt || String(prompt.prompt_category || '').toUpperCase() !== 'EPISODE') return null;
+  return prompt;
+}
+
+async function resolveDynamicPromptAndInfra(
+  userId: string,
+  projectId: string,
+  workflowKey: WorkflowKey,
+  episodeNo: number
+) {
   let visualMedium = 'ANIME';
   let systemPromptTitle = 'Default Storyteller';
   let customSystemPrompt = '';
   let imageSystemPrompt = '';
+  let systemPromptId: string | null = null;
+  let systemPromptCategory: string | null = null;
+  let episodePromptOverride = false;
 
   try {
     const { data: projectRow } = await animeSupabase
@@ -161,10 +199,26 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
     const { data: promptRows } = await promptQuery;
     const activePrompt = Array.isArray(promptRows) ? promptRows[0] : null;
     if (activePrompt) {
+      systemPromptId = activePrompt.id || null;
+      systemPromptCategory = String(activePrompt.prompt_category || 'BIBLE').toUpperCase();
       systemPromptTitle = activePrompt.title || systemPromptTitle;
       customSystemPrompt = activePrompt.prompt_text || '';
       if (activePrompt.visual_medium) {
         visualMedium = String(activePrompt.visual_medium).toUpperCase();
+      }
+    }
+
+    if (workflowKey === 'WF-02') {
+      const episodePrompt = await resolveEpisodePromptOverride(userId, projectId, episodeNo);
+      if (episodePrompt) {
+        episodePromptOverride = true;
+        systemPromptId = episodePrompt.id;
+        systemPromptCategory = 'EPISODE';
+        systemPromptTitle = episodePrompt.title || systemPromptTitle;
+        customSystemPrompt = episodePrompt.prompt_text || '';
+        if (episodePrompt.visual_medium) {
+          visualMedium = String(episodePrompt.visual_medium).toUpperCase();
+        }
       }
     }
 
@@ -203,6 +257,9 @@ async function resolveDynamicPromptAndInfra(userId: string, projectId: string) {
     customSystemPrompt,
     imageSystemPrompt,
     hydratedInfra,
+    systemPromptId,
+    systemPromptCategory,
+    episodePromptOverride,
   };
 }
 
@@ -241,7 +298,12 @@ export async function submitAnimeCommand(
   const episodeNo = params.body.episode_no ?? 1;
   const seasonNo = params.body.season_no ?? 1;
 
-  const dynamicCtx = await resolveDynamicPromptAndInfra(params.userId, params.body.project_id);
+  const dynamicCtx = await resolveDynamicPromptAndInfra(
+    params.userId,
+    params.body.project_id,
+    wfKey,
+    episodeNo
+  );
 
   const payloadObj = (params.body.payload ?? {}) as Record<string, unknown>;
   const resolvedVisualMedium =
@@ -263,6 +325,9 @@ export async function submitAnimeCommand(
     dynamicCtx.imageSystemPrompt;
 
   const systemPromptConfig = {
+    id: dynamicCtx.systemPromptId,
+    prompt_category: dynamicCtx.systemPromptCategory,
+    episode_override: dynamicCtx.episodePromptOverride,
     visual_medium: resolvedVisualMedium,
     title: resolvedPromptTitle,
     prompt_text: resolvedCustomSystemPrompt,
@@ -278,6 +343,9 @@ export async function submitAnimeCommand(
     ...((payloadObj.project_style as Record<string, unknown> | undefined) ?? {}),
     visual_style: resolvedVisualMedium === 'REAL_HUMAN' ? 'REALISTIC' : 'ANIME',
     visual_medium: resolvedVisualMedium,
+    system_prompt_id: dynamicCtx.systemPromptId,
+    system_prompt_category: dynamicCtx.systemPromptCategory,
+    episode_prompt_override: dynamicCtx.episodePromptOverride,
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
     image_system_prompt: resolvedImageSystemPrompt,
@@ -309,6 +377,9 @@ export async function submitAnimeCommand(
     userPrompt,
     user_prompt: userPrompt,
     visual_medium: resolvedVisualMedium,
+    system_prompt_id: dynamicCtx.systemPromptId,
+    system_prompt_category: dynamicCtx.systemPromptCategory,
+    episode_prompt_override: dynamicCtx.episodePromptOverride,
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
     image_system_prompt: resolvedImageSystemPrompt,
@@ -335,6 +406,9 @@ export async function submitAnimeCommand(
     userPrompt,
     user_prompt: userPrompt,
     visual_medium: resolvedVisualMedium,
+    system_prompt_id: dynamicCtx.systemPromptId,
+    system_prompt_category: dynamicCtx.systemPromptCategory,
+    episode_prompt_override: dynamicCtx.episodePromptOverride,
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
     image_system_prompt: resolvedImageSystemPrompt,
