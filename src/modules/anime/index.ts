@@ -12,6 +12,7 @@ import { registerAnimeApprovalsRoutes } from './approvals/approvals.routes';
 import { registerAnimeCallbacksRoutes } from './callbacks/callbacks.routes';
 import { registerAnimeCommandsRoutes } from './commands/commands.routes';
 import { animeErrorHandler } from './errors/anime.errors';
+import { extractUserId } from './auth/project-guard';
 import { startBrainWorker } from './intelligence/brain.worker';
 import { startIncidentWorker } from './intelligence/incident.worker';
 import { registerAnimeMediaRoutes } from './media/media.routes';
@@ -27,7 +28,7 @@ import { registerAnimeDevicesRoutes } from './system/devices.routes';
 
 export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
   // === BATCH6_GLOBAL_PREVALIDATION_HOOK (SIDE-EFFECT-FREE STUDIO CONTEXT & DUPLICATE GUARD) ===
-  app.addHook('preValidation', async (request: any) => {
+  app.addHook('preValidation', async (request: any, reply: any) => {
     const url = String(request.url || '');
     const body = request.body as Record<string, any> | undefined;
     if (!body || typeof body !== 'object') return;
@@ -73,12 +74,20 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
         }
       }
 
+      if (!request.authContext && typeof app.authenticate === 'function') {
+        await app.authenticate(request, reply);
+        if (reply.sent) return;
+      }
+      const userId = extractUserId(request);
+      if (!userId) return;
+
       try {
         const [{ data: proj }, { data: prompts }] = await Promise.all([
           animeSupabase.from('projects').select('story_bible').eq('id', projectId).maybeSingle(),
           animeSupabase
             .from('user_system_prompts')
             .select('*')
+            .eq('user_id', userId)
             .or(`project_id.eq.${projectId},project_id.is.null`)
             .order('created_at', { ascending: false })
             .limit(20),
