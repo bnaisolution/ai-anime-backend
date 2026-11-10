@@ -4,6 +4,7 @@ import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { decryptConfig, encryptConfig, maskConfig } from './infrastructure.crypto';
 import * as repo from './infrastructure.repo';
 import { resolveTenant } from '../tenant/tenant.service';
+import { mintWorkerJobToken } from '../workers/workerToken';
 import type { InfrastructurePublicDto, InfrastructureRecord, ProviderType } from './infrastructure.types';
 
 function masterKey(): string {
@@ -114,7 +115,14 @@ export async function verify(id: string, userId: string, requestId?: string): Pr
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 5000);
-      const resp = await fetch(healthUrl, { signal: ctrl.signal });
+      const healthToken = mintWorkerJobToken({
+        job_id: `infra-verify-${id}`,
+        project_id: 'infrastructure',
+        user_id: userId,
+        scope: ['health'],
+        ttl_seconds: 60,
+      });
+      const resp = await fetch(healthUrl, { signal: ctrl.signal, headers: { authorization: `Bearer ${healthToken}` } });
       clearTimeout(timer);
       ok = resp.ok;
       if (!ok) errMsg = `HTTP ${resp.status}`;
