@@ -72,3 +72,68 @@ test('createProjectSynchronous does not accept a client-supplied id', async () =
   assert.notEqual(created.id, forgedId);
   assert.notEqual(insertPayload.id, forgedId);
 });
+
+test('createProjectSynchronous persists canonical genre and visual medium fields', async () => {
+  let insertPayload;
+  installFakeSupabase(async (call) => {
+    if (call.action === 'insert' && call.table === 'projects') {
+      insertPayload = call.payload;
+      return { data: { ...call.payload }, error: null };
+    }
+    return { data: null, error: null };
+  });
+
+  const { createProjectSynchronous } = H.dist('modules/anime/reads/projects.service.js');
+  await createProjectSynchronous({
+    userId: '11111111-1111-4111-8111-111111111111',
+    name: 'Canonical',
+    genre: 'Sci-Fi',
+    visualMedium: 'MANGA',
+    logline: 'A test logline',
+  });
+
+  assert.equal(insertPayload.genre, 'Sci-Fi');
+  assert.equal(insertPayload.visual_medium, 'MANGA');
+  assert.equal(insertPayload.description, 'A test logline');
+});
+
+test('getProject scopes reads by both project id and authenticated owner', async () => {
+  const owner = '11111111-1111-4111-8111-111111111111';
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.table === 'projects' && call.action === 'select') {
+      return { data: { id: 'p1', user_id: owner, name: 'Owned' }, error: null };
+    }
+    return { data: null, error: null };
+  });
+
+  const { getProject } = H.dist('modules/anime/reads/projects.service.js');
+  const project = await getProject('p1', owner);
+  assert.equal(project.user_id, owner);
+  const select = state.calls.find((call) => call.table === 'projects' && call.action === 'select');
+  assert.deepEqual(
+    select.filters.filter((filter) => filter.op === 'eq').map((filter) => [filter.col, filter.value]),
+    [['id', 'p1'], ['user_id', owner]]
+  );
+});
+
+test('getProject returns PROJECT_FORBIDDEN when the project belongs to another user', async () => {
+  installFakeSupabase(async () => ({ data: null, error: null }));
+  const { getProject } = H.dist('modules/anime/reads/projects.service.js');
+  await assert.rejects(
+    () => getProject('p1', '11111111-1111-4111-8111-111111111111'),
+    (error) => error.code === 'PROJECT_FORBIDDEN' && error.httpStatus === 403
+  );
+});
+
+test('listProjects never falls back to projects owned by other users', async () => {
+  const owner = '11111111-1111-4111-8111-111111111111';
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.table === 'projects' && call.action === 'select') return { data: [], error: null };
+    return { data: null, error: null };
+  });
+
+  const { listProjects } = H.dist('modules/anime/reads/projects.service.js');
+  const projects = await listProjects(owner);
+  assert.deepEqual(projects, []);
+  assert.equal(state.calls.filter((call) => call.table === 'projects' && call.action === 'select').length, 1);
+});

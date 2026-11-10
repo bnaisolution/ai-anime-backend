@@ -1,24 +1,14 @@
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 
-const ACTIVE_STATES = ['QUEUED', 'DISPATCHED', 'ACKNOWLEDGED', 'RUNNING', 'RECONCILING'];
-
 export async function cleanupStaleProjectTasks(projectId?: string) {
-  const cutoffIso = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const nowIso = new Date().toISOString();
   try {
-    let cmdQuery = animeSupabase
-      .from('api_commands')
-      .update({ status: 'FAILED', error_message: 'Auto-expired stale pipeline job (>15m timeout)', updated_at: new Date().toISOString() })
-      .in('status', ACTIVE_STATES)
-      .lt('created_at', cutoffIso);
-    if (projectId) cmdQuery = cmdQuery.eq('project_id', projectId);
-    await cmdQuery;
-
     let paQuery = animeSupabase
       .from('pending_actions')
-      .update({ status: 'COMPLETED' })
-      .in('status', ['PENDING', 'RUNNING', 'FAILED', 'RETRY_SCHEDULED'])
-      .lt('created_at', cutoffIso);
+      .update({ status: 'EXPIRED' })
+      .in('status', ['PENDING', 'RUNNING', 'FAILED', 'RETRY_SCHEDULED', 'pending', 'running', 'failed', 'retry_scheduled'])
+      .lt('expires_at', nowIso);
     if (projectId) paQuery = paQuery.eq('project_id', projectId);
     await paQuery;
 
@@ -56,7 +46,7 @@ export async function getJobDetail(projectId: string, jobId: string) {
 
   const [epRes, paRes] = await Promise.all([
     command.episode_no ? animeSupabase.from('episodes').select('*').eq('project_id', projectId).eq('episode_no', command.episode_no).maybeSingle() : Promise.resolve({ data: null }),
-    animeSupabase.from('pending_actions').select('*').eq('project_id', projectId).in('status', ['PENDING', 'RUNNING', 'RETRY_SCHEDULED']),
+    animeSupabase.from('pending_actions').select('*').eq('project_id', projectId).in('status', ['PENDING', 'RUNNING', 'RETRY_SCHEDULED', 'pending', 'running', 'retry_scheduled']),
   ]);
 
   return { ...command, episode_state: epRes.data ?? null, pending_actions: paRes.data ?? [] };

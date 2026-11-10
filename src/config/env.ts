@@ -18,11 +18,17 @@ export interface EnvConfig {
   PORT: number;
   NODE_ENV: string;
   SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
+  SUPABASE_JWT_SECRET: string;
+  SUPABASE_JWKS_URL: string;
+  SUPABASE_JWT_ISSUER: string;
+  SUPABASE_JWT_AUDIENCE: string;
   JWT_SECRET: string;
   JWT_ISSUER: string;
   JWT_AUDIENCE: string;
   JWT_EXPIRES_IN: string;
+  AUTH_INTERNAL_JWT_ENABLED: boolean;
   OWNER_EMAILS: string[];
   TRUSTED_SERVICE_TOKEN: string;
   GROQ_API_KEY: string;
@@ -35,15 +41,25 @@ export interface EnvConfig {
   TELEGRAM_OWNER_CHAT_ID: string;
 }
 
+const SUPABASE_URL = required('SUPABASE_URL').replace(/\/+$/, '');
+const SUPABASE_AUTH_ISSUER = `${SUPABASE_URL}/auth/v1`;
+const AUTH_INTERNAL_JWT_ENABLED = (process.env.AUTH_INTERNAL_JWT_ENABLED || (NODE_ENV === 'test' ? 'true' : 'false')).trim().toLowerCase() === 'true';
+
 export const env: EnvConfig = {
   PORT: parseInt(process.env.PORT || '3000', 10),
   NODE_ENV,
-  SUPABASE_URL: (process.env.SUPABASE_URL || 'https://icypjilkcqylgbpmkyes.supabase.co').trim(),
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY: (process.env.SUPABASE_ANON_KEY || '').trim(),
   SUPABASE_SERVICE_ROLE_KEY: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+  SUPABASE_JWT_SECRET: (process.env.SUPABASE_JWT_SECRET || '').trim(),
+  SUPABASE_JWKS_URL: (process.env.SUPABASE_JWKS_URL || `${SUPABASE_AUTH_ISSUER}/.well-known/jwks.json`).trim(),
+  SUPABASE_JWT_ISSUER: (process.env.SUPABASE_JWT_ISSUER || SUPABASE_AUTH_ISSUER).trim(),
+  SUPABASE_JWT_AUDIENCE: (process.env.SUPABASE_JWT_AUDIENCE || 'authenticated').trim(),
   JWT_SECRET,
   JWT_ISSUER: required('JWT_ISSUER'),
   JWT_AUDIENCE: required('JWT_AUDIENCE'),
   JWT_EXPIRES_IN: (process.env.JWT_EXPIRES_IN || '1h').trim(),
+  AUTH_INTERNAL_JWT_ENABLED,
   OWNER_EMAILS: (process.env.OWNER_EMAILS || '')
     .split(',')
     .map((e) => e.trim().toLowerCase())
