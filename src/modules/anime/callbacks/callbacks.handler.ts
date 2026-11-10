@@ -3,6 +3,7 @@ import { writeAudit } from '../audit/audit.writer';
 import { animeEnv } from '../config/anime.env';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { redactSensitivePayload } from '../../../security/payloadRedaction';
 import { insertCallback } from './callbacks.repo';
 import { verifyCallbackSignature } from './signature';
 export async function handleCallbackRequest(input: { source: 'n8n' | 'worker'; rawBody: string; signatureHeader: string | undefined; timestampHeader: string | undefined; nonceHeader: string | undefined; requestId: string; }): Promise<any> {
@@ -25,9 +26,10 @@ export async function handleCallbackRequest(input: { source: 'n8n' | 'worker'; r
     }
   }
   const callbackId = payload.callback_id || payload.execution_id || payload.command_id || input.requestId;
-  const dedupe = await insertCallback({ project_id: projectId, source: input.source, callback_id: callbackId, raw_payload: payload, verified: true });
+  const storedPayload = redactSensitivePayload(payload);
+  const dedupe = await insertCallback({ project_id: projectId, source: input.source, callback_id: callbackId, raw_payload: storedPayload, verified: true });
   if (dedupe.duplicate) return { accepted: true, duplicate: true, callback_id: callbackId, project_id: projectId };
-  const { error: outboxError } = await animeSupabase.from('outbox_events').insert({ id: randomUUID(), type: 'reconcile_command', payload: { project_id: projectId, command_id: commandId, callback_id: callbackId, source: input.source, request_id: input.requestId, callback_payload: payload }, status: 'pending', attempts: 0 });
+  const { error: outboxError } = await animeSupabase.from('outbox_events').insert({ id: randomUUID(), type: 'reconcile_command', payload: { project_id: projectId, command_id: commandId, callback_id: callbackId, source: input.source, request_id: input.requestId, callback_payload: storedPayload }, status: 'pending', attempts: 0 });
   if (outboxError) {
     await animeSupabase.from('callback_inbox').delete().eq('project_id', projectId).eq('callback_id', callbackId);
     throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to enqueue callback reconciliation.', cause: outboxError });

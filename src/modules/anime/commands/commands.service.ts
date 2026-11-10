@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { writeAudit } from '../audit/audit.writer';
-import { getDecryptedMapForUser } from '../infrastructure/infrastructure.service';
+import { getHydratedInfrastructureForUser } from '../infrastructure/infrastructure.service';
 import { animeSupabase } from '../db/anime.supabase';
+import { redactSensitivePayload } from '../../../security/payloadRedaction';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import {
   findCommandById,
@@ -61,47 +62,10 @@ export function computeCommandBodyHash(body: CreateCommandBody): string {
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
 
-const SENSITIVE_PAYLOAD_KEYS = new Set([
-  'user_infrastructure',
-  'gpu_routing',
-  'telegram_storage',
-  'api_key',
-  'apikey',
-  'access_key',
-  'secret_key',
-  'secret',
-  'token',
-  'access_token',
-  'refresh_token',
-  'id_token',
-  'api_token',
-  'auth_token',
-  'bearer_token',
-  'session_token',
-  'client_secret',
-  'bot_token',
-  'password',
-  'authorization',
-  'private_key',
-  'connection_string',
-  'config_encrypted',
-]);
-
-function sanitizePayload(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map((item) => sanitizePayload(item));
-  if (value === null || typeof value !== 'object') return value;
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (SENSITIVE_PAYLOAD_KEYS.has(key.toLowerCase())) continue;
-    sanitized[key] = sanitizePayload(child);
-  }
-  return sanitized;
-}
-
 function sanitizeCommandForResponse(command: ApiCommandRecord): ApiCommandRecord {
   return {
     ...command,
-    payload: sanitizePayload(command.payload) as Record<string, unknown>,
+    payload: redactSensitivePayload(command.payload),
   };
 }
 
@@ -240,15 +204,7 @@ async function resolveDynamicPromptAndInfra(
 
   let hydratedInfra: Record<string, unknown> = {};
   try {
-    const providerConfigs = await getDecryptedMapForUser(userId);
-    hydratedInfra = { ...providerConfigs };
-    for (const cfg of Object.values(providerConfigs)) {
-      if (cfg && typeof cfg === 'object') {
-        if (cfg.gpu_routing) hydratedInfra.gpu_routing = cfg.gpu_routing;
-        if (cfg.telegram_storage) hydratedInfra.telegram_storage = cfg.telegram_storage;
-        if (cfg.github_worker) hydratedInfra.github_worker = cfg.github_worker;
-      }
-    }
+    hydratedInfra = await getHydratedInfrastructureForUser(userId);
   } catch (_) {}
 
   return {
@@ -423,17 +379,20 @@ export async function submitAnimeCommand(
     payload: enrichedPayload,
   };
 
+  const persistedPayload = redactSensitivePayload(enrichedPayload);
+  const persistedOutboxPayload = redactSensitivePayload(outboxPayload);
+
   const createdOrExisting = await insertCommandAtomic({
     command_id: commandId,
     project_id: params.body.project_id,
     user_id: params.userId,
     intent: params.body.intent,
-    payload: enrichedPayload,
+    payload: persistedPayload,
     status: CommandStatus.QUEUED,
     idempotency_key: rawKey,
     body_hash: bodyHash,
     outbox_type: 'dispatch_n8n',
-    outbox_payload: outboxPayload,
+    outbox_payload: persistedOutboxPayload,
   });
 
   if (createdOrExisting.id !== commandId) {

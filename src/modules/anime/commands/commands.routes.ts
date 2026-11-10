@@ -3,9 +3,10 @@ import { extractUserId, requireProjectRole } from '../auth/project-guard';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { CommandIdParamsSchema, CreateCommandBodySchema } from './commands.schema';
 import { getAnimeCommandForUser, submitAnimeCommand } from './commands.service';
+import { enforceTenantQuota } from '../quota/quota.guard';
 
 export async function registerAnimeCommandsRoutes(app: FastifyInstance): Promise<void> {
-  app.post('/v1/anime/commands', { schema: { body: CreateCommandBodySchema }, preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'editor'])] }, async (request, reply) => {
+  app.post('/v1/anime/commands', { schema: { body: CreateCommandBodySchema }, preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'editor']), enforceTenantQuota(1)] }, async (request, reply) => {
     const userId = extractUserId(request);
     if (!userId) throw new AnimeError({ code: AnimeErrorCode.AUTH_INVALID, message: 'Auth missing' });
     const rawKey = request.headers['idempotency-key'] as string;

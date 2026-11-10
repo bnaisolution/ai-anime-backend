@@ -10,10 +10,15 @@ export interface InfrastructureRecord {
   provider_type: ProviderType;
   config_encrypted: string;
   capabilities: Record<string, unknown>;
-  status: 'active' | 'inactive' | 'testing' | 'error';
+  status: 'active' | 'inactive' | 'testing' | 'error' | 'revoked';
   is_default: boolean;
   last_verified_at: string | null;
   last_error: string | null;
+  key_version?: number;
+  bound_tenant_id?: string | null;
+  last_rotated_at?: string | null;
+  revoked_at?: string | null;
+  fingerprint?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +33,11 @@ export interface InfrastructurePublicDto {
   last_verified_at: string | null;
   last_error: string | null;
   config_masked: Record<string, unknown>;
+  key_version: number;
+  bound_tenant_id: string | null;
+  last_rotated_at: string | null;
+  revoked_at: string | null;
+  fingerprint: string | null;
   created_at: string;
   updated_at: string;
 }
