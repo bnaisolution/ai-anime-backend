@@ -199,6 +199,7 @@ New coverage:
 ## 15. CI Evidence
 
 - Backend CI run `42765154897`: PASS on `00d6e037a2c9c333181537751ffb0c6b3b9c8769`.
+- Report-only CI run `42765554847`: PASS on `ec10bf24a4d97836ddf5d4f68c7f6764d23cafdb`; tested code unchanged.
 - Safe suites job: PASS.
 - Regression job: PASS.
 - Isolated database job: SKIPPED by the safety gate.
