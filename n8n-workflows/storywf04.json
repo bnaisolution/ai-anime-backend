@@ -4,7 +4,7 @@
   "id": "8q9tF3VE0mLUZQfa",
   "name": "storywf04",
   "description": "WF-04 Admin & Governance: Handles manual reviews, voice changes, and system status.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -974,7 +974,7 @@
         1776
       ],
       "parameters": {
-        "workflowId": "={{ $env.WF_07_PUBLISHER_ID }}",
+        "workflowId": "={{ $env.WF_07_PUBLISHER_ID || 'zvw63UrbObZhFUiW' }}",
         "options": {}
       }
     },

@@ -4,7 +4,7 @@
   "id": "s4RGuFSDlevgD5nC",
   "name": "storywf03",
   "description": "WF-03 Production Pipeline: Handles image generation, TTS, motion, and CPU FFmpeg mixing.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -1568,7 +1568,7 @@
       "updatedAt": "2026-10-26T07:42:34.218Z",
       "createdAt": "2026-10-26T07:42:34.218Z",
       "role": "workflow:owner",
-      "workflowId": "IfZyvmWlEijJ6Ccj",
+      "workflowId": "s4RGuFSDlevgD5nC",
       "projectId": "DHmXIxR6TKeJcd0d",
       "project": {
         "updatedAt": "2026-10-17T06:52:24.955Z",

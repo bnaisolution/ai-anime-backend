@@ -4,7 +4,7 @@
   "id": "zvw63UrbObZhFUiW",
   "name": "Storywf07",
   "description": "WF-07 Publisher: Uploads and publishes final video to YouTube, IG, and Telegram.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {

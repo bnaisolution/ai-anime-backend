@@ -4,7 +4,7 @@
   "id": "baRqhI9JSob9m5oD",
   "name": "Storywf11",
   "description": "WF-11 QC Gate: Validates audio, video, and script quality before approval.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -746,7 +746,7 @@
       "updatedAt": "2026-10-26T10:07:34.391Z",
       "createdAt": "2026-10-26T10:07:34.391Z",
       "role": "workflow:owner",
-      "workflowId": "PFXwsrQDk9nSIkRY",
+      "workflowId": "baRqhI9JSob9m5oD",
       "projectId": "DHmXIxR6TKeJcd0d",
       "project": {
         "updatedAt": "2026-10-17T06:52:24.955Z",

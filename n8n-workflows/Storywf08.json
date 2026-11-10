@@ -4,7 +4,7 @@
   "id": "MrWrz58aRUVTzpLr",
   "name": "Storywf08",
   "description": "WF-08 Analytics: Fetches views/likes and generates AI feedback for future episodes.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {

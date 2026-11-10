@@ -4,7 +4,7 @@
   "id": "swOEbQV3iNUNmMwu",
   "name": "StoryWf10",
   "description": "WF-10 State Machine: Manages episode state transitions (e.g., DRAFT to MIXED).",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {

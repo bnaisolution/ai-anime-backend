@@ -4,7 +4,7 @@
   "id": "ADPseu4KBfVveYrq",
   "name": "storywf05",
   "description": "WF-05 Vision Pipeline: Extracts Visual DNA from image, audio, or YouTube links.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -651,7 +651,7 @@
       "updatedAt": "2026-10-26T09:41:02.111Z",
       "createdAt": "2026-10-26T09:41:02.111Z",
       "role": "workflow:owner",
-      "workflowId": "k7HsOfo7Veyt8Huk",
+      "workflowId": "ADPseu4KBfVveYrq",
       "projectId": "DHmXIxR6TKeJcd0d",
       "project": {
         "updatedAt": "2026-10-17T06:52:24.955Z",

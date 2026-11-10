@@ -4,7 +4,7 @@
   "id": "2fcuca0HkGxGIYMv",
   "name": "StoryWf12",
   "description": "WF-12 Quota Governor: Tracks API/GPU usage and blocks requests if limits are exceeded.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -320,7 +320,7 @@
       "updatedAt": "2026-10-26T10:10:44.899Z",
       "createdAt": "2026-10-26T10:10:44.899Z",
       "role": "workflow:owner",
-      "workflowId": "y5DW83fQjvyrzE98",
+      "workflowId": "2fcuca0HkGxGIYMv",
       "projectId": "DHmXIxR6TKeJcd0d",
       "project": {
         "updatedAt": "2026-10-17T06:52:24.955Z",

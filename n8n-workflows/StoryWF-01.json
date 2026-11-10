@@ -4,7 +4,7 @@
   "id": "UeEXeimGGwqIh84T",
   "name": "StoryWF-01",
   "description": "WF-01 Bible Architect: Creates Story Bible, characters, visual DNA, and assigns voices.",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -1575,7 +1575,7 @@
       "updatedAt": "2026-10-26T06:21:50.081Z",
       "createdAt": "2026-10-26T06:21:50.081Z",
       "role": "workflow:owner",
-      "workflowId": "BwP2L3HccmQ7dwmJ",
+      "workflowId": "UeEXeimGGwqIh84T",
       "projectId": "DHmXIxR6TKeJcd0d",
       "project": {
         "updatedAt": "2026-10-17T06:52:24.955Z",
