@@ -10,7 +10,8 @@ Batch 3 added the missing safe test framework and validation layers across the b
 
 Final evidence:
 
-- Backend CI `42757778042`: PASS on `14439b6f4dcaac57c775d97a97dbefd3fbcfd6fd` — 224 safe tests (67 unit, 81 routes, 63 static-local, 13 static-siblings) and 19 regression tests; DB integration skipped by the safety gate.
+- Backend tested-code CI `42757778042`: PASS on `14439b6f4dcaac57c775d97a97dbefd3fbcfd6fd` — 224 safe tests (67 unit, 81 routes, 63 static-local, 13 static-siblings) and 19 regression tests; DB integration skipped by the safety gate.
+- Backend report-only CI `42760582142`: PASS on `ac0fbd8a61fe3a9239764a9c4d7fc7d11f78142d` — documentation-only update; tested code unchanged.
 - Android CI `42757794603`: PASS on `7087f332e8639f4fff7ceb9e9504324d37264326` — 54 JVM tests, 122 instrumentation tests, 2/2 Maestro flows, lint, debug APK, and aggregate summary.
 - Worker CI `42757780077`: PASS on `c3a0435e92ae53fc8d47a382662f4040e903b93b` — 20 tests.
 - n8n static validation: 14/14 canonical workflows PASS; no workflow was imported, activated, or executed.
@@ -42,9 +43,9 @@ Not performed:
 
 ## Part 3 — Repositories, Branches, PRs, and Commits
 
-| Repository | Local path | Batch 3 branch | Base | Final head | PR |
+| Repository | Local path | Batch 3 branch | Base | Tested code head | PR |
 |---|---|---|---|---|---|
-| Backend | `/data/data/com.termux/files/home/anime-audit/ai-anime-backend` | `opencode/batch-3-test-framework` | `opencode/batch-2-prompt-library` | `14439b6f4dcaac57c775d97a97dbefd3fbcfd6fd` | `#3` OPEN, `CLEAN` |
+| Backend | `/data/data/com.termux/files/home/anime-audit/ai-anime-backend` | `opencode/batch-3-test-framework` | `opencode/batch-2-prompt-library` | `14439b6f4dcaac57c775d97a97dbefd3fbcfd6fd` (report-only commits follow) | `#3` OPEN, `CLEAN` |
 | Android | `/data/data/com.termux/files/home/anime-audit/ai-anime-android` | `opencode/batch-3-test-framework` | `opencode/batch-2-prompt-library` | `7087f332e8639f4fff7ceb9e9504324d37264326` | `#3` OPEN, `CLEAN` |
 | Worker | `/data/data/com.termux/files/home/anime-audit/anime-cpu-worker` | `opencode/batch-3-test-framework` | `main` | `c3a0435e92ae53fc8d47a382662f4040e903b93b` | `#1` OPEN, `CLEAN` |
 
@@ -189,7 +190,7 @@ Owner actions:
 
 Batch 3 PRs:
 
-- Backend: `https://github.com/bnaisolution/ai-anime-backend/pull/3` — OPEN, `CLEAN`, base `opencode/batch-2-prompt-library`, head `14439b6f4dcaac57c775d97a97dbefd3fbcfd6fd`.
+- Backend: `https://github.com/bnaisolution/ai-anime-backend/pull/3` — OPEN, `CLEAN`, base `opencode/batch-2-prompt-library`, tested code head `14439b6f4dcaac57c775d97a97dbefd3fbcfd6fd`; PR head includes docs-only report commits.
 - Android: `https://github.com/bnaisolution/ai-anime-android/pull/3` — OPEN, `CLEAN`, base `opencode/batch-2-prompt-library`, head `7087f332e8639f4fff7ceb9e9504324d37264326`.
 - Worker: `https://github.com/bnaisolution/anime-cpu-worker/pull/1` — OPEN, `CLEAN`, base `main`, head `c3a0435e92ae53fc8d47a382662f4040e903b93b`.
 
