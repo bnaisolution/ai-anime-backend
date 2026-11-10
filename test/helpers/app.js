@@ -20,6 +20,7 @@ async function buildApp(options = {}) {
   await app.register(authPlugin);
   await app.register(requireDefault('modules/auth/auth.routes.js'), { prefix: '/api/v1/auth' });
   await app.register(requireDefault('modules/config/config.routes.js'), { prefix: '/api/v1/config' });
+  await app.register(requireDefault('modules/memory/memory.routes.js'), { prefix: '/api/v1/memory' });
   await app.register(requireDefault('modules/anime/media/telegram.proxy.js'));
 
   const { animeRequestIdHook } = H.dist('modules/anime/middleware/request-id.js');
