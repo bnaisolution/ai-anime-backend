@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { assertProjectTenantAccess, resolveRequestedTenantId } from '../tenant/tenant.service';
 
 const PROJECT_ROLES = new Set(['owner', 'admin', 'editor', 'reviewer', 'viewer']);
 const IDENTITY_FIELDS = ['user_id', 'userId', 'owner_id'];
@@ -100,7 +101,7 @@ export function requireProjectRole(allowedRoles: string[]) {
 
     const { data, error } = await animeSupabase
       .from('projects')
-      .select('id, user_id')
+      .select('id, user_id, tenant_id')
       .eq('id', projectId)
       .maybeSingle();
 
@@ -116,6 +117,15 @@ export function requireProjectRole(allowedRoles: string[]) {
       throw projectForbidden('Cross-project access denied.');
     }
 
+    const requestedTenantId = resolveRequestedTenantId(request);
+    const projectTenantId = typeof (data as any).tenant_id === 'string' ? (data as any).tenant_id : null;
+    if (requestedTenantId && projectTenantId && requestedTenantId !== projectTenantId) {
+      throw projectForbidden('Tenant does not match the authorized project.');
+    }
+    if (projectTenantId) {
+      await assertProjectTenantAccess(authenticatedUserId, projectTenantId);
+    }
+
     const projectRole = resolveProjectRole((request as any).authContext, true);
     if (!projectRole || !permittedRoles.has(projectRole)) {
       throw projectForbidden('Insufficient role.');
@@ -126,6 +136,7 @@ export function requireProjectRole(allowedRoles: string[]) {
       ...reqAny.anime,
       user_id: authenticatedUserId,
       project_id: projectId,
+      tenant_id: projectTenantId,
       role: projectRole
     };
   };

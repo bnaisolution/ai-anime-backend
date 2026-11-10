@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { writeAudit } from '../audit/audit.writer';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { decryptConfig, encryptConfig, maskConfig } from './infrastructure.crypto';
 import * as repo from './infrastructure.repo';
+import { resolveTenant } from '../tenant/tenant.service';
 import type { InfrastructurePublicDto, InfrastructureRecord, ProviderType } from './infrastructure.types';
 
 function masterKey(): string {
@@ -10,14 +12,35 @@ function masterKey(): string {
   return k;
 }
 
+function previousMasterKeys(): string[] {
+  return String(process.env.ANIME_ENCRYPTION_KEY_PREVIOUS || '')
+    .split(',')
+    .map((key) => key.trim())
+    .filter((key) => key.length >= 32);
+}
+
+function fingerprintConfig(config: Record<string, unknown>): string {
+  const canonical = JSON.stringify(config, Object.keys(config).sort());
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+function decryptRecord(r: InfrastructureRecord): Record<string, unknown> {
+  return JSON.parse(decryptConfig(r.config_encrypted, masterKey(), previousMasterKeys()));
+}
+
 function toPublic(r: InfrastructureRecord): InfrastructurePublicDto {
   let cfg: Record<string, unknown> = {};
-  try { cfg = JSON.parse(decryptConfig(r.config_encrypted, masterKey())); } catch { cfg = { error: 'decrypt_failed' }; }
+  try { cfg = decryptRecord(r); } catch { cfg = { error: 'decrypt_failed' }; }
   return {
     id: r.id, name: r.name, provider_type: r.provider_type,
     capabilities: r.capabilities, status: r.status,
     is_default: r.is_default, last_verified_at: r.last_verified_at,
     last_error: r.last_error, config_masked: maskConfig(cfg),
+    key_version: r.key_version ?? 1,
+    bound_tenant_id: r.bound_tenant_id ?? null,
+    last_rotated_at: r.last_rotated_at ?? null,
+    revoked_at: r.revoked_at ?? null,
+    fingerprint: r.fingerprint ?? null,
     created_at: r.created_at, updated_at: r.updated_at,
   };
 }
@@ -31,8 +54,12 @@ export async function create(userId: string, input: {
     config_encrypted: encryptConfig(JSON.stringify(input.config), masterKey()),
     capabilities: input.capabilities ?? {}, is_default: input.is_default ?? false,
   });
+  const updated = await repo.update(record.id, userId, {
+    key_version: 2,
+    fingerprint: fingerprintConfig(input.config),
+  });
   await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'CREATE_INFRASTRUCTURE', entity_type: 'USER_INFRASTRUCTURE', entity_id: record.id, new_value: { name: record.name, provider_type: record.provider_type }, request_id: input.request_id });
-  return toPublic(record);
+  return toPublic(updated);
 }
 
 export async function list(userId: string): Promise<InfrastructurePublicDto[]> {
@@ -51,7 +78,11 @@ export async function update(id: string, userId: string, patch: {
 }): Promise<InfrastructurePublicDto> {
   const dbPatch: Record<string, unknown> = {};
   if (patch.name !== undefined) dbPatch.name = patch.name;
-  if (patch.config !== undefined) dbPatch.config_encrypted = encryptConfig(JSON.stringify(patch.config), masterKey());
+  if (patch.config !== undefined) {
+    dbPatch.config_encrypted = encryptConfig(JSON.stringify(patch.config), masterKey());
+    dbPatch.key_version = 2;
+    dbPatch.fingerprint = fingerprintConfig(patch.config);
+  }
   if (patch.capabilities !== undefined) dbPatch.capabilities = patch.capabilities;
   if (patch.status !== undefined) dbPatch.status = patch.status;
   if (patch.is_default !== undefined) dbPatch.is_default = patch.is_default;
@@ -73,7 +104,10 @@ export async function setDefault(id: string, userId: string, requestId?: string)
 export async function verify(id: string, userId: string, requestId?: string): Promise<InfrastructurePublicDto> {
   const r = await repo.getById(id, userId);
   if (!r) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Infrastructure not found' });
-  const cfg = JSON.parse(decryptConfig(r.config_encrypted, masterKey())) as Record<string, any>;
+  if (r.status === 'revoked') {
+    throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: 'Infrastructure credential has been revoked.' });
+  }
+  const cfg = decryptRecord(r) as Record<string, any>;
   let ok = false; let errMsg: string | null = null;
   const healthUrl = cfg.health_url || (cfg.worker_url ? `${String(cfg.worker_url).replace(/\/$/, '')}/health` : null) || (cfg.base_url ? `${String(cfg.base_url).replace(/\/$/, '')}/health` : null);
   if (healthUrl) {
@@ -95,7 +129,7 @@ export async function getDecryptedMapForUser(userId: string): Promise<Record<str
   const records = await repo.getActiveByUser(userId);
   const out: Record<string, Record<string, unknown>> = {};
   for (const r of records) {
-    try { out[r.provider_type] = JSON.parse(decryptConfig(r.config_encrypted, masterKey())); } catch { /* skip corrupt */ }
+    try { out[r.provider_type] = decryptRecord(r); } catch { /* skip corrupt */ }
   }
   return out;
 }
@@ -111,4 +145,75 @@ export async function getHydratedInfrastructureForUser(userId: string): Promise<
     }
   }
   return hydratedInfra;
+}
+
+
+export async function rotate(id: string, userId: string, config: Record<string, unknown>, requestId?: string): Promise<InfrastructurePublicDto> {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Replacement config object is required.' });
+  }
+  const existing = await repo.getById(id, userId);
+  if (!existing) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Infrastructure not found' });
+  if (existing.status === 'revoked') throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: 'Revoked credentials cannot be rotated.' });
+  const updated = await repo.update(id, userId, {
+    config_encrypted: encryptConfig(JSON.stringify(config), masterKey()),
+    key_version: (existing.key_version ?? 1) + 1,
+    fingerprint: fingerprintConfig(config),
+    last_rotated_at: new Date().toISOString(),
+    status: 'active',
+    last_error: null,
+  });
+  await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'ROTATE_INFRASTRUCTURE', entity_type: 'USER_INFRASTRUCTURE', entity_id: id, new_value: { key_version: updated.key_version }, request_id: requestId });
+  return toPublic(updated);
+}
+
+export async function revoke(id: string, userId: string, requestId?: string): Promise<InfrastructurePublicDto> {
+  const existing = await repo.getById(id, userId);
+  if (!existing) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Infrastructure not found' });
+  const updated = await repo.update(id, userId, {
+    config_encrypted: encryptConfig('{}', masterKey()),
+    status: 'revoked',
+    revoked_at: new Date().toISOString(),
+    fingerprint: null,
+    last_error: 'Revoked by owner.',
+  });
+  await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'REVOKE_INFRASTRUCTURE', entity_type: 'USER_INFRASTRUCTURE', entity_id: id, request_id: requestId });
+  return toPublic(updated);
+}
+
+export async function bindToTenant(id: string, userId: string, tenantId: string, requestId?: string): Promise<InfrastructurePublicDto> {
+  await resolveTenant(userId, tenantId);
+  const existing = await repo.getById(id, userId);
+  if (!existing) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Infrastructure not found' });
+  if (existing.status === 'revoked') throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: 'Revoked credentials cannot be bound.' });
+  const updated = await repo.update(id, userId, { bound_tenant_id: tenantId });
+  await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'BIND_INFRASTRUCTURE_TENANT', entity_type: 'USER_INFRASTRUCTURE', entity_id: id, new_value: { tenant_id: tenantId }, request_id: requestId });
+  return toPublic(updated);
+}
+
+export function validateConfig(providerType: ProviderType, config: Record<string, unknown>): { valid: boolean; errors: string[]; warnings: string[] } {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    return { valid: false, errors: ['config must be an object'], warnings };
+  }
+  const hasUrl = typeof config.worker_url === 'string' || typeof config.base_url === 'string' || typeof config.health_url === 'string';
+  if (['own_gpu', 'custom', 'tts', 'ffmpeg', 'github_actions'].includes(providerType) && !hasUrl) {
+    errors.push('worker_url, base_url, or health_url is required for this provider.');
+  }
+  if (['groq', 'gemini'].includes(providerType) && typeof config.api_key !== 'string') {
+    errors.push('api_key is required for this provider.');
+  }
+  if (providerType === 'kaggle' && typeof config.username !== 'string') {
+    errors.push('username is required for Kaggle.');
+  }
+  if (hasUrl) {
+    for (const key of ['worker_url', 'base_url', 'health_url']) {
+      const value = config[key];
+      if (typeof value === 'string' && value && !/^https:\/\//i.test(value) && !/^http:\/\/localhost(?::\d+)?/i.test(value)) {
+        warnings.push(`${key} should use HTTPS outside local development.`);
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors, warnings };
 }
