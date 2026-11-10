@@ -58,3 +58,20 @@ test('migrations contain no database-wide destructive commands', () => {
     assert.equal(/\bTRUNCATE\s+(?:TABLE\s+)?(?:public\.)?[a-z_][a-z0-9_]*/i.test(sql), false, `${file}: TRUNCATE`);
   }
 });
+
+test('database integration suite remains opt-in, read-only, and fully skipped without isolated DB', () => {
+  assert.match(DB_TEST, /const enabled = process\.env\.ALLOW_TEST_DB === '1';/);
+  assert.match(DB_TEST, /skipReason = !enabled/);
+  assert.match(DB_TEST, /BLOCKED: set ALLOW_TEST_DB=1 plus TEST_SUPABASE_URL and TEST_SUPABASE_SERVICE_ROLE_KEY/);
+  assert.equal((DB_TEST.match(/\{ skip: skipReason \}/g) || []).length, 4);
+  assert.equal(/\b(?:insert|update|upsert|delete|rpc)\s*\(/i.test(DB_TEST), false);
+  assert.equal(/\b(?:DROP|TRUNCATE|ALTER|CREATE)\s+(?:TABLE|DATABASE|SCHEMA)\b/i.test(DB_TEST), false);
+});
+
+test('database integration suite asserts read-only schema contracts only', () => {
+  assert.match(DB_TEST, /\.select\('id,user_id,visual_medium,active_system_prompt_id'\)/);
+  assert.match(DB_TEST, /\.select\('id,error_message,updated_at'\)/);
+  assert.match(DB_TEST, /\.select\('id,voice_text'\)/);
+  assert.match(DB_TEST, /\.select\('accumulated_units,tokens_used'\)/);
+  assert.equal((DB_TEST.match(/\.select\(/g) || []).length, 4);
+});
