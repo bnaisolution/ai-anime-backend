@@ -6,7 +6,7 @@ Status: **AUTOMATED SCOPE PASS — RUNTIME AND E2E GATES REMAIN BLOCKED**
 
 ## A. Executive Summary
 
-Batch 2 source work is implemented, committed, pushed, and passing every available automated gate. The latest backend cloud run passed 193 safe tests and 19 regression tests. The latest Android cloud run passed 34 JVM tests, 122 instrumentation tests, 2/2 Maestro flows, lint, the debug APK build, and the aggregate summary.
+Batch 2 source work is implemented, committed, pushed, and passing every available automated gate. The latest backend implementation cloud run passed 193 safe tests and 19 regression tests; the docs-only report commit also passed backend CI. The latest Android cloud run passed 34 JVM tests, 122 instrumentation tests, 2/2 Maestro flows, lint, the debug APK build, and the aggregate summary.
 
 The Batch 2 Git-verifiable scope is complete: genre templates and expanded media vocabulary (`B2-04`), Story Bible shared prompt-library access (`B2-06`), WF-02 episode prompt override resolution (`B2-09`), semantic-retrieval/fallback/isolation coverage (`B2-12`), and Android local/server memory reconciliation (`B2-13`) are all implemented and covered.
 
@@ -73,6 +73,7 @@ Prior Batch 2 commits retained: Android `18cb6d8`, `c04a1a3`, `c1ec601`, `74edcb
 | Check | Evidence | Result |
 |---|---|---|
 | Backend build | Local `npm run build` | PASS |
+| Backend report CI | CI run `42743302502` | PASS |
 | Backend unit | CI run `42739292401` | PASS — 67 |
 | Backend routes | CI run `42739292401` | PASS — 81 |
 | Backend static local | CI run `42739292401` | PASS — 37 |
