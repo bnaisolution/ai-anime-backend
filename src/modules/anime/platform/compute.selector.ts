@@ -254,16 +254,18 @@ export function selectComputePlan(candidates: ComputeCandidate[], requirements: 
   return planFor(first, requirements, engine, 'Selected the first active BYOD provider.');
 }
 
-export async function selectComputeMatrixForUser(userId: string, requirements: ComputeMatrixRequirements): Promise<ComputeMatrixPlan> {
+export async function selectComputeMatrixForUser(userId: string, requirements: ComputeMatrixRequirements, tenantId?: string): Promise<ComputeMatrixPlan> {
   const needsPlatform = requirements.gpu_mode === 'platform_managed' || requirements.cpu_mode === 'platform_managed' || requirements.preferred_mode === 'platform_managed';
   if (needsPlatform) assertPlatformManagedEnabled('compute matrix selection');
   const items = await infrastructure.list(userId);
-  const candidates: ComputeCandidate[] = items.map((item) => ({
-    id: item.id,
-    provider_type: item.provider_type,
-    status: item.status,
-    capabilities: item.capabilities,
-  }));
+  const candidates: ComputeCandidate[] = items
+    .filter((item) => infrastructure.isInfrastructureVisibleToTenant(item, tenantId))
+    .map((item) => ({
+      id: item.id,
+      provider_type: item.provider_type,
+      status: item.status,
+      capabilities: item.capabilities,
+    }));
   if (needsPlatform) {
     const pool = await getPlatformPoolStatus();
     for (const capacity of pool.capacities) {
@@ -286,16 +288,18 @@ export async function selectComputeMatrixForUser(userId: string, requirements: C
   return selectComputeMatrix(candidates, requirements);
 }
 
-export async function selectComputeForUser(userId: string, requirements: ComputeRequirements): Promise<ComputePlan> {
+export async function selectComputeForUser(userId: string, requirements: ComputeRequirements, tenantId?: string): Promise<ComputePlan> {
   if (requirements.preferred_mode === 'platform_managed') {
     assertPlatformManagedEnabled('compute selection');
   }
   const items = await infrastructure.list(userId);
-  const candidates: ComputeCandidate[] = items.map((item) => ({
-    id: item.id,
-    provider_type: item.provider_type,
-    status: item.status,
-    capabilities: item.capabilities,
-  }));
+  const candidates: ComputeCandidate[] = items
+    .filter((item) => infrastructure.isInfrastructureVisibleToTenant(item, tenantId))
+    .map((item) => ({
+      id: item.id,
+      provider_type: item.provider_type,
+      status: item.status,
+      capabilities: item.capabilities,
+    }));
   return selectComputePlan(candidates, requirements);
 }

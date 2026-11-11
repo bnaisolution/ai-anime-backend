@@ -16,6 +16,7 @@ const ComputeBody = Type.Object({
   requires_llm: Type.Optional(Type.Boolean()),
   preferred_provider: Type.Optional(Type.String({ maxLength: 64 })),
   preferred_mode: Type.Optional(Type.Union([Type.Literal('byod'), Type.Literal('platform_managed')])),
+  tenant_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 
 const PlatformActionBody = Type.Object({
@@ -60,6 +61,7 @@ const ComputeMatrixBody = Type.Object({
   primary_provider: Type.Optional(Type.String({ maxLength: 64 })),
   secondary_provider: Type.Optional(Type.String({ maxLength: 64 })),
   checkpoint: Type.Optional(Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()])),
+  tenant_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 const PoolResourceEnum = Type.Union([Type.Literal('gpu'), Type.Literal('cpu'), Type.Literal('llm'), Type.Literal('storage')]);
 const ReservePoolBody = Type.Object({
@@ -140,7 +142,8 @@ export async function registerAnimePlatformRoutes(app: FastifyInstance): Promise
   });
 
   app.post('/v1/anime/infrastructure/compute/select', { schema: { body: ComputeBody }, preHandler: [app.authenticate] }, async (request: any) => {
-    const data = await selectComputeForUser(userId(request), request.body);
+    const tenantId = request.body.tenant_id ? (await resolveTenant(userId(request), request.body.tenant_id)).tenant.id : undefined;
+    const data = await selectComputeForUser(userId(request), request.body, tenantId);
     return { data, meta: { request_id: request.anime?.request_id } };
   });
 
@@ -201,7 +204,8 @@ export async function registerAnimePlatformRoutes(app: FastifyInstance): Promise
   });
 
   app.post('/v1/anime/infrastructure/compute/matrix', { schema: { body: ComputeMatrixBody }, preHandler: [app.authenticate] }, async (request: any) => {
-    const data = await selectComputeMatrixForUser(userId(request), request.body);
+    const tenantId = request.body.tenant_id ? (await resolveTenant(userId(request), request.body.tenant_id)).tenant.id : undefined;
+    const data = await selectComputeMatrixForUser(userId(request), request.body, tenantId);
     return { data, meta: { request_id: request.anime?.request_id } };
   });
 

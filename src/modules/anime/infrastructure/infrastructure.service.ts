@@ -123,17 +123,22 @@ export async function verify(id: string, userId: string, requestId?: string): Pr
   return toPublic(updated);
 }
 
-export async function getDecryptedMapForUser(userId: string): Promise<Record<string, Record<string, unknown>>> {
+export function isInfrastructureVisibleToTenant(record: { bound_tenant_id?: string | null }, tenantId?: string): boolean {
+  return !tenantId || !record.bound_tenant_id || record.bound_tenant_id === tenantId;
+}
+
+export async function getDecryptedMapForUser(userId: string, tenantId?: string): Promise<Record<string, Record<string, unknown>>> {
   const records = await repo.getActiveByUser(userId);
   const out: Record<string, Record<string, unknown>> = {};
   for (const r of records) {
+    if (!isInfrastructureVisibleToTenant(r, tenantId)) continue;
     try { out[r.provider_type] = decryptRecord(r); } catch { /* skip corrupt */ }
   }
   return out;
 }
 
-export async function getHydratedInfrastructureForUser(userId: string): Promise<Record<string, unknown>> {
-  const providerConfigs = await getDecryptedMapForUser(userId);
+export async function getHydratedInfrastructureForUser(userId: string, tenantId?: string): Promise<Record<string, unknown>> {
+  const providerConfigs = await getDecryptedMapForUser(userId, tenantId);
   const hydratedInfra: Record<string, unknown> = { ...providerConfigs };
   for (const cfg of Object.values(providerConfigs)) {
     if (cfg && typeof cfg === 'object') {
@@ -214,6 +219,14 @@ export async function reencryptUserInfrastructure(userId: string, requestId?: st
 
 export function getKeyCustody(): ReturnType<typeof keyCustodyStatus> {
   return keyCustodyStatus();
+}
+
+export async function unbindFromTenant(id: string, userId: string, requestId?: string): Promise<InfrastructurePublicDto> {
+  const existing = await repo.getById(id, userId);
+  if (!existing) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Infrastructure not found' });
+  const updated = await repo.update(id, userId, { bound_tenant_id: null });
+  await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'UNBIND_INFRASTRUCTURE_TENANT', entity_type: 'USER_INFRASTRUCTURE', entity_id: id, new_value: { tenant_id: null }, request_id: requestId });
+  return toPublic(updated);
 }
 
 export async function bindToTenant(id: string, userId: string, tenantId: string, requestId?: string): Promise<InfrastructurePublicDto> {

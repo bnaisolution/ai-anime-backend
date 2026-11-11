@@ -32,6 +32,11 @@ export async function registerAnimeInfrastructureLifecycleRoutes(app: FastifyIns
     return { data, meta: { request_id: request.anime?.request_id } };
   });
 
+  app.post('/v1/anime/infrastructure/:id/unbind', { schema: { params: IdParams }, preHandler: [app.authenticate] }, async (request: any) => {
+    const data = await svc.unbindFromTenant(request.params.id, userId(request), request.anime?.request_id);
+    return { data, meta: { request_id: request.anime?.request_id } };
+  });
+
   app.post('/v1/anime/infrastructure/:id/bind', { schema: { params: IdParams, body: BindBody }, preHandler: [app.authenticate] }, async (request: any) => {
     const data = await svc.bindToTenant(request.params.id, userId(request), request.body.tenant_id, request.anime?.request_id);
     return { data, meta: { request_id: request.anime?.request_id } };
