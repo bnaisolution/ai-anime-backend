@@ -71,7 +71,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/canon_facts?select=id,fact_key,fact_type,fact_value,canon_status,version,affected_episodes&project_id=eq.\" + ($json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "f05d5381-6bf1-4608-83f4-635681772726",
@@ -112,7 +116,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_knowledge?select=id,character_code,knowledge_key,knowledge_value,learned_at_ep,secret,knows&project_id=eq.\" + ($('Input Normalizer & Mode Resolver').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "b129589b-9742-4b3d-8a63-6ceb1ad26255",
@@ -168,7 +176,11 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "e73f7bbd-b018-4129-ad38-592023e80224",
@@ -229,7 +241,11 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "2c32466c-2e83-4e38-86f8-8732f603ad41",
@@ -304,7 +320,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/canon_facts?on_conflict=project_id,fact_key\", method: \"POST\", body: $json.new_facts_to_add, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "cf5aa46a-8841-4451-8777-0cc356019c78",
@@ -345,7 +362,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_knowledge?on_conflict=project_id,character_code,knowledge_key\", method: \"POST\", body: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "ab765125-26dd-4dd1-8115-b874b1d17066",
@@ -386,7 +404,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Canon Verdict & Locked Fact Protection Engine').item.json.project_id, episode_no: $('Canon Verdict & Locked Fact Protection Engine').item.json.episode_no, workflow_name: 'WF-09', action: $('Canon Verdict & Locked Fact Protection Engine').item.json.operation_mode, execution_id: $execution.id, new_value: { isValid: $('Canon Verdict & Locked Fact Protection Engine').item.json.isValid, violations_count: $('Canon Verdict & Locked Fact Protection Engine').item.json.violations.length, facts_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_facts_to_add.length, knowledge_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add.length } }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "0359850e-4444-4555-bff1-d39a0d16b8f7",
@@ -400,6 +419,109 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "/* [START_WF09_CAN_PROCEED] */\nconst __postProcess = (o) => {\n  if (!o || typeof o !== 'object') return o;\n  const ok = o.can_proceed !== undefined ? Boolean(o.can_proceed) : (o.isValid !== false && o.status !== 'BLOCKED');\n  return { ...o, isValid: ok, can_proceed: ok };\n};\nconst __rawNodeOut = await (async () => {\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Canon Verdict & Locked Fact Protection Engine');\nconst violationsText = state.violations.length > 0 ? state.violations.map((v, i) => `${i + 1}. **[${v.type}]** ${v.description}`).join('\\n') : '• Koi Canon Contradiction ya Knowledge Graph Violation nahi mila.';\n\nconst summaryMsg = [\n  `${state.isValid ? '✅' : '🛑'} **WF-09: Canon Engine & Knowledge Graph Verdict (${state.operation_mode})**`,\n  `📁 **Project:** ${state.project_name} | **Episode:** ${state.episode_no} | **Valid:** \\`${state.isValid}\\``,\n  ``, `🔍 **Rule 14/15 & Section 42 Validation Findings (${state.violations.length}):**`, violationsText,\n  state.should_mutate_db ? `\\n💾 **Database Mutations Committed:**\\n• Canon Facts Upserted: ${state.new_facts_to_add.length}\\n• Character Knowledge Entries Upserted: ${state.new_knowledge_to_add.length}` : `\\n🔒 **Read-Only / Blocked Mode:** Database me koi canon mutation commit nahi kiya gaya.`\n].join('\\n');\n\nreturn {\n  json: {\n    project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, episode_number: state.episode_no,\n    season_no: state.season_no, season_number: state.season_no, mode: state.mode || 'SAVE', sessionId: state.sessionId,\n    intent: state.intent, downstream_command: state.downstream_command || state.intent,\n    target_workflow_id: state.target_workflow_id || (($env.WF_02_STORY_ID || 'qRUdhg1PNDK2wJk6') || 'qRUdhg1PNDK2wJk6'), preflight_workflow_ids: state.preflight_workflow_ids || {},\n    extracted_params: state.extracted_params || { episode_number: state.episode_no },\n    user_prompt: state.user_prompt || state.userPrompt || state.rawText, userPrompt: state.userPrompt || state.user_prompt || state.rawText, rawText: state.rawText || state.user_prompt,\n    ok: state.isValid, workflow_name: 'WF-09', execution_id: $execution.id, operation_mode: state.operation_mode,\n    isValid: state.isValid, violations: state.violations, new_facts_to_add: state.new_facts_to_add, new_knowledge_to_add: state.new_knowledge_to_add,\n    output: summaryMsg, text: summaryMsg\n  }\n};\n})();\nif (__rawNodeOut === undefined) {\n  return $input.all();\n}\nif (Array.isArray(__rawNodeOut)) {\n  return __rawNodeOut.map(it => (it && typeof it === 'object' && it.json ? { ...it, json: __postProcess(it.json) } : __postProcess(it)));\n}\nif (__rawNodeOut && typeof __rawNodeOut === 'object' && __rawNodeOut.json) {\n  return { ...__rawNodeOut, json: __postProcess(__rawNodeOut.json) };\n}\nreturn __postProcess(__rawNodeOut);\n/* [END_WF09_CAN_PROCEED] */\n"
+      }
+    },
+    {
+      "id": "04e24508-d74d-5893-aef6-798288ccec1d",
+      "name": "Backend: Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3312,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-09\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "34efcbc8-92d5-5a90-83df-98e111034820",
+      "name": "Backend: Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3312,
+        220
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-09\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "f54cda43-0463-5fbe-95c4-8507ad330ce2",
+      "name": "Stop: Workflow Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        3532,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
       }
     }
   ],
@@ -434,6 +556,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -442,6 +571,13 @@
         [
           {
             "node": "Deterministic Lock Guard & Prompt Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -464,6 +600,13 @@
         [
           {
             "node": "If Primary Groq Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -493,6 +636,13 @@
         [
           {
             "node": "Canon Verdict & Locked Fact Protection Engine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -536,6 +686,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -547,6 +704,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -555,6 +719,35 @@
         [
           {
             "node": "Final Canon Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Canon Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Backend: Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend: Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Stop: Workflow Failed",
             "type": "main",
             "index": 0
           }

@@ -71,7 +71,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?select=id,project_id,episode_no,title,youtube_url,instagram_urls&project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.episode_no) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "9301709b-37c4-4c56-a844-ba61bc26ac80",
@@ -158,7 +162,8 @@
         "options": {
           "timeout": 15000
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "e4bc46df-93df-4027-aed9-189091f60071",
@@ -193,7 +198,8 @@
         "options": {
           "timeout": 20000
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "5914beea-f684-4107-b6b5-dfbd8e78e424",
@@ -258,7 +264,8 @@
         "options": {
           "timeout": 20000
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "fba8ea69-597a-4e89-be54-23de494a8d0f",
@@ -314,7 +321,11 @@
         "options": {
           "timeout": 25000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "c9d58423-5cad-4b79-afad-91be5a3ea4a7",
@@ -375,7 +386,11 @@
         "options": {
           "timeout": 25000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "ba526d7c-ac28-4365-8589-ba3c20e4cd52",
@@ -444,7 +459,8 @@
         "options": {
           "timeout": 20000
         }
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "48b03059-0e96-4c85-9ce0-21835fe86bb4",
@@ -499,7 +515,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episode_analytics?on_conflict=project_id,episode_no,platform\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, platform: 'UNIFIED_CROSS_PLATFORM', views: $json.unified_report.total_views, watch_time_seconds: $json.unified_report.total_watch_time_sec, avg_view_duration: $json.unified_report.avg_view_duration, ctr: $json.unified_report.avg_retention_pct, likes: $json.unified_report.total_likes, comments: $json.unified_report.total_comments, shares: $json.unified_report.total_shares, saves: $json.unified_report.total_saves, engagement_score: $json.unified_report.engagement_score, fetched_at: $json.unified_report.recorded_at }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "0943b941-a82e-42ed-ab13-668e695e1af3",
@@ -540,7 +557,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/project_analytics_insights\", method: \"POST\", body: { project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, sentiment: $('Restore Context After Telegram').item.json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').item.json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').item.json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').item.json.ai_insights.script_optimization_tips, created_at: $now.toISO() }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "b53bab5f-3af4-4cdf-8562-5735a8806617",
@@ -581,7 +599,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, workflow_name: 'WF-08', action: 'ANALYTICS_SYNCHRONIZED', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "b2bb7718-2f66-4fec-9be8-630863542b41",
@@ -595,6 +614,109 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Restore Context After Telegram');\nconst rep = state.unified_report;\nconst ins = state.ai_insights;\nconst summaryText = [\n  `📊 **WF-08: Episode ${state.episode_no} Analytics & Performance Synchronized!**`,\n  `📁 **Project ID:** \\`${state.project_id}\\` | **Platforms:** ${rep.platforms_measured.join(', ')}`,\n  ``, `📈 **Unified Performance Metrics:**`,\n  `• **Total Views:** ${rep.total_views.toLocaleString()}`,\n  `• **Engagement Score:** \\`${rep.engagement_score}/100\\` (Rate: ${rep.engagement_rate_pct}%)`,\n  `• **Likes / Shares / Saves / Comments:** ${rep.total_likes} / ${rep.total_shares} / ${rep.total_saves} / ${rep.total_comments}`,\n  ``, `🧠 **AI Narrative Feedback Loop (Saved for WF-02):**`,\n  `• **Audience Sentiment:** \\`${ins.sentiment.toUpperCase()}\\``,\n  `• **Top Elements:** ${ins.top_performing_elements.join(', ')}`,\n  `• **Optimization Tips:** ${ins.script_optimization_tips.map(t => `\\n  - ${t}`).join('')}`\n].join('\\n');\nreturn { json: { ok: true, status: 'ANALYTICS_SYNCHRONIZED', workflow_name: 'WF-08', execution_id: $execution.id, project_id: state.project_id, episode_no: state.episode_no, engagement_score: rep.engagement_score, unified_metrics: rep, ai_insights: ins, output: summaryText, text: summaryText } };"
+      }
+    },
+    {
+      "id": "eaf23771-ae09-57b7-9975-8ed7e41f592f",
+      "name": "Backend: Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5104,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-08\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "e1fac76b-792c-5f1c-8b98-f00917dcfd99",
+      "name": "Backend: Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5104,
+        220
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-08\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "bc243215-e6da-5104-8120-1be43ce6c76f",
+      "name": "Stop: Workflow Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        5324,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
       }
     }
   ],
@@ -626,6 +748,13 @@
         [
           {
             "node": "Unpack Publication IDs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -669,6 +798,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -677,6 +813,13 @@
         [
           {
             "node": "Restore Context Before Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -720,6 +863,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -739,6 +889,13 @@
         [
           {
             "node": "If Primary Groq Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -768,6 +925,13 @@
         [
           {
             "node": "AI Insights Parser & Milestone Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -811,6 +975,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -833,6 +1004,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -844,6 +1022,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -852,6 +1037,35 @@
         [
           {
             "node": "Final Analytics Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Analytics Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Backend: Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend: Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Stop: Workflow Failed",
             "type": "main",
             "index": 0
           }

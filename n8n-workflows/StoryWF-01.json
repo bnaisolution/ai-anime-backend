@@ -71,7 +71,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/projects?select=id,name,story_bible,current_season,is_active&id=eq.\" + ($json.project_id) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "55437a8a-fb17-4f00-95f5-9a0dcb19bd33",
@@ -112,7 +116,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "43f760cf-fbf3-429a-9b4a-b2b1eb317046",
@@ -153,7 +161,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "a2e07855-0717-4126-8382-a1246151f210",
@@ -194,7 +206,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "b37568c2-1d31-47b1-862a-30c708bf6409",
@@ -235,7 +251,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_arcs?select=character_code,arc_name,current_stage,stages,flaw,goal&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "839e0f5d-a4d7-494a-81b6-1992efd23055",
@@ -276,7 +296,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/power_system?select=power_name,power_level,abilities,limitations&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "7a52291d-200f-43fd-8ab3-9f308e9f852d",
@@ -317,7 +341,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_relationships?select=char_a_code,char_b_code,trust_level&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "d71a47e8-7a16-48a2-8b5e-6d31909a4bf1",
@@ -358,7 +386,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/locations?select=location_code,name,visual_description&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "2801ffb9-5f7b-46a5-af33-994b75804631",
@@ -399,7 +431,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/artifacts?select=artifact_code,name,powers,current_owner_code&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "65566666-d8a4-434d-ac52-7394d3a85b75",
@@ -440,7 +476,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/voice_catalog?select=provider,voice_id,voice_name,gender,language&is_active=eq.true\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "ea77c5e2-9898-43e1-b2f8-f5017865466d",
@@ -496,7 +536,11 @@
         "options": {
           "timeout": 25000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "06e8ff8f-5875-49da-8abe-e775268d3a30",
@@ -557,7 +601,11 @@
         "options": {
           "timeout": 25000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "2978bf16-f0de-4cea-9c86-6c27e8fa0999",
@@ -654,7 +702,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/projects?id=eq.\" + ($json.project_id), method: \"PATCH\", body: { story_bible: $json.bible_payload.bible, current_season: $json.current_season }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "a8db08b1-3eb6-41bb-be63-1a3dbd19f546",
@@ -695,7 +744,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/bible_versions\", method: \"POST\", body: { project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, season_no: $('Voice Profiler & Visual DNA Validator').item.json.current_season, episode_no: 0, bible_snapshot: $('Voice Profiler & Visual DNA Validator').item.json.bible_payload.bible, change_summary: $('Voice Profiler & Visual DNA Validator').item.json.change_summary }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "c5f39a84-f97e-4573-8d12-d71d9491b486",
@@ -750,7 +800,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?on_conflict=project_id,character_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.characters_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "ef84a787-be26-4d67-aae5-7af49064b5b7",
@@ -791,7 +842,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_ref_history_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "6f2c9548-47ae-434f-9cf3-a55b1e91dfd3",
@@ -832,7 +884,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_status?on_conflict=project_id,character_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "359dcc2e-d1f4-43dd-b615-3e56ef694517",
@@ -873,7 +926,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_status_history\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_history_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "bcc0becf-fbc6-4f54-b277-b43fcfa83c8c",
@@ -914,7 +968,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_arcs\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_arcs_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "b9fa3c6f-b74b-4a64-9f22-7338c895afb9",
@@ -955,7 +1010,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/power_system\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.powers_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "48b07488-33c9-4850-b4e0-c96efba8a34c",
@@ -996,7 +1052,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_relationships\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.relationships_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "bac70f9f-992f-4dc3-9d20-4ff2792d1bbb",
@@ -1037,7 +1094,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/locations?on_conflict=project_id,name\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.locations_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "6be85d50-61d8-4359-8669-75f2e13db0fc",
@@ -1078,7 +1136,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/artifacts?on_conflict=project_id,artifact_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.artifacts_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "b4ac445a-6e90-4d57-814d-f750f3a27fc8",
@@ -1119,7 +1178,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/story_rules?on_conflict=project_id,rule_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.rules_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "509e455a-8309-4265-a678-f70a33ddd458",
@@ -1160,7 +1220,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, workflow_name: 'WF-01', action: $('Voice Profiler & Visual DNA Validator').item.json.operation_route === 'BIBLE_SAVE' ? 'SAVE_BIBLE' : 'BIBLE_CHAT', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "34dd22a9-1e15-42d8-b85e-a781f6a0c135",
@@ -1174,6 +1235,109 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "/* [START_WF01_DEDUP] */\nconst __dedupByKey = (arr, keyFn) => {\n  if (!Array.isArray(arr)) return [];\n  const seen = new Set();\n  return arr.filter(item => {\n    if (!item || typeof item !== 'object') return false;\n    const k = String(keyFn(item) || '').trim().toUpperCase();\n    if (!k || seen.has(k)) return false;\n    seen.add(k);\n    return true;\n  });\n};\n$input.all().forEach(__item => {\n  const j = __item?.json;\n  if (!j || typeof j !== 'object') return;\n  if (Array.isArray(j.characters)) {\n    j.characters = __dedupByKey(j.characters, c => c.character_code || c.name);\n  }\n  if (Array.isArray(j.artifacts)) {\n    j.artifacts = __dedupByKey(j.artifacts, a => a.artifact_code || a.name);\n  }\n  if (Array.isArray(j.story_rules)) {\n    j.story_rules = __dedupByKey(j.story_rules, r => r.rule_code || r.title || r.rule_name);\n  }\n});\n/* [END_WF01_DEDUP] */\n\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Voice Profiler & Visual DNA Validator');\nconst payload = state.bible_payload;\nconst isSaved = state.operation_route === 'BIBLE_SAVE';\nconst chars = payload.characters || [];\n\nconst voiceAssignmentsText = chars.length > 0\n  ? chars.map(c => `• ${c.character_code} (${c.name}) -> Voice: ${c.voice_config.voice_id} [${c.voice_config.status}]`).join('\\n')\n  : '• Koi naya character assign nahi hua.';\n\nlet finalMessage = '';\nif (isSaved) {\n  finalMessage = [\n    `✅ **WF-01: Story Bible & Universe Successfully Saved!**`,\n    `📁 **Project:** ${state.project_name} (\\`${state.project_id}\\`) | **Season:** ${state.current_season}`,\n    `📊 **Saved Entities:** ${chars.length} Characters | ${payload.rules?.length || 0} Rules | ${payload.powers?.length || 0} Powers | ${payload.locations?.length || 0} Locations`,\n    `🎙️ **Rule 39 Voice Assignments:**\\n${voiceAssignmentsText}`,\n    `💬 **Architect Note:** ${state.chat_response}`\n  ].join('\\n');\n} else {\n  finalMessage = [\n    `🧠 **WF-01: Bible Architect (Brainstorming Mode)**`,\n    state.chat_response,\n    chars.length > 0 ? `🎙️ **Draft Voice Previews:**\\n${voiceAssignmentsText}\\n` : '',\n    `💡 *Tip: Jab universe lock karne ke liye ready hon, bas \"save karo\" ya \"#save_bible\" bol dena!*`\n  ].filter(Boolean).join('\\n');\n}\n\nreturn {\n  json: {\n    ok: true, status: isSaved ? 'BIBLE_SAVED' : 'BIBLE_CHAT_COMPLETED', workflow_name: 'WF-01', execution_id: $execution.id,\n    project_id: state.project_id, project_name: state.project_name, operation_route: state.operation_route,\n    counts: { characters: chars.length, rules: payload.rules?.length || 0, powers: payload.powers?.length || 0, locations: payload.locations?.length || 0, arcs: payload.arcs?.length || 0, relationships: payload.relationships?.length || 0, artifacts: payload.artifacts?.length || 0 },\n    output: finalMessage, text: finalMessage\n  }\n};"
+      }
+    },
+    {
+      "id": "1ce22c47-49ea-5012-ace1-68f373e6eea2",
+      "name": "Backend: Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7568,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-01\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "f0ad24b4-8e01-54b1-8859-8f0ec19a6280",
+      "name": "Backend: Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7568,
+        220
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-01\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "efe94c20-a706-5e93-ab86-0006fa850162",
+      "name": "Stop: Workflow Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        7788,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
       }
     }
   ],
@@ -1208,6 +1372,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1216,6 +1387,13 @@
         [
           {
             "node": "Supabase: Fetch Character Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1230,6 +1408,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1238,6 +1423,13 @@
         [
           {
             "node": "Supabase: Fetch Character Arcs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1252,6 +1444,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1260,6 +1459,13 @@
         [
           {
             "node": "Supabase: Fetch Relationships",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1274,6 +1480,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1282,6 +1495,13 @@
         [
           {
             "node": "Supabase: Fetch Artifacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1296,6 +1516,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1304,6 +1531,13 @@
         [
           {
             "node": "Context Builder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1326,6 +1560,13 @@
         [
           {
             "node": "If Primary Groq Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1355,6 +1596,13 @@
         [
           {
             "node": "Voice Profiler & Visual DNA Validator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1398,6 +1646,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1406,6 +1661,13 @@
         [
           {
             "node": "Split Characters & Prepare Upsert Batches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1431,6 +1693,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1439,6 +1708,13 @@
         [
           {
             "node": "Supabase: Upsert Character Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1453,6 +1729,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1461,6 +1744,13 @@
         [
           {
             "node": "Supabase: Insert Character Arcs",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1475,6 +1765,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1483,6 +1780,13 @@
         [
           {
             "node": "Supabase: Insert Character Relationships",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1497,6 +1801,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1505,6 +1816,13 @@
         [
           {
             "node": "Supabase: Insert Artifacts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1519,6 +1837,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1530,6 +1855,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1538,6 +1870,35 @@
         [
           {
             "node": "Final Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Backend: Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend: Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Stop: Workflow Failed",
             "type": "main",
             "index": 0
           }

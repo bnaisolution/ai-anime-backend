@@ -93,7 +93,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/projects?select=id,name,is_active&\" + ($json.project_id ? 'id=eq.' + encodeURIComponent($json.project_id) + '&is_active=eq.true' : 'is_active=eq.true') + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "717e1303-3044-4024-b009-352d6adc3410",
@@ -202,7 +206,11 @@
         "options": {
           "timeout": 8000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "13f3a5de-0355-42b9-9ca4-057366d6e976",
@@ -263,7 +271,11 @@
         "options": {
           "timeout": 10000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "e3501126-057f-46bc-b60d-363dd45c81c3",
@@ -352,7 +364,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episode_states?select=id,episode_no,current_state,is_locked,updated_at&project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.extracted_params.episode_number || 1) + \"&current_state=in.(GENERATING,PRODUCTION)&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "aa185ef4-e9c3-483e-a2e7-fd8f44760d24",
@@ -393,7 +409,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/pending_actions?select=id,action_type,status,action_payload,created_at&project_id=eq.\" + ($('Mode & R12 Governance Engine').item.json.project_id) + \"&status=in.(PENDING,RUNNING,IN_PROGRESS,LOCKED)&limit=20\", method: \"GET\", body: null, prefer: null, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "2dbd0720-a80e-4647-bdd7-a2462fbb1450",
@@ -448,7 +468,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.extracted_params?.episode_number || null, workflow_name: 'WF-00', action: $json.intent, entity_type: 'COMMAND', reason: $json.userPrompt || $json.rawText, execution_id: $execution.id, new_value: { downstream_command: $json.downstream_command, mode: $json.mode, modality: $json.modality, classifier_layer: $json.classifier_layer, confidence: $json.confidence, idempotency_blocked: $json.idempotency_blocked || false, sanitized_payload: $json.sanitized_payload } }, prefer: \"return=minimal\", command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "cd70f9de-333c-476a-856a-1a7e031a8d81",
@@ -633,7 +654,9 @@
       ],
       "parameters": {
         "workflowId": "={{ $json.target_workflow_id }}",
-        "options": {}
+        "options": {
+          "waitForSubWorkflow": false
+        }
       }
     },
     {
@@ -700,7 +723,7 @@
       "parameters": {
         "workflowId": "={{ $('Restore Context After Audit').first().json.target_workflow_id }}",
         "options": {
-          "waitForSubWorkflow": true
+          "waitForSubWorkflow": false
         },
         "workflowInputs": {
           "mappingMode": "defineBelow",
@@ -713,7 +736,9 @@
             "project_style": "={{ $('Restore Context After Audit').first().json.project_style }}",
             "visual_medium": "={{ $('Restore Context After Audit').first().json.visual_medium || 'ANIME' }}",
             "custom_system_prompt": "={{ $('Restore Context After Audit').first().json.custom_system_prompt || '' }}",
-            "system_prompt_title": "={{ $('Restore Context After Audit').first().json.system_prompt_title || '' }}"
+            "system_prompt_title": "={{ $('Restore Context After Audit').first().json.system_prompt_title || '' }}",
+            "command_id": "={{ $('Restore Context After Audit').first().json.command_id || $('Restore Context After Audit').first().json.sessionId }}",
+            "sessionId": "={{ $('Restore Context After Audit').first().json.sessionId || $('Restore Context After Audit').first().json.command_id }}"
           }
         }
       }
@@ -730,7 +755,9 @@
       ],
       "parameters": {
         "workflowId": "={{ $json.target_workflow_id }}",
-        "options": {}
+        "options": {
+          "waitForSubWorkflow": false
+        }
       }
     },
     {
@@ -760,7 +787,9 @@
       ],
       "parameters": {
         "workflowId": "={{ $json.target_workflow_id }}",
-        "options": {}
+        "options": {
+          "waitForSubWorkflow": false
+        }
       }
     },
     {
@@ -775,7 +804,9 @@
       ],
       "parameters": {
         "workflowId": "={{ $json.target_workflow_id }}",
-        "options": {}
+        "options": {
+          "waitForSubWorkflow": false
+        }
       }
     },
     {
@@ -846,6 +877,109 @@
         "mode": "runOnceForEachItem",
         "jsCode": "/* [START_WF00_GUARD] */\nconst __rawIn = $input.first()?.json || {};\nconst __projId = __rawIn.project_id || __rawIn.body?.project_id || __rawIn.payload?.project_id || null;\nconst __intent = String(__rawIn.intent || __rawIn.body?.intent || '').toUpperCase();\nconst __exemptIntents = [\n  'HEALTH_CHECK', 'PING', 'CREATE_PROJECT', 'OPEN_PROJECT',\n  'DB_TEST', 'SYSTEM_HEALTH', 'ADMIN_STATUS',\n  'ADMIN_START_KAGGLE', 'ADMIN_STOP_KAGGLE'\n];\nif (__intent && !__exemptIntents.includes(__intent) && !__projId) {\n  throw new Error('WF-00 Security Boundary (BUG-051): Missing verified project_id context.');\n}\nconst __evaluatePreflightGate = (quotaRes, canonRes, continuityRes) => {\n  const qOk = !quotaRes || (quotaRes.can_proceed !== false && quotaRes.is_allowed !== false && quotaRes.allowed !== false && quotaRes.status !== 'BLOCKED');\n  const cOk = !canonRes || (canonRes.can_proceed !== false && canonRes.isValid !== false && canonRes.status !== 'BLOCKED');\n  const contOk = !continuityRes || (continuityRes.can_proceed !== false && continuityRes.is_consistent !== false && continuityRes.status !== 'CRITICAL_FAILURE');\n  return {\n    can_proceed: Boolean(qOk && cOk && contOk),\n    quota_ok: Boolean(qOk),\n    canon_ok: Boolean(cOk),\n    continuity_ok: Boolean(contOk)\n  };\n};\nconst __safeNodeJson = (names) => {\n  for (const nm of names) {\n    try {\n      const v = $(nm).first()?.json;\n      if (v && typeof v === 'object') return v;\n    } catch (_e) {}\n  }\n  return null;\n};\nconst __qOut = __safeNodeJson([\"Pre-Flight 1: WF-12 Quota Governor\", \"Pre-Flight 1: WF-10 Quota Guard\", \"WF-12 Quota Governor\", \"WF-12 Quota Guard\", \"Quota Governor\"]);\nconst __cOut = __safeNodeJson([\"Pre-Flight 2: WF-09 Canon Check\", \"Pre-Flight 2: WF-09 Canon Guard\", \"WF-09 Canon Guard\", \"WF-09 Canon Engine\", \"Canon Check\"]);\nconst __contOut = __safeNodeJson([\"Pre-Flight 3: WF-06 Continuity Check\", \"Pre-Flight 3: WF-06 Continuity Guard\", \"WF-06 Continuity Guard\", \"WF-06 Continuity Engine\", \"Continuity Check\"]);\nconst __pfEval = __evaluatePreflightGate(__qOut, __cOut, __contOut);\nif (!__pfEval.can_proceed) {\n  throw new Error(`WF-00 Fail-Closed Preflight Gate Blocked WF-02: ${JSON.stringify(__pfEval)}`);\n}\n$input.all().forEach(__item => {\n  if (__item && __item.json && typeof __item.json === 'object') {\n    __item.json.can_proceed = __pfEval.can_proceed;\n    __item.json.preflight = __pfEval;\n  }\n});\n/* [END_WF00_GUARD] */\n\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst baseCtx = __getNodeJson('Restore Context After Audit');\nconst prevOut = ($input.item && $input.item.json) ? $input.item.json : {};\nconst resolvedPrompt = (prevOut.user_prompt || prevOut.userPrompt || baseCtx.userPrompt || baseCtx.rawText || (baseCtx.payload && baseCtx.payload.prompt) || '').toString().trim();\nconst epNo = Number(baseCtx.episode_no || baseCtx.episode_number || (baseCtx.extracted_params && baseCtx.extracted_params.episode_number) || 1);\nreturn {\n  json: {\n    ...baseCtx,\n    project_id: baseCtx.project_id,\n    project_name: baseCtx.project_name,\n    episode_no: epNo,\n    episode_number: epNo,\n    user_prompt: resolvedPrompt,\n    userPrompt: resolvedPrompt,\n    rawText: baseCtx.rawText || resolvedPrompt,\n    user_infrastructure: baseCtx.user_infrastructure || {},\n    gpu_routing: baseCtx.gpu_routing || {},\n    telegram_storage: baseCtx.telegram_storage || {},\n    project_style: baseCtx.project_style || {},\n    visual_medium: baseCtx.visual_medium || 'ANIME',\n    system_prompt_title: baseCtx.system_prompt_title || '',\n    custom_system_prompt: baseCtx.custom_system_prompt || '',\n    recommended_context_patches: prevOut.recommended_context_patches || baseCtx.recommended_context_patches || {}\n  }\n};"
       }
+    },
+    {
+      "id": "e8099eae-6318-5428-924b-452ae92d7a2c",
+      "name": "Backend: Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5952,
+        432
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('Webhook Trigger').first().json.project_id || null), command_id: ($('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId || null), wf_key: \"WF-00\", status: \"DISPATCHED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "7ea74660-ad6a-546f-a0a3-2eb3b48b2af4",
+      "name": "Backend: Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5952,
+        652
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('Webhook Trigger').first().json.project_id || null), command_id: ($('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId || null), wf_key: \"WF-00\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "e2e1cab3-789d-5bf9-81de-bbc5ec54f90b",
+      "name": "Stop: Workflow Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        6172,
+        652
+      ],
+      "parameters": {
+        "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
+      }
     }
   ],
   "connections": {
@@ -887,6 +1021,13 @@
         [
           {
             "node": "Project Context Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -959,6 +1100,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -985,6 +1133,13 @@
         [
           {
             "node": "Layer 3: Intent Normalizer & Regex",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1039,6 +1194,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1047,6 +1209,13 @@
         [
           {
             "node": "Idempotency Lock Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1069,6 +1238,13 @@
         [
           {
             "node": "Restore Context After Audit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1276,6 +1452,28 @@
         [
           {
             "node": "Restore Context Before WF-09",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Backend: Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend: Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Stop: Workflow Failed",
             "type": "main",
             "index": 0
           }

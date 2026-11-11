@@ -12,7 +12,7 @@ function authInvalid(message: string): never {
   throw new AnimeError({ code: AnimeErrorCode.AUTH_INVALID, message });
 }
 
-async function resolveCommandBinding(body: any): Promise<{ command_id: string; project_id: string; user_id: string }> {
+export async function resolveCommandBinding(body: any): Promise<{ command_id: string; project_id: string; user_id: string }> {
   const rawCommand = String(body?.command_id || body?.session_id || '').trim();
   const commandId = rawCommand.replace(/^cmd_/, '');
   const projectId = String(body?.project_id || '').trim();

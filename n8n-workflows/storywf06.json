@@ -71,7 +71,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/projects?select=id,name,story_bible,current_season&id=eq.\" + ($json.project_id) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "a092abf7-c3c7-4013-972e-9462c2c177aa",
@@ -112,7 +116,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/canon_facts?select=fact_key,fact_value,canon_status,fact_type&project_id=eq.\" + ($('Input Normalizer & Scope Resolver').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "1d4d938b-a56e-4bf6-a4dd-25a84fce2426",
@@ -153,7 +161,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/story_state_snapshots?select=episode_id,season_id,snapshot_data&project_id=eq.\" + ($('Input Normalizer & Scope Resolver').item.json.project_id) + \"&episode_id=lt.\" + ($('Input Normalizer & Scope Resolver').item.json.episode_no) + \"&order=episode_id.desc&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "df6fcb0b-a22a-486b-8eb8-cc316fbf7968",
@@ -194,7 +206,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.\" + ($('Input Normalizer & Scope Resolver').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "bfc5ebea-f389-45a8-8868-29d620629af7",
@@ -235,7 +251,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/story_timeline?select=episode_no,event_code,event_description,location,characters_involved&project_id=eq.\" + ($('Input Normalizer & Scope Resolver').item.json.project_id) + \"&order=episode_no.desc,created_at.desc&limit=20\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "4ec71770-3380-4cfc-8363-bc0e0b255357",
@@ -276,7 +296,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.\" + ($('Input Normalizer & Scope Resolver').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "d7a2a6a7-74bc-405f-b78e-4d871e8ed4bb",
@@ -317,7 +341,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/mystery_tracker?select=mystery_id,description,status,clues&project_id=eq.\" + ($('Input Normalizer & Scope Resolver').item.json.project_id) + \"&status=in.(OPEN,PARTIAL,ACTIVE)\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "93b25791-2397-470c-a71f-38802193e744",
@@ -387,7 +415,11 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "115345a8-4512-4916-93a0-bc0d5ed9227f",
@@ -448,7 +480,11 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "b547a37e-67cf-4e61-8070-c1c173ef8bb3",
@@ -503,7 +539,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, workflow_name: 'WF-06', action: 'CONTINUITY_EVALUATION', execution_id: $execution.id, new_value: { score: $json.continuity_score, status: $json.gate_status, violations_count: $json.violations_count, evaluation_mode: $json.evaluation_mode } }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "0c857a2b-98f1-4ab0-8ba3-810dfbe0ec0f",
@@ -517,6 +554,109 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "/* [START_WF06_CAN_PROCEED] */\nconst __postProcess = (o) => {\n  if (!o || typeof o !== 'object') return o;\n  const ok = o.can_proceed !== undefined ? Boolean(o.can_proceed) : (o.status !== 'CRITICAL_FAILURE' && o.is_consistent !== false);\n  return { ...o, can_proceed: ok };\n};\nconst __rawNodeOut = await (async () => {\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst state = __getNodeJson('Continuity Score & Decision Engine'); const triggerCtx = __getNodeJson('When Executed by Another Workflow') || {}; const badge = state.gate_status === 'PASSED' ? '✅ PASSED' : state.gate_status === 'WARNINGS_RESOLVED' ? '⚠️ WARNINGS_RESOLVED' : '🛑 BLOCKED_CRITICAL'; const msg = [`🛡️ **WF-06 Report**`, `📊 **Score:** ${state.continuity_score}/100 | **Gate:** ${badge}`, `💬 **Summary:** ${state.continuity_summary}`].join('\\n'); const patchedUserPrompt = state.can_proceed && state.violations.length > 0 ? `${state.user_prompt}\\n\\n[PATCHES]: ${JSON.stringify(state.recommended_context_patches)}` : state.user_prompt; return { json: { user_infrastructure: state.user_infrastructure || triggerCtx.user_infrastructure || {}, project_style: state.project_style || triggerCtx.project_style || {}, project_id: state.project_id, project_name: state.project_name, episode_no: state.episode_no, episode_number: state.episode_no, season_no: state.season_no, season_number: state.season_no, mode: state.mode || 'SAVE', sessionId: state.sessionId, intent: state.intent || 'CHECK_CONTINUITY', downstream_command: state.downstream_command || 'CHECK_CONTINUITY', target_workflow_id: state.target_workflow_id || (($env.WF_02_STORY_ID || 'qRUdhg1PNDK2wJk6') || 'qRUdhg1PNDK2wJk6'), preflight_workflow_ids: state.preflight_workflow_ids || {}, extracted_params: state.extracted_params || { episode_number: state.episode_no }, user_prompt: patchedUserPrompt, userPrompt: patchedUserPrompt, rawText: state.rawText || state.user_prompt, ok: state.can_proceed, workflow_name: 'WF-06', execution_id: $execution.id, continuity_score: state.continuity_score, status: state.gate_status, gate_status: state.gate_status, can_proceed: state.can_proceed, violations: state.violations, violations_count: state.violations_count, continuity_summary: state.continuity_summary, recommended_context_patches: state.recommended_context_patches, output: msg, text: msg } };\n})();\nif (__rawNodeOut === undefined) {\n  return $input.all();\n}\nif (Array.isArray(__rawNodeOut)) {\n  return __rawNodeOut.map(it => (it && typeof it === 'object' && it.json ? { ...it, json: __postProcess(it.json) } : __postProcess(it)));\n}\nif (__rawNodeOut && typeof __rawNodeOut === 'object' && __rawNodeOut.json) {\n  return { ...__rawNodeOut, json: __postProcess(__rawNodeOut.json) };\n}\nreturn __postProcess(__rawNodeOut);\n/* [END_WF06_CAN_PROCEED] */\n"
+      }
+    },
+    {
+      "id": "6ce60461-268d-52dd-b60a-1c2336b86293",
+      "name": "Backend: Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4272,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-06\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "19a83934-b3dd-5df5-a690-9c0335f56a36",
+      "name": "Backend: Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4272,
+        220
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-06\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "49f11166-0fb6-5398-99a6-3659880379ff",
+      "name": "Stop: Workflow Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4492,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
       }
     }
   ],
@@ -551,6 +691,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -559,6 +706,13 @@
         [
           {
             "node": "Supabase: Fetch Story State Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -573,6 +727,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -581,6 +742,13 @@
         [
           {
             "node": "Supabase: Fetch Story Timeline",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -595,6 +763,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -606,6 +781,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -614,6 +796,13 @@
         [
           {
             "node": "Deterministic Pre-Check Engine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -650,6 +839,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -679,6 +875,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -698,6 +901,35 @@
         [
           {
             "node": "Response & Pre-Flight Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Response & Pre-Flight Formatter": {
+      "main": [
+        [
+          {
+            "node": "Backend: Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend: Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Stop: Workflow Failed",
             "type": "main",
             "index": 0
           }

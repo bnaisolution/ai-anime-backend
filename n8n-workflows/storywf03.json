@@ -21,7 +21,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "/* [START_WF03_BATCH] */\nconst __normalizeSceneBatch = (scenesArr) => {\n  if (!Array.isArray(scenesArr) || scenesArr.length === 0) return [];\n  const seenOrders = new Set();\n  const clean = [];\n  for (let i = 0; i < scenesArr.length; i++) {\n    const s = scenesArr[i];\n    if (!s || typeof s !== 'object') continue;\n    const ord = Number(s.scene_order ?? s.scene_no ?? (i + 1));\n    if (seenOrders.has(ord)) continue;\n    seenOrders.add(ord);\n    clean.push({ ...s, scene_order: ord });\n  }\n  return clean.sort((a, b) => a.scene_order - b.scene_order);\n};\n$input.all().forEach(__item => {\n  if (__item?.json && Array.isArray(__item.json.scenes)) {\n    __item.json.scenes = __normalizeSceneBatch(__item.json.scenes);\n  }\n});\n/* [END_WF03_BATCH] */\n\nconst raw = ($input.item && $input.item.json) ? $input.item.json : {};\nconst dispatch = raw.wf03_dispatch_payload || raw;\n\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst mode = 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || 0);\n\nif (!project_id) {\n  throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nconst userInfra = dispatch.user_infrastructure || raw.user_infrastructure || {};\nconst projectStyle = dispatch.project_style || raw.project_style || {};\nconst imageSystemPrompt = (dispatch.image_system_prompt || dispatch.image_prompt_config?.prompt_text || raw.image_system_prompt || '').toString().trim();\nconst visualMedium = (projectStyle.visual_medium || projectStyle.visual_style || raw.visual_medium || 'ANIME').toString().toUpperCase().trim();\n\nreturn {\n  json: {\n    project_id,\n    episode_no,\n    season_no,\n    mode,\n    scene_count,\n    visual_medium: visualMedium,\n    project_style: projectStyle,\n    image_system_prompt: imageSystemPrompt,\n    user_infrastructure: userInfra,\n    execution_id: $execution.id\n  }\n};"
+        "jsCode": "/* [START_WF03_BATCH] */\nconst __normalizeSceneBatch = (scenesArr) => {\n  if (!Array.isArray(scenesArr) || scenesArr.length === 0) return [];\n  const seenOrders = new Set();\n  const clean = [];\n  for (let i = 0; i < scenesArr.length; i++) {\n    const s = scenesArr[i];\n    if (!s || typeof s !== 'object') continue;\n    const ord = Number(s.scene_order ?? s.scene_no ?? (i + 1));\n    if (seenOrders.has(ord)) continue;\n    seenOrders.add(ord);\n    clean.push({ ...s, scene_order: ord });\n  }\n  return clean.sort((a, b) => a.scene_order - b.scene_order);\n};\n$input.all().forEach(__item => {\n  if (__item?.json && Array.isArray(__item.json.scenes)) {\n    __item.json.scenes = __normalizeSceneBatch(__item.json.scenes);\n  }\n});\n/* [END_WF03_BATCH] */\n\nconst raw = ($input.item && $input.item.json) ? $input.item.json : {};\nconst dispatch = raw.wf03_dispatch_payload || raw;\n\nconst project_id = dispatch.project_id || raw.project_id || null;\nconst episode_no = Number(dispatch.episode_no || dispatch.episode_number || raw.episode_no || raw.episode_number || 1);\nconst season_no = Number(dispatch.season_no || dispatch.season_number || raw.season_no || 1);\nconst mode = 'SAVE';\nconst scene_count = Number(dispatch.total_scenes || dispatch.scene_count || raw.scene_count || 0);\n\nif (!project_id) {\n  throw new Error('WF-03 Error: project_id is strictly required (Rule 5 Project Isolation).');\n}\n\nconst userInfra = dispatch.user_infrastructure || raw.user_infrastructure || {};\nconst projectStyle = dispatch.project_style || raw.project_style || {};\nconst imageSystemPrompt = (dispatch.image_system_prompt || dispatch.image_prompt_config?.prompt_text || raw.image_system_prompt || '').toString().trim();\nconst visualMedium = (projectStyle.visual_medium || projectStyle.visual_style || raw.visual_medium || 'ANIME').toString().toUpperCase().trim();\n\nreturn {\n  json: {\n    project_id,\n    episode_no,\n    season_no,\n    mode,\n    scene_count,\n    visual_medium: visualMedium,\n    project_style: projectStyle,\n    image_system_prompt: imageSystemPrompt,\n    user_infrastructure: userInfra,\n    execution_id: $execution.id,\n    command_id: dispatch.command_id || raw.command_id || null,\n    sessionId: dispatch.sessionId || raw.sessionId || null\n  }\n};"
       },
       "id": "6599afb4-e2c0-4efc-998e-faa92417756c",
       "name": "Normalize Input & Enforce SAVE Mode",
@@ -71,7 +71,11 @@
         448,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -112,7 +116,11 @@
         672,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -153,7 +161,11 @@
         896,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -194,7 +206,11 @@
         1120,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -235,7 +251,11 @@
         1344,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -276,7 +296,11 @@
         1568,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -317,7 +341,11 @@
         1792,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -358,7 +386,11 @@
         2016,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -443,7 +475,11 @@
         2912,
         80
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -498,7 +534,8 @@
         3360,
         144
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -566,7 +603,11 @@
         4032,
         80
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -619,7 +660,11 @@
         4480,
         0
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -674,7 +719,8 @@
         4928,
         144
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -746,7 +792,8 @@
         5600,
         80
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -801,7 +848,8 @@
         6048,
         144
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -869,7 +917,8 @@
         2912,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -903,7 +952,11 @@
         3136,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -958,7 +1011,8 @@
         3584,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -999,7 +1053,8 @@
         3808,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -1040,7 +1095,8 @@
         4032,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -1081,7 +1137,8 @@
         4256,
         432
       ],
-      "continueOnFail": true
+      "continueOnFail": true,
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -1096,6 +1153,109 @@
         4480,
         432
       ]
+    },
+    {
+      "id": "a18b681e-b832-5a9e-ba98-c02c37e21ef9",
+      "name": "Backend: Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6672,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-03\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "5c09cff0-5f03-556c-bcce-c3ed717c5f6a",
+      "name": "Backend: Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6672,
+        220
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-03\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "ec108b1d-6727-59f5-91f5-49c9afe09382",
+      "name": "Stop: Workflow Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        6892,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
+      }
     }
   ],
   "connections": {
@@ -1129,6 +1289,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1137,6 +1304,13 @@
         [
           {
             "node": "Supabase: Fetch Clips & Checkpoints",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1151,6 +1325,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1159,6 +1340,13 @@
         [
           {
             "node": "Supabase: Fetch Scene Library Cache",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1173,6 +1361,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1181,6 +1376,13 @@
         [
           {
             "node": "Supabase: Fetch BGM Library",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1195,6 +1397,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1203,6 +1412,13 @@
         [
           {
             "node": "Cache Evaluator & Stage Resolver",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1264,6 +1480,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1283,6 +1506,13 @@
         [
           {
             "node": "Restore Scene Context After Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1326,6 +1556,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1355,6 +1592,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1374,6 +1618,13 @@
         [
           {
             "node": "Restore Scene Context After Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1417,6 +1668,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1436,6 +1694,13 @@
         [
           {
             "node": "Pass Scene to Batch Loop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1472,6 +1737,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1480,6 +1752,13 @@
         [
           {
             "node": "Verify Final Master Video & Prepare DB Finalization",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1505,6 +1784,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1513,6 +1799,13 @@
         [
           {
             "node": "Supabase: Update Episode State (MIXED)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -1527,6 +1820,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1535,6 +1835,35 @@
         [
           {
             "node": "Final Production Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Production Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Backend: Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend: Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Stop: Workflow Failed",
             "type": "main",
             "index": 0
           }

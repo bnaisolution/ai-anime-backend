@@ -72,7 +72,11 @@
         "options": {
           "timeout": 30000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "58521a74-6eb6-4288-8ed7-5e74b5968d16",
@@ -133,7 +137,11 @@
         "options": {
           "timeout": 35000
         }
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "a20f1af9-60a7-4f19-93bc-b37dd8c498f4",
@@ -208,7 +216,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/pending_actions\", method: \"POST\", body: $json.manual_review_record, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "c1736eed-0b44-41b8-a7f6-a3dee6768cb3",
@@ -283,7 +292,11 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?select=character_code,name,reference_version&project_id=eq.\" + ($json.project_id) + \"&character_code=eq.\" + (encodeURIComponent($json.character_code)) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
-      }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
     },
     {
       "id": "c192d065-9a26-4522-94c4-6006d9edd164",
@@ -338,7 +351,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?on_conflict=project_id,character_code\", method: \"POST\", body: $json.character_upsert_payload, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "96f84e73-798a-42c0-84b3-e6ab5865fa8d",
@@ -379,7 +393,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version\", method: \"POST\", body: $('Prepare Versioned Character & R4 History').item.json.reference_history_payload, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "d2d9918b-11dd-4ab6-8ea7-fbc6125ce5e6",
@@ -420,7 +435,8 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Prepare Versioned Character & R4 History').item.json.project_id, workflow_name: 'WF-05', action: 'VISION_EXTRACTION_SAVED', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "id": "926b5ac6-d830-4c18-8614-f68d90a95c2a",
@@ -434,6 +450,109 @@
       "parameters": {
         "mode": "runOnceForEachItem",
         "jsCode": "const __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst __getNodeBin = (n) => (__getNodeItem(n).binary || {});\nconst parserState = __getNodeJson('Vision Response Normalizer & JSON Parser');\n\nif (parserState.provider_failure === true) {\n  const failMsg = [\n    `⚠️ **WF-05: Vision Providers Failed — Queued for Manual Review!**`,\n    `• **Modality:** \\`${parserState.modality}\\``,\n    `• **Status:** \\`MANUAL_REVIEW\\` (\\`review_type: VISION_PROVIDER_FAIL\\`)`,\n    `• **Action Taken:** Gemini Vision aur OpenAI Vision dono se valid Visual DNA nahi mila, isliye request \\`pending_actions\\` table me safe queue kar di gayi hai.`\n  ].join('\\n');\n  return { json: { ok: false, status: 'MANUAL_REVIEW_QUEUED', workflow_name: 'WF-05', execution_id: $execution.id, project_id: parserState.project_id, modality: parserState.modality, review_type: 'VISION_PROVIDER_FAIL', output: failMsg, text: failMsg } };\n}\n\nconst activeState = $('Prepare Versioned Character & R4 History').isExecuted ? __getNodeJson('Prepare Versioned Character & R4 History') : __getNodeJson('QUICK Mode Branch (Zero DB Writes)');\nconst dna = activeState.visual_dna;\nconst isSaveMode = activeState.effective_mode === 'SAVE';\n\nconst dnaBreakdown = [\n  `• **Face:** ${dna.face}`,\n  `• **Hair:** ${dna.hair} | **Eyes:** ${dna.eyes} | **Skin:** ${dna.skin}`,\n  `• **Body Build:** ${dna.body_build} | **Estimated Age:** ${dna.estimated_age}`,\n  `• **Clothing:** ${dna.clothing}`,\n  `• **Accessories & Weapons:** ${dna.accessories} / ${dna.weapons}`,\n  `• **Color Palette:** ${dna.color_palette}`,\n  `• **Distinctive Marks:** ${dna.distinctive_marks}`\n].join('\\n');\n\nconst modeSummary = isSaveMode\n  ? `💾 **Mode: SAVE (Canonical Persistence Active)**\\n• **Character Upserted:** \\`${activeState.character_code}\\` (${activeState.character_name})\\n• **R4 Reference History:** \\`reference_version = v${activeState.reference_version}\\` (\\`valid_from_episode = 0\\`, \\`valid_to_episode = null\\`)\\n• **Audit Log:** Recorded \\`VISION_EXTRACTION_SAVED\\` in \\`audit_log\\`.`\n  : `⚡ **Mode: QUICK (Ad-Hoc Preview — Zero Database Writes)**\\n• **Isolation Guarantee:** Project tables me kuch bhi write nahi kiya gaya hai.\\n• **Temporary Working Link:** ${activeState.working_storage_url}\\n💡 *Tip: Is Visual DNA ko permanently lock karne ke liye \\`mode: SAVE\\` use karein.*`;\n\nconst finalMessage = [\n  `👁️ **WF-05: Multi-Modal Vision DNA Extraction Complete!**`,\n  `🔍 **Modality:** \\`${activeState.modality}\\` | **Provider:** \\`${activeState.vision_provider_used}\\``,\n  `📝 **Summary:** ${activeState.analysis_summary}`, ``,\n  `🧬 **Extracted Visual DNA (11-Field Schema):**`, dnaBreakdown, ``, modeSummary\n].join('\\n');\n\nreturn {\n  json: {\n    ok: true, status: isSaveMode ? 'VISION_EXTRACTION_SAVED' : 'QUICK_VISION_PREVIEW_READY', workflow_name: 'WF-05', execution_id: $execution.id,\n    project_id: activeState.project_id, modality: activeState.modality, mode: activeState.effective_mode, db_writes_performed: activeState.db_writes_performed,\n    vision_provider_used: activeState.vision_provider_used, character_code: activeState.character_code, character_name: activeState.character_name,\n    reference_version: activeState.reference_version, valid_from_episode: activeState.valid_from_episode, valid_to_episode: activeState.valid_to_episode,\n    working_storage_url: activeState.working_storage_url || null, visual_dna: activeState.visual_dna, output: finalMessage, text: finalMessage\n  }\n};"
+      }
+    },
+    {
+      "id": "7118f57a-be8c-563b-ab4c-a1acec470bc9",
+      "name": "Backend: Success Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3312,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-05\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "539b705d-e19f-59fe-a720-4faa7e652342",
+      "name": "Backend: Error Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3312,
+        220
+      ],
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/callback",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-05\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "603f6564-5617-5a53-af9e-33188c861de9",
+      "name": "Stop: Workflow Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        3532,
+        220
+      ],
+      "parameters": {
+        "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
       }
     }
   ],
@@ -468,6 +587,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -494,6 +620,13 @@
         [
           {
             "node": "Vision Response Normalizer & JSON Parser",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
             "type": "main",
             "index": 0
           }
@@ -537,6 +670,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -577,6 +717,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -599,6 +746,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -610,6 +764,13 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -618,6 +779,35 @@
         [
           {
             "node": "Final Vision Response Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Vision Response Formatter": {
+      "main": [
+        [
+          {
+            "node": "Backend: Success Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backend: Error Callback": {
+      "main": [
+        [
+          {
+            "node": "Stop: Workflow Failed",
             "type": "main",
             "index": 0
           }

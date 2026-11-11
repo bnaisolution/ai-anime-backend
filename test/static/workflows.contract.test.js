@@ -10,20 +10,20 @@ const DIR = path.join(H.backendRoot, 'n8n-workflows');
 const ALL_DIR = path.join(H.backendRoot, 'n8n-workflows-all');
 
 const EXPECTED = {
-  'StoryWF-00_Main_Router.json': { id: 'U4pLz7pXmG2OqXlt', nodes: 34 },
-  'StoryWF-01.json': { id: 'UeEXeimGGwqIh84T', nodes: 33 },
-  'storywf02.json': { id: 'qRUdhg1PNDK2wJk6', nodes: 26 },
-  'storywf03.json': { id: 's4RGuFSDlevgD5nC', nodes: 38 },
-  'storywf04.json': { id: '8q9tF3VE0mLUZQfa', nodes: 30 },
-  'storywf05.json': { id: 'ADPseu4KBfVveYrq', nodes: 16 },
-  'storywf06.json': { id: 'WAB7tCTJSUilOp07', nodes: 17 },
-  'Storywf07.json': { id: 'zvw63UrbObZhFUiW', nodes: 27 },
-  'Storywf08.json': { id: 'MrWrz58aRUVTzpLr', nodes: 22 },
-  'storywf09.json': { id: 'gT1c0Hpvrwyf9YS6', nodes: 14 },
-  'StoryWf10.json': { id: 'swOEbQV3iNUNmMwu', nodes: 14 },
-  'Storywf11.json': { id: 'baRqhI9JSob9m5oD', nodes: 15 },
-  'StoryWf12.json': { id: '2fcuca0HkGxGIYMv', nodes: 8 },
-  'storywf13.json': { id: 'jI39p4vr4CnWhpgw', nodes: 13 },
+  'StoryWF-00_Main_Router.json': { id: 'U4pLz7pXmG2OqXlt', nodes: 37 },
+  'StoryWF-01.json': { id: 'UeEXeimGGwqIh84T', nodes: 36 },
+  'storywf02.json': { id: 'qRUdhg1PNDK2wJk6', nodes: 29 },
+  'storywf03.json': { id: 's4RGuFSDlevgD5nC', nodes: 41 },
+  'storywf04.json': { id: '8q9tF3VE0mLUZQfa', nodes: 33 },
+  'storywf05.json': { id: 'ADPseu4KBfVveYrq', nodes: 19 },
+  'storywf06.json': { id: 'WAB7tCTJSUilOp07', nodes: 20 },
+  'Storywf07.json': { id: 'zvw63UrbObZhFUiW', nodes: 30 },
+  'Storywf08.json': { id: 'MrWrz58aRUVTzpLr', nodes: 25 },
+  'storywf09.json': { id: 'gT1c0Hpvrwyf9YS6', nodes: 17 },
+  'StoryWf10.json': { id: 'swOEbQV3iNUNmMwu', nodes: 17 },
+  'Storywf11.json': { id: 'baRqhI9JSob9m5oD', nodes: 18 },
+  'StoryWf12.json': { id: '2fcuca0HkGxGIYMv', nodes: 11 },
+  'storywf13.json': { id: 'jI39p4vr4CnWhpgw', nodes: 16 },
 };
 
 function loadWorkflows(dir) {
