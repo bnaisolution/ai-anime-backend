@@ -4,6 +4,7 @@ import { assertPlatformManagedEnabled } from './platform.service';
 import { getModel, listModels, validateModelCompatibility, type ModelSelectionMode, type ModelTask } from './modelCatalog';
 import { resolveProviderDefinition, type ProviderBilling } from './providerRegistry';
 import { buildFallbackPlan } from './universalFallback';
+import { getPlatformPoolStatus } from './platformPool.service';
 
 export interface ComputeRequirements {
   requires_gpu?: boolean;
@@ -22,6 +23,24 @@ export interface ComputeRequirements {
   checkpoint?: Record<string, unknown> | null;
   primary_provider?: string;
   secondary_provider?: string;
+}
+
+export type ComputeMode = 'byod' | 'platform_managed' | 'auto';
+
+export interface ComputeMatrixRequirements extends ComputeRequirements {
+  gpu_mode?: ComputeMode;
+  cpu_mode?: ComputeMode;
+  gpu_task?: ModelTask;
+  cpu_task?: ModelTask;
+}
+
+export interface ComputeMatrixPlan {
+  gpu_mode: ComputeMode;
+  cpu_mode: ComputeMode;
+  gpu: ComputePlan | null;
+  cpu: ComputePlan | null;
+  gpu_reason: string;
+  cpu_reason: string;
 }
 
 export interface ComputeCandidate {
@@ -100,19 +119,19 @@ function modelForCandidate(candidate: ComputeCandidate, requirements: ComputeReq
   return { model_id: compatible[0].model.id, compatible: true, reason: compatible[0].result.reason };
 }
 
-function compatibleCandidates(candidates: ComputeCandidate[], allowed: Set<string>, requirements: ComputeRequirements): ComputeCandidate[] {
+function compatibleCandidates(candidates: ComputeCandidate[], allowed: Set<string>, requirements: ComputeRequirements, allowPlatformBilling = false): ComputeCandidate[] {
   return candidates
     .filter((candidate) => candidate.status === 'active' && allowed.has(candidate.provider_type))
     .filter((candidate) => {
       const definition = resolveProviderDefinition(candidate.provider_type, candidate.capabilities ?? {});
       if (!definition) return false;
-      if (definition.billing === 'platform' && requirements.allow_paid_fallback !== true) return false;
+      if (definition.billing === 'platform' && !allowPlatformBilling && requirements.allow_paid_fallback !== true) return false;
       return modelForCandidate(candidate, requirements).compatible;
     })
     .sort((a, b) => priorityOf(a, requirements) - priorityOf(b, requirements));
 }
 
-function planFor(candidates: ComputeCandidate[], requirements: ComputeRequirements, engine: 'gpu' | 'cpu', fallbackReason: string, forceFallback = false): ComputePlan {
+function planFor(candidates: ComputeCandidate[], requirements: ComputeRequirements, engine: 'gpu' | 'cpu', fallbackReason: string, forceFallback = false, allowPlatformBilling = false): ComputePlan {
   const primary = requirements.primary_provider || requirements.preferred_provider;
   const plan = buildFallbackPlan({
     candidates: candidates.map((candidate) => ({
@@ -126,7 +145,7 @@ function planFor(candidates: ComputeCandidate[], requirements: ComputeRequiremen
     primary_provider: primary,
     secondary_provider: requirements.secondary_provider,
     mode: requirements.selection_mode === 'advanced' ? 'manual' : 'automatic',
-    allow_paid_fallback: requirements.allow_paid_fallback,
+    allow_paid_fallback: allowPlatformBilling ? true : requirements.allow_paid_fallback,
     checkpoint: requirements.checkpoint ?? null,
   });
   const selected = plan.selected_provider
@@ -150,8 +169,55 @@ function planFor(candidates: ComputeCandidate[], requirements: ComputeRequiremen
     reason: plan.reason,
     fallback_reason: plan.fallback ? (fallbackReason || plan.reason) : '',
     resume_from: plan.resume_from,
-    requires_paid_approval: plan.requires_paid_approval,
+    requires_paid_approval: plan.requires_paid_approval || billingOf(selected) === 'platform',
   };
+}
+
+function providerCategory(candidate: ComputeCandidate): string | null {
+  return resolveProviderDefinition(candidate.provider_type, candidate.capabilities ?? {})?.category ?? null;
+}
+
+function matrixCandidates(candidates: ComputeCandidate[], mode: ComputeMode, category: 'gpu' | 'cpu'): ComputeCandidate[] {
+  return candidates.filter((candidate) => {
+    if (candidate.status !== 'active') return false;
+    if (providerCategory(candidate) !== category) return false;
+    const platform = candidate.capabilities?.platform_managed === true;
+    if (mode === 'platform_managed') return platform;
+    if (mode === 'byod') return !platform;
+    return true;
+  });
+}
+
+function planForMatrixEngine(
+  candidates: ComputeCandidate[],
+  requirements: ComputeRequirements,
+  engine: 'gpu' | 'cpu',
+  mode: ComputeMode,
+): { plan: ComputePlan | null; reason: string } {
+  if (mode === 'platform_managed' && !platformManagedSelectionEnabled()) {
+    return { plan: null, reason: 'Platform-Managed selection is disabled.' };
+  }
+  const pool = matrixCandidates(candidates, mode, engine);
+  if (pool.length === 0) return { plan: null, reason: `No active ${engine.toUpperCase()} provider is configured for ${mode}.` };
+  const allowPlatform = mode === 'platform_managed';
+  const compatible = compatibleCandidates(pool, new Set(pool.map((candidate) => candidate.provider_type)), requirements, allowPlatform);
+  if (compatible.length === 0) return { plan: null, reason: `No compatible ${engine.toUpperCase()} model/provider is available for ${mode}.` };
+  return { plan: planFor(compatible, requirements, engine, `Selected ${engine.toUpperCase()} provider in ${mode} mode.`, false, allowPlatform), reason: '' };
+}
+
+function platformManagedSelectionEnabled(): boolean {
+  return process.env.ANIME_PLATFORM_MANAGED_ENABLED === 'true'
+    && process.env.ANIME_PLATFORM_MANAGED_OWNER_APPROVED === 'true';
+}
+
+export function selectComputeMatrix(candidates: ComputeCandidate[], requirements: ComputeMatrixRequirements): ComputeMatrixPlan {
+  const gpuMode = requirements.gpu_mode ?? (requirements.preferred_mode === 'platform_managed' ? 'platform_managed' : 'byod');
+  const cpuMode = requirements.cpu_mode ?? (requirements.preferred_mode === 'platform_managed' ? 'platform_managed' : 'byod');
+  const gpuRequirements = { ...requirements, requires_gpu: true, task: requirements.gpu_task ?? requirements.task, allow_paid_fallback: gpuMode === 'platform_managed' ? true : requirements.allow_paid_fallback };
+  const cpuRequirements = { ...requirements, requires_gpu: false, task: requirements.cpu_task ?? requirements.task, allow_paid_fallback: cpuMode === 'platform_managed' ? true : requirements.allow_paid_fallback };
+  const gpu = planForMatrixEngine(candidates, gpuRequirements, 'gpu', gpuMode);
+  const cpu = planForMatrixEngine(candidates, cpuRequirements, 'cpu', cpuMode);
+  return { gpu_mode: gpuMode, cpu_mode: cpuMode, gpu: gpu.plan, cpu: cpu.plan, gpu_reason: gpu.reason, cpu_reason: cpu.reason };
 }
 
 export function selectComputePlan(candidates: ComputeCandidate[], requirements: ComputeRequirements): ComputePlan {
@@ -186,6 +252,38 @@ export function selectComputePlan(candidates: ComputeCandidate[], requirements: 
   if (first.length === 0) throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: 'No active BYOD provider is configured.' });
   const engine = GPU_PROVIDERS.has(first[0].provider_type) ? 'gpu' : 'cpu';
   return planFor(first, requirements, engine, 'Selected the first active BYOD provider.');
+}
+
+export async function selectComputeMatrixForUser(userId: string, requirements: ComputeMatrixRequirements): Promise<ComputeMatrixPlan> {
+  const needsPlatform = requirements.gpu_mode === 'platform_managed' || requirements.cpu_mode === 'platform_managed' || requirements.preferred_mode === 'platform_managed';
+  if (needsPlatform) assertPlatformManagedEnabled('compute matrix selection');
+  const items = await infrastructure.list(userId);
+  const candidates: ComputeCandidate[] = items.map((item) => ({
+    id: item.id,
+    provider_type: item.provider_type,
+    status: item.status,
+    capabilities: item.capabilities,
+  }));
+  if (needsPlatform) {
+    const pool = await getPlatformPoolStatus();
+    for (const capacity of pool.capacities) {
+      if (!capacity.enabled || capacity.available_units <= 0) continue;
+      const category = capacity.resource === 'gpu' ? 'gpu' : capacity.resource === 'cpu' ? 'cpu' : null;
+      if (!category) continue;
+      candidates.push({
+        id: `platform:${capacity.resource}:${capacity.provider_id}`,
+        provider_type: 'custom',
+        status: 'active',
+        capabilities: {
+          provider_id: category === 'gpu' ? 'platform_gpu_pool' : 'platform_cpu_pool',
+          platform_managed: true,
+          platform_provider_id: capacity.provider_id,
+          priority: 50,
+        },
+      });
+    }
+  }
+  return selectComputeMatrix(candidates, requirements);
 }
 
 export async function selectComputeForUser(userId: string, requirements: ComputeRequirements): Promise<ComputePlan> {

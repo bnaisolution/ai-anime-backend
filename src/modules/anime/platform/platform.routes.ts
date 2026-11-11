@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { Type } from '@sinclair/typebox';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
-import { selectComputeForUser } from './compute.selector';
+import { selectComputeForUser, selectComputeMatrixForUser } from './compute.selector';
 import { listModels, selectModel } from './modelCatalog';
 import { listProviders } from './providerRegistry';
 import { buildFallbackPlan } from './universalFallback';
@@ -43,6 +43,23 @@ const ModelSelectBody = Type.Object({
   weights: Type.Optional(Type.Array(Type.String({ maxLength: 64 }))),
   allow_paid_fallback: Type.Optional(Type.Boolean()),
   platform_managed: Type.Optional(Type.Boolean()),
+});
+const ComputeModeEnum = Type.Union([Type.Literal('byod'), Type.Literal('platform_managed'), Type.Literal('auto')]);
+const ComputeMatrixBody = Type.Object({
+  gpu_mode: Type.Optional(ComputeModeEnum),
+  cpu_mode: Type.Optional(ComputeModeEnum),
+  gpu_task: Type.Optional(ModelTaskEnum),
+  cpu_task: Type.Optional(ModelTaskEnum),
+  selection_mode: Type.Optional(Type.Union([Type.Literal('auto'), Type.Literal('simple'), Type.Literal('advanced')])),
+  model_id: Type.Optional(Type.String({ maxLength: 128 })),
+  vram_gb: Type.Optional(Type.Number({ minimum: 0 })),
+  dependencies: Type.Optional(Type.Array(Type.String({ maxLength: 64 }))),
+  weights: Type.Optional(Type.Array(Type.String({ maxLength: 64 }))),
+  allow_paid_fallback: Type.Optional(Type.Boolean()),
+  preferred_provider: Type.Optional(Type.String({ maxLength: 64 })),
+  primary_provider: Type.Optional(Type.String({ maxLength: 64 })),
+  secondary_provider: Type.Optional(Type.String({ maxLength: 64 })),
+  checkpoint: Type.Optional(Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()])),
 });
 const PoolResourceEnum = Type.Union([Type.Literal('gpu'), Type.Literal('cpu'), Type.Literal('llm'), Type.Literal('storage')]);
 const ReservePoolBody = Type.Object({
@@ -181,6 +198,11 @@ export async function registerAnimePlatformRoutes(app: FastifyInstance): Promise
   app.get('/v1/anime/platform/billing/summary', { schema: { querystring: BillingQuery }, preHandler: [app.authenticate] }, async (request: any) => {
     const tenant = await resolveTenant(userId(request), request.query.tenant_id);
     return { data: await getPlatformBillingSummary(tenant.tenant.id, request.query.from, request.query.to), meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.post('/v1/anime/infrastructure/compute/matrix', { schema: { body: ComputeMatrixBody }, preHandler: [app.authenticate] }, async (request: any) => {
+    const data = await selectComputeMatrixForUser(userId(request), request.body);
+    return { data, meta: { request_id: request.anime?.request_id } };
   });
 
   app.post('/v1/anime/platform/actions', { schema: { body: PlatformActionBody }, preHandler: [app.authenticate] }, async (request: any) => {
