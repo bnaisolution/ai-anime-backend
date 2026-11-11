@@ -7,6 +7,7 @@ import type { ProviderType } from './infrastructure.types';
 const IdParams = Type.Object({ id: Type.String({ format: 'uuid' }) });
 const RotateBody = Type.Object({ config: Type.Record(Type.String(), Type.Unknown()) });
 const BindBody = Type.Object({ tenant_id: Type.String({ format: 'uuid' }) });
+const ReencryptBody = Type.Object({ dry_run: Type.Optional(Type.Boolean({ default: false })) });
 const ValidateBody = Type.Object({
   provider_type: Type.String(),
   config: Type.Record(Type.String(), Type.Unknown()),
@@ -52,6 +53,15 @@ export async function registerAnimeInfrastructureLifecycleRoutes(app: FastifyIns
       },
       meta: { request_id: request.anime?.request_id },
     };
+  });
+
+  app.get('/v1/anime/infrastructure/key-custody', { preHandler: [app.authenticate] }, async (request: any) => {
+    return { data: svc.getKeyCustody(), meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.post('/v1/anime/infrastructure/reencrypt', { schema: { body: ReencryptBody }, preHandler: [app.authenticate] }, async (request: any) => {
+    const data = await svc.reencryptUserInfrastructure(userId(request), request.anime?.request_id, { dry_run: request.body?.dry_run });
+    return { data, meta: { request_id: request.anime?.request_id } };
   });
 
   app.post('/v1/anime/infrastructure/validate', { schema: { body: ValidateBody }, preHandler: [app.authenticate] }, async (request: any) => {

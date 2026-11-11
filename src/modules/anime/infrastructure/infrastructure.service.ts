@@ -1,24 +1,12 @@
 import { createHash } from 'node:crypto';
 import { writeAudit } from '../audit/audit.writer';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
-import { decryptConfig, encryptConfig, maskConfig } from './infrastructure.crypto';
+import { maskConfig } from './infrastructure.crypto';
+import { decryptWithKeyVersion, encryptWithCurrentKey, keyCustodyStatus } from './keyRegistry';
 import * as repo from './infrastructure.repo';
 import { resolveTenant } from '../tenant/tenant.service';
 import { mintWorkerJobToken } from '../workers/workerToken';
 import type { InfrastructurePublicDto, InfrastructureRecord, ProviderType } from './infrastructure.types';
-
-function masterKey(): string {
-  const k = process.env.ANIME_ENCRYPTION_KEY;
-  if (!k || k.length < 32) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'ANIME_ENCRYPTION_KEY missing or too short' });
-  return k;
-}
-
-function previousMasterKeys(): string[] {
-  return String(process.env.ANIME_ENCRYPTION_KEY_PREVIOUS || '')
-    .split(',')
-    .map((key) => key.trim())
-    .filter((key) => key.length >= 32);
-}
 
 function fingerprintConfig(config: Record<string, unknown>): string {
   const canonical = JSON.stringify(config, Object.keys(config).sort());
@@ -26,7 +14,7 @@ function fingerprintConfig(config: Record<string, unknown>): string {
 }
 
 function decryptRecord(r: InfrastructureRecord): Record<string, unknown> {
-  return JSON.parse(decryptConfig(r.config_encrypted, masterKey(), previousMasterKeys()));
+  return JSON.parse(decryptWithKeyVersion(r.config_encrypted, r.key_version));
 }
 
 function toPublic(r: InfrastructureRecord): InfrastructurePublicDto {
@@ -50,13 +38,14 @@ export async function create(userId: string, input: {
   name: string; provider_type: ProviderType; config: Record<string, unknown>;
   capabilities?: Record<string, unknown>; is_default?: boolean; request_id?: string;
 }): Promise<InfrastructurePublicDto> {
+  const encrypted = encryptWithCurrentKey(JSON.stringify(input.config));
   const record = await repo.insert({
     user_id: userId, name: input.name, provider_type: input.provider_type,
-    config_encrypted: encryptConfig(JSON.stringify(input.config), masterKey()),
+    config_encrypted: encrypted.ciphertext,
     capabilities: input.capabilities ?? {}, is_default: input.is_default ?? false,
   });
   const updated = await repo.update(record.id, userId, {
-    key_version: 2,
+    key_version: encrypted.key_version,
     fingerprint: fingerprintConfig(input.config),
   });
   await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'CREATE_INFRASTRUCTURE', entity_type: 'USER_INFRASTRUCTURE', entity_id: record.id, new_value: { name: record.name, provider_type: record.provider_type }, request_id: input.request_id });
@@ -80,8 +69,9 @@ export async function update(id: string, userId: string, patch: {
   const dbPatch: Record<string, unknown> = {};
   if (patch.name !== undefined) dbPatch.name = patch.name;
   if (patch.config !== undefined) {
-    dbPatch.config_encrypted = encryptConfig(JSON.stringify(patch.config), masterKey());
-    dbPatch.key_version = 2;
+    const encrypted = encryptWithCurrentKey(JSON.stringify(patch.config));
+    dbPatch.config_encrypted = encrypted.ciphertext;
+    dbPatch.key_version = encrypted.key_version;
     dbPatch.fingerprint = fingerprintConfig(patch.config);
   }
   if (patch.capabilities !== undefined) dbPatch.capabilities = patch.capabilities;
@@ -163,9 +153,10 @@ export async function rotate(id: string, userId: string, config: Record<string, 
   const existing = await repo.getById(id, userId);
   if (!existing) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Infrastructure not found' });
   if (existing.status === 'revoked') throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: 'Revoked credentials cannot be rotated.' });
+  const encrypted = encryptWithCurrentKey(JSON.stringify(config));
   const updated = await repo.update(id, userId, {
-    config_encrypted: encryptConfig(JSON.stringify(config), masterKey()),
-    key_version: (existing.key_version ?? 1) + 1,
+    config_encrypted: encrypted.ciphertext,
+    key_version: encrypted.key_version,
     fingerprint: fingerprintConfig(config),
     last_rotated_at: new Date().toISOString(),
     status: 'active',
@@ -178,8 +169,10 @@ export async function rotate(id: string, userId: string, config: Record<string, 
 export async function revoke(id: string, userId: string, requestId?: string): Promise<InfrastructurePublicDto> {
   const existing = await repo.getById(id, userId);
   if (!existing) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Infrastructure not found' });
+  const encrypted = encryptWithCurrentKey('{}');
   const updated = await repo.update(id, userId, {
-    config_encrypted: encryptConfig('{}', masterKey()),
+    config_encrypted: encrypted.ciphertext,
+    key_version: encrypted.key_version,
     status: 'revoked',
     revoked_at: new Date().toISOString(),
     fingerprint: null,
@@ -187,6 +180,40 @@ export async function revoke(id: string, userId: string, requestId?: string): Pr
   });
   await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'REVOKE_INFRASTRUCTURE', entity_type: 'USER_INFRASTRUCTURE', entity_id: id, request_id: requestId });
   return toPublic(updated);
+}
+
+export async function reencryptUserInfrastructure(userId: string, requestId?: string, options?: { dry_run?: boolean }): Promise<{ rotated: number; skipped: number; failed: number; dry_run: boolean; key_custody: ReturnType<typeof keyCustodyStatus> }> {
+  const records = await repo.listByUser(userId);
+  let rotated = 0;
+  let skipped = 0;
+  let failed = 0;
+  for (const record of records) {
+    if (record.status === 'revoked') {
+      skipped += 1;
+      continue;
+    }
+    try {
+      const config = decryptRecord(record);
+      const encrypted = encryptWithCurrentKey(JSON.stringify(config));
+      if (options?.dry_run) {
+        rotated += 1;
+      } else if (record.key_version !== encrypted.key_version || record.config_encrypted !== encrypted.ciphertext) {
+        await repo.update(record.id, userId, { config_encrypted: encrypted.ciphertext, key_version: encrypted.key_version });
+        rotated += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch {
+      failed += 1;
+    }
+  }
+  const result = { rotated, skipped, failed, dry_run: Boolean(options?.dry_run), key_custody: keyCustodyStatus() };
+  await writeAudit({ project_id: null, user_id: userId, workflow_name: 'INFRASTRUCTURE', action: 'REENCRYPT_INFRASTRUCTURE', entity_type: 'USER_INFRASTRUCTURE', entity_id: null, new_value: result, request_id: requestId });
+  return result;
+}
+
+export function getKeyCustody(): ReturnType<typeof keyCustodyStatus> {
+  return keyCustodyStatus();
 }
 
 export async function bindToTenant(id: string, userId: string, tenantId: string, requestId?: string): Promise<InfrastructurePublicDto> {
