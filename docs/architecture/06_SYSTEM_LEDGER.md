@@ -8,10 +8,10 @@
 - n8n Workflows: 14 Canonical active (WF-00 to WF-13) | 6 duplicate Story workflows purged
 
 ## Recent Milestones (Rolling Window - Last 3)
-- [2026-11-11] Batch 5: Media3 Bearer token injection, Maestro 3/3 green, n8n duplicate purge.
 - [2026-11-11] All Batches (1-5) successfully merged into main branch across all services.
 - [2026-11-11] Master auth unblocked: `admin@example.com` login HTTP 200, refresh HTTP 200, `/auth/me` 200.
+- [2026-11-11] Runtime validation (API layer): auth suite 11/11 expected, n8n 14/14 canonical active, 2 defects opened (owner 500, logout token).
 
 ## Active State & Next Immediate Action
-- Current Status: Login live on `icypjilkcqylgbpmkyes` (AI Assistant App / Manager project) using publishable key `sb_publishable_...` in `SUPABASE_ANON_KEY`. `ANIME_SUPABASE_ANON_KEY` still placeholder (`temp_anon_key`).
-- Next Action: Anime project anon key swap (if needed), then End-to-End Pipeline Smoke Test & Release APK generation.
+- Current Status: Login live on `icypjilkcqylgbpmkyes` (Manager project) using `sb_publishable_...` key. Defect D1: `/v1/anime/owner/quota` + `/tenants` return 500 (tenant tables not migrated). Defect D2: logout revokes refresh token but access token stays valid until expiry (~1h). `ANIME_SUPABASE_ANON_KEY` still placeholder.
+- Next Action: Apply `supabase/migrations/005_batch4_tenant_platform.sql` to anime project (fixes `/v1/anime/owner/*` 500), then E2E pipeline smoke test & release APK.
