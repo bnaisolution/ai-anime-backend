@@ -79,7 +79,9 @@ test('GPU and CPU selection are independent and fail closed', () => {
   assert.match(computeSelector, /GPU_PROVIDERS/);
   assert.match(computeSelector, /AUDIO_PROVIDERS/);
   assert.match(computeSelector, /LLM_PROVIDERS/);
-  assert.match(computeSelector, /fallback: true/);
+  assert.match(computeSelector, /fallback: forceFallback \|\| plan\.fallback/);
+  assert.match(computeSelector, /buildFallbackPlan/);
+  assert.match(computeSelector, /allow_paid_fallback/);
   assert.match(computeSelector, /PROVIDER_UNAVAILABLE/);
 });
 
