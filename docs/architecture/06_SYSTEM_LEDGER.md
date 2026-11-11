@@ -13,5 +13,5 @@
 - [2026-11-11] Master auth unblocked: `admin@example.com` login HTTP 200, refresh HTTP 200, `/auth/me` 200.
 
 ## Active State & Next Immediate Action
-- Current Status: Login live on `icypjilkcqylgbpmkyes` auth project (Manager scope). `SUPABASE_ANON_KEY` currently TEMPORARY (service-role value) — pending real anon key swap. `ANIME_SUPABASE_ANON_KEY` still placeholder.
-- Next Action: Swap real anon key into `.env` + recreate backend, then End-to-End Pipeline Smoke Test & Release APK generation.
+- Current Status: Login live on `icypjilkcqylgbpmkyes` (AI Assistant App / Manager project) using publishable key `sb_publishable_...` in `SUPABASE_ANON_KEY`. `ANIME_SUPABASE_ANON_KEY` still placeholder (`temp_anon_key`).
+- Next Action: Anime project anon key swap (if needed), then End-to-End Pipeline Smoke Test & Release APK generation.
