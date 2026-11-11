@@ -44,29 +44,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episodes?select=id,project_id,episode_no,title,youtube_url,instagram_urls&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.episode_no }}&limit=1",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?select=id,project_id,episode_no,title,youtube_url,instagram_urls&project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.episode_no) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -282,27 +286,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-08 Analytics & Narrative Feedback AI. Analyze performance metrics. Output STRICT JSON with exact keys: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"string\"], \"drop_off_diagnostics\": \"string\", \"script_optimization_tips\": [\"string\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($json.unified_report) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"groq\", path: \"/openai/v1/chat/completions\", body: { model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-08 Analytics & Narrative Feedback AI. Analyze performance metrics. Output STRICT JSON with exact keys: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"string\"], \"drop_off_diagnostics\": \"string\", \"script_optimization_tips\": [\"string\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($json.unified_report) } ] }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 25000
         }
@@ -339,27 +347,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Analyze performance metrics and output STRICT JSON: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"...\"], \"drop_off_diagnostics\": \"...\", \"script_optimization_tips\": [\"...\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($('Data Aggregator & Normalizer').item.json.unified_report) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"gemini\", path: \"/v1beta/openai/chat/completions\", body: { model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.2, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'Analyze performance metrics and output STRICT JSON: {\"sentiment\": \"positive|neutral|negative\", \"top_performing_elements\": [\"...\"], \"drop_off_diagnostics\": \"...\", \"script_optimization_tips\": [\"...\"]}.' }, { role: 'user', content: 'Performance Report: ' + JSON.stringify($('Data Aggregator & Normalizer').item.json.unified_report) } ] }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 25000
         }
@@ -461,35 +473,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_analytics?on_conflict=project_id,episode_no,platform",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, platform: 'UNIFIED_CROSS_PLATFORM', views: $json.unified_report.total_views, watch_time_seconds: $json.unified_report.total_watch_time_sec, avg_view_duration: $json.unified_report.avg_view_duration, ctr: $json.unified_report.avg_retention_pct, likes: $json.unified_report.total_likes, comments: $json.unified_report.total_comments, shares: $json.unified_report.total_shares, saves: $json.unified_report.total_saves, engagement_score: $json.unified_report.engagement_score, fetched_at: $json.unified_report.recorded_at }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episode_analytics?on_conflict=project_id,episode_no,platform\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, platform: 'UNIFIED_CROSS_PLATFORM', views: $json.unified_report.total_views, watch_time_seconds: $json.unified_report.total_watch_time_sec, avg_view_duration: $json.unified_report.avg_view_duration, ctr: $json.unified_report.avg_retention_pct, likes: $json.unified_report.total_likes, comments: $json.unified_report.total_comments, shares: $json.unified_report.total_shares, saves: $json.unified_report.total_saves, engagement_score: $json.unified_report.engagement_score, fetched_at: $json.unified_report.recorded_at }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -506,35 +514,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/project_analytics_insights",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, sentiment: $('Restore Context After Telegram').item.json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').item.json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').item.json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').item.json.ai_insights.script_optimization_tips, created_at: $now.toISO() }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/project_analytics_insights\", method: \"POST\", body: { project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, sentiment: $('Restore Context After Telegram').item.json.ai_insights.sentiment, top_performing_elements: $('Restore Context After Telegram').item.json.ai_insights.top_performing_elements, drop_off_diagnostics: $('Restore Context After Telegram').item.json.ai_insights.drop_off_diagnostics, script_optimization_tips: $('Restore Context After Telegram').item.json.ai_insights.script_optimization_tips, created_at: $now.toISO() }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -551,35 +555,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, workflow_name: 'WF-08', action: 'ANALYTICS_SYNCHRONIZED', execution_id: $execution.id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Restore Context After Telegram').item.json.project_id, episode_no: $('Restore Context After Telegram').item.json.episode_no, workflow_name: 'WF-08', action: 'ANALYTICS_SYNCHRONIZED', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },

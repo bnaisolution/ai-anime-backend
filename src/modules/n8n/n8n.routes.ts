@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { WORKFLOW_REGISTRY } from '../../security/executionGuard';
+import { isAnimeWorkflowPayload } from '../../security/animeWorkflowBoundary';
 
 export const API_CONTRACT_REGISTRY = [
   { contract_id: 'CNT-001', endpoint: '/api/v1/ai/chat', method: 'POST', version: '1.4-v3.0', auth_required: 'Bearer JWT', timeout_ms: 30000, idempotency: 'request_id', related_wfs: ['CHAT-DIRECT'], min_android_version: '3.0.0', status: 'verified' },
@@ -20,6 +21,7 @@ export default async function n8nRoutes(fastify: FastifyInstance) {
   fastify.post('/test-workflow', { preHandler: [fastify.authenticate, fastify.requireOwner] }, async (request, reply) => {
     const body = request.body as { workflow_json?: any };
     if (!body.workflow_json) return reply.code(400).send({ status: 'failed', error: 'workflow_json required' });
+    if (isAnimeWorkflowPayload(body.workflow_json)) return reply.code(403).send({ status: 'failed', error: 'ANIME_WORKFLOW_USE_DEDICATED_ROUTE' });
 
     try {
       const n8nUrl = `${process.env.N8N_BASE_URL || 'http://n8n:5678'}/api/v1/workflows`;
@@ -60,6 +62,7 @@ export default async function n8nRoutes(fastify: FastifyInstance) {
   fastify.post('/deploy-workflow', { preHandler: [fastify.authenticate, fastify.requireOwner] }, async (request, reply) => {
     const body = request.body as { workflow_json?: any };
     if (!body.workflow_json) return reply.code(400).send({ status: 'failed', error: 'workflow_json required' });
+    if (isAnimeWorkflowPayload(body.workflow_json)) return reply.code(403).send({ status: 'failed', error: 'ANIME_WORKFLOW_USE_DEDICATED_ROUTE' });
 
     try {
       const n8nUrl = `${process.env.N8N_BASE_URL || 'http://n8n:5678'}/api/v1/workflows`;

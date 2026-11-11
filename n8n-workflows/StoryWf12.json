@@ -34,29 +34,33 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/quota_usage?select=id,project_id,usage_date,service_type,accumulated_units,updated_at&project_id=eq.{{ $json.project_id }}&usage_date=eq.{{ $json.usage_date }}&service_type=eq.{{ $json.service_type }}&limit=1",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/quota_usage?select=id,project_id,usage_date,service_type,accumulated_units,updated_at&project_id=eq.\" + ($json.project_id) + \"&usage_date=eq.\" + ($json.usage_date) + \"&service_type=eq.\" + ($json.service_type) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "c83896ce-9baf-4ff2-a502-728213851295",
       "name": "Supabase: Fetch Daily Quota Usage",
@@ -106,35 +110,31 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/quota_usage?on_conflict=project_id,usage_date,service_type",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.upsert_payload) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/quota_usage?on_conflict=project_id,usage_date,service_type\", method: \"POST\", body: $json.upsert_payload, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "0243c6d0-b8a1-448f-8443-79ae32625740",
@@ -151,35 +151,31 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Quota & Throttling Evaluator').item.json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').item.json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').item.json.service_type, projected_total: $('Quota & Throttling Evaluator').item.json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').item.json.daily_quota_limit } }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Quota & Throttling Evaluator').item.json.project_id, workflow_name: 'WF-12', action: $('Quota & Throttling Evaluator').item.json.quota_status, execution_id: $execution.id, new_value: { service_type: $('Quota & Throttling Evaluator').item.json.service_type, projected_total: $('Quota & Throttling Evaluator').item.json.projected_total_units, daily_limit: $('Quota & Throttling Evaluator').item.json.daily_quota_limit } }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "540090fa-d4dc-4663-91e5-250409f4c384",

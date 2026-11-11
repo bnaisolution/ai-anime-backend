@@ -25,6 +25,8 @@ import { registerAnimeReadsRoutes } from './reads/reads.routes';
 import { registerAnimeHealthRoutes } from './routes/health.routes';
 import { supervisorWorker } from './supervisor/supervisor.worker';
 import { registerAnimeDevicesRoutes } from './system/devices.routes';
+import { registerAnimeWorkflowGatewayRoutes } from './internal/workflowGateway.routes';
+import { registerAnimeAdminWorkflowRoutes } from './admin/workflows.routes';
 
 export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
   // === BATCH6_GLOBAL_PREVALIDATION_HOOK (SIDE-EFFECT-FREE STUDIO CONTEXT & DUPLICATE GUARD) ===
@@ -141,6 +143,8 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
 
 export async function registerAnimeRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimeHealthRoutes);
+  await app.register(registerAnimeWorkflowGatewayRoutes);
+  await app.register(registerAnimeAdminWorkflowRoutes);
   await app.register(registerAnimeDevicesRoutes);
   await app.register(registerAnimeCommandsRoutes);
   await app.register(registerAnimeCallbacksRoutes);

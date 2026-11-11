@@ -40,29 +40,33 @@
     },
     {
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,project_id,action_type,status,retry_count,ready_at,action_payload,created_at&or=(status.eq.FAILED,and(status.eq.RETRY_SCHEDULED,ready_at.lte.{{ $now.toISO() }}))&order=created_at.asc&limit=25",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-system-token",
+              "value": "={{ $env.ANIME_WORKFLOW_SYSTEM_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/pending_actions?select=id,project_id,action_type,status,retry_count,ready_at,action_payload,created_at&or=(status.eq.FAILED,and(status.eq.RETRY_SCHEDULED,ready_at.lte.\" + ($now.toISO()) + \"))&order=created_at.asc&limit=25\", method: \"GET\", body: null, prefer: null, system_scope: true }) }}"
       },
       "id": "9a36c079-febe-4a44-b7de-e18b61b10c37",
       "name": "Supabase: Fetch Failed & Due Retry Jobs",
@@ -136,36 +140,32 @@
     },
     {
       "parameters": {
-        "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?id=eq.{{ $json.job_id }}",
+        "method": "POST",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-system-token",
+              "value": "={{ $env.ANIME_WORKFLOW_SYSTEM_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: $json.next_status, retry_count: $json.new_retry_count, ready_at: $json.next_schedule }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/pending_actions?id=eq.\" + ($json.job_id), method: \"PATCH\", body: { status: $json.next_status, retry_count: $json.new_retry_count, ready_at: $json.next_schedule }, prefer: \"return=minimal\", system_scope: true }) }}",
         "options": {}
       },
       "id": "4c46ee0a-37bd-46cc-b39e-95a3af70176c",
@@ -237,35 +237,31 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-system-token",
+              "value": "={{ $env.ANIME_WORKFLOW_SYSTEM_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Exponential Backoff & Dead-Letter Math').item.json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').item.json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').item.json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').item.json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').item.json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').item.json.next_schedule } }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Exponential Backoff & Dead-Letter Math').item.json.project_id, episode_no: $('Exponential Backoff & Dead-Letter Math').item.json.episode_no, workflow_name: 'WF-13', action: $('Exponential Backoff & Dead-Letter Math').item.json.next_status, execution_id: $execution.id, new_value: { job_id: $('Exponential Backoff & Dead-Letter Math').item.json.job_id, retry_count: $('Exponential Backoff & Dead-Letter Math').item.json.new_retry_count, next_schedule: $('Exponential Backoff & Dead-Letter Math').item.json.next_schedule } }, prefer: \"return=minimal\", system_scope: true }) }}",
         "options": {}
       },
       "id": "90adc41d-9330-41f1-b289-29e29cc7b3ee",

@@ -44,29 +44,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?select=id,fact_key,fact_type,fact_value,canon_status,version,affected_episodes&project_id=eq.{{ $json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/canon_facts?select=id,fact_key,fact_type,fact_value,canon_status,version,affected_episodes&project_id=eq.\" + ($json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -81,29 +85,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_knowledge?select=id,character_code,knowledge_key,knowledge_value,learned_at_ep,secret,knows&project_id=eq.{{ $('Input Normalizer & Mode Resolver').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_knowledge?select=id,character_code,knowledge_key,knowledge_value,learned_at_ep,secret,knows&project_id=eq.\" + ($('Input Normalizer & Mode Resolver').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -132,27 +140,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Compare proposed_events against canon_facts and character_knowledge. Enforce two strict laws: 1) Rule 14 & 15 Fact Locking: If any proposed event contradicts a LOCKED canon fact, set isValid=false and emit a violation with type=\"CRITICAL_CANON_VIOLATION\". 2) Section 42 Character Knowledge Graph (Anti-Meta-Gaming): Check if every character in characters_involved taking an action actually possesses the required knowledge in character_knowledge. If a character acts on a secret or unlearned fact they do not possess, set isValid=false and emit a violation with type=\"KNOWLEDGE_GRAPH_VIOLATION\". Output STRICT JSON matching this exact schema: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\"|\"FLEXIBLE_FACT_SHIFT\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $json.llm_evaluation_context } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"groq\", path: \"/openai/v1/chat/completions\", body: { model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Compare proposed_events against canon_facts and character_knowledge. Enforce two strict laws: 1) Rule 14 & 15 Fact Locking: If any proposed event contradicts a LOCKED canon fact, set isValid=false and emit a violation with type=\"CRITICAL_CANON_VIOLATION\". 2) Section 42 Character Knowledge Graph (Anti-Meta-Gaming): Check if every character in characters_involved taking an action actually possesses the required knowledge in character_knowledge. If a character acts on a secret or unlearned fact they do not possess, set isValid=false and emit a violation with type=\"KNOWLEDGE_GRAPH_VIOLATION\". Output STRICT JSON matching this exact schema: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\"|\"FLEXIBLE_FACT_SHIFT\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $json.llm_evaluation_context } ] }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 30000
         }
@@ -189,27 +201,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Validate proposed_events against LOCKED canon_facts (Rule 14/15) and character_knowledge (Section 42). Output STRICT JSON: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $('Deterministic Lock Guard & Prompt Builder').item.json.llm_evaluation_context } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"gemini\", path: \"/v1beta/openai/chat/completions\", body: { model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-09 Canon Engine & Character Knowledge Graph Validator (Master Blueprint v6.5.0). Validate proposed_events against LOCKED canon_facts (Rule 14/15) and character_knowledge (Section 42). Output STRICT JSON: {\"isValid\": boolean, \"violations\": [{\"type\": \"CRITICAL_CANON_VIOLATION\"|\"KNOWLEDGE_GRAPH_VIOLATION\", \"description\": \"string\"}], \"new_facts_to_add\": [{\"fact_key\": \"FACT_001\", \"fact_type\": \"LORE\", \"fact_value\": {\"statement\": \"string\"}, \"canon_status\": \"FLEXIBLE\", \"affected_episodes\": [1]}], \"new_knowledge_to_add\": [{\"character_code\": \"CHAR_001\", \"knowledge_key\": \"KNOW_001\", \"knowledge_value\": \"string\", \"learned_at_ep\": 1, \"secret\": false, \"knows\": true}]}.' }, { role: 'user', content: $('Deterministic Lock Guard & Prompt Builder').item.json.llm_evaluation_context } ] }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 30000
         }
@@ -262,35 +278,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/canon_facts?on_conflict=project_id,fact_key",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.new_facts_to_add) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/canon_facts?on_conflict=project_id,fact_key\", method: \"POST\", body: $json.new_facts_to_add, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -307,35 +319,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_knowledge?on_conflict=project_id,character_code,knowledge_key",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_knowledge?on_conflict=project_id,character_code,knowledge_key\", method: \"POST\", body: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -352,35 +360,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Canon Verdict & Locked Fact Protection Engine').item.json.project_id, episode_no: $('Canon Verdict & Locked Fact Protection Engine').item.json.episode_no, workflow_name: 'WF-09', action: $('Canon Verdict & Locked Fact Protection Engine').item.json.operation_mode, execution_id: $execution.id, new_value: { isValid: $('Canon Verdict & Locked Fact Protection Engine').item.json.isValid, violations_count: $('Canon Verdict & Locked Fact Protection Engine').item.json.violations.length, facts_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_facts_to_add.length, knowledge_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add.length } }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Canon Verdict & Locked Fact Protection Engine').item.json.project_id, episode_no: $('Canon Verdict & Locked Fact Protection Engine').item.json.episode_no, workflow_name: 'WF-09', action: $('Canon Verdict & Locked Fact Protection Engine').item.json.operation_mode, execution_id: $execution.id, new_value: { isValid: $('Canon Verdict & Locked Fact Protection Engine').item.json.isValid, violations_count: $('Canon Verdict & Locked Fact Protection Engine').item.json.violations.length, facts_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_facts_to_add.length, knowledge_added: $('Canon Verdict & Locked Fact Protection Engine').item.json.new_knowledge_to_add.length } }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },

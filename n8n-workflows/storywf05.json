@@ -44,7 +44,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ ($env.GEMINI_VISION_MODEL || $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash').replace('models/', '') }}:generateContent?key={{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.gemini?.api_key || $env.GEMINI_API_KEY) }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -53,14 +53,22 @@
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ contents: [ { role: 'user', parts: $json.gemini_parts } ], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"gemini\", path: \"/v1beta/models/\" + (($env.GEMINI_VISION_MODEL || $env.LLM_FALLBACK_MODEL || 'gemini-2.0-flash').replace('models/', '')) + \":generateContent\", body: { contents: [ { role: 'user', parts: $json.gemini_parts } ], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 30000
         }
@@ -97,27 +105,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.OPENAI_VISION_ENDPOINT || 'https://api.openai.com/v1/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ ($('When Executed by Another Workflow').first().json.user_infrastructure?.openai.api_key || $env.OPENAI_API_KEY) }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.OPENAI_VISION_MODEL || 'gpt-4o', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-05 Vision Fallback Analyzer for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Extract anime character Visual DNA into STRICT JSON matching: {\"character_code\": \"CHAR_001\", \"name\": \"string\", \"analysis_summary\": \"string\", \"visual_dna\": {\"face\": \"string\", \"hair\": \"string\", \"skin\": \"string\", \"eyes\": \"string\", \"body_build\": \"string\", \"clothing\": \"string\", \"accessories\": \"string\", \"weapons\": \"string\", \"color_palette\": \"string\", \"estimated_age\": \"string\", \"distinctive_marks\": \"string\"}}. Mandatory fields: face, hair, clothing, color_palette.' }, { role: 'user', content: [ { type: 'text', text: 'Modality: ' + $('Input Normalizer & Ingestion Gate').item.json.modality + '\\nCharacter Code Hint: ' + ($('Input Normalizer & Ingestion Gate').item.json.character_code_hint || 'CHAR_001') + '\\nUser Prompt: ' + $('Input Normalizer & Ingestion Gate').item.json.userPrompt }, { type: 'image_url', image_url: { url: $('Input Normalizer & Ingestion Gate').item.json.openai_image_url, detail: 'high' } } ] } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"openai\", path: \"/v1/chat/completions\", body: { model: $env.OPENAI_VISION_MODEL || 'gpt-4o', temperature: 0.1, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-05 Vision Fallback Analyzer for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Extract anime character Visual DNA into STRICT JSON matching: {\"character_code\": \"CHAR_001\", \"name\": \"string\", \"analysis_summary\": \"string\", \"visual_dna\": {\"face\": \"string\", \"hair\": \"string\", \"skin\": \"string\", \"eyes\": \"string\", \"body_build\": \"string\", \"clothing\": \"string\", \"accessories\": \"string\", \"weapons\": \"string\", \"color_palette\": \"string\", \"estimated_age\": \"string\", \"distinctive_marks\": \"string\"}}. Mandatory fields: face, hair, clothing, color_palette.' }, { role: 'user', content: [ { type: 'text', text: 'Modality: ' + $('Input Normalizer & Ingestion Gate').item.json.modality + '\\nCharacter Code Hint: ' + ($('Input Normalizer & Ingestion Gate').item.json.character_code_hint || 'CHAR_001') + '\\nUser Prompt: ' + $('Input Normalizer & Ingestion Gate').item.json.userPrompt }, { type: 'image_url', image_url: { url: $('Input Normalizer & Ingestion Gate').item.json.openai_image_url, detail: 'high' } } ] } ] }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 35000
         }
@@ -170,35 +182,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.manual_review_record) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/pending_actions\", method: \"POST\", body: $json.manual_review_record, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -248,29 +256,33 @@
         384
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,reference_version&project_id=eq.{{ $json.project_id }}&character_code=eq.{{ encodeURIComponent($json.character_code) }}&limit=1",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?select=character_code,name,reference_version&project_id=eq.\" + ($json.project_id) + \"&character_code=eq.\" + (encodeURIComponent($json.character_code)) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -300,35 +312,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?on_conflict=project_id,character_code",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.character_upsert_payload) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?on_conflict=project_id,character_code\", method: \"POST\", body: $json.character_upsert_payload, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -345,35 +353,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Prepare Versioned Character & R4 History').item.json.reference_history_payload) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version\", method: \"POST\", body: $('Prepare Versioned Character & R4 History').item.json.reference_history_payload, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -390,35 +394,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Prepare Versioned Character & R4 History').item.json.project_id, workflow_name: 'WF-05', action: 'VISION_EXTRACTION_SAVED', execution_id: $execution.id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Prepare Versioned Character & R4 History').item.json.project_id, workflow_name: 'WF-05', action: 'VISION_EXTRACTION_SAVED', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },

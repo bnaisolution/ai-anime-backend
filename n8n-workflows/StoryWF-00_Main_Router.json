@@ -66,29 +66,33 @@
         1328
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,is_active&{{ $json.project_id ? 'id=eq.' + encodeURIComponent($json.project_id) + '&is_active=eq.true' : 'is_active=eq.true' }}&limit=1",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/projects?select=id,name,is_active&\" + ($json.project_id ? 'id=eq.' + encodeURIComponent($json.project_id) + '&is_active=eq.true' : 'is_active=eq.true') + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}"
       }
     },
     {
@@ -170,27 +174,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $json.modality + '\\nMedia URL: ' + ($json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($json.mode || 'none') + '\\nUser Input: ' + ($json.userPrompt || $json.rawText) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"groq\", path: \"/openai/v1/chat/completions\", body: { model: $env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $json.modality + '\\nMedia URL: ' + ($json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($json.mode || 'none') + '\\nUser Input: ' + ($json.userPrompt || $json.rawText) } ] }, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}",
         "options": {
           "timeout": 8000
         }
@@ -227,27 +235,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($('Layer 1: Prefix Fast-Track').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $('Layer 1: Prefix Fast-Track').item.json.modality + '\\nMedia URL: ' + ($('Layer 1: Prefix Fast-Track').item.json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($('Layer 1: Prefix Fast-Track').item.json.mode || 'none') + '\\nUser Input: ' + ($('Layer 1: Prefix Fast-Track').item.json.userPrompt || $('Layer 1: Prefix Fast-Track').item.json.rawText) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"gemini\", path: \"/v1beta/openai/chat/completions\", body: { model: $env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash', temperature: 0.0, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the WF-00 Intent Classifier for the AI Cinematic Anime Engine (Master Blueprint v6.5.0). Classify the user request into STRICT JSON matching: {\"intent\": \"<INTENT>\", \"confidence\": 0.0-1.0, \"reason\": \"string\", \"extracted_params\": {\"episode_number\": number|null, \"mode\": \"QUICK\"|\"SAVE\"|null, \"character_name\": string|null, \"voice_id\": string|null}}. Allowed <INTENT> values ONLY: GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, QUICK_GENERATE_REEL, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, LIST_VOICES, RESET_VOICE, CHECK_CANON, VIEW_CANON, APPROVE_CANON_CHANGE, REJECT_CANON_CHANGE, CHECK_CONTINUITY, CHECK_QUOTA, RETRY_FAILED, VIEW_STATE, VIEW_AUDIT, RUN_QC, PUBLISH_NOW, VIEW_ANALYTICS, ADMIN_START_KAGGLE, ADMIN_STOP_KAGGLE, ADMIN_STATUS, DB_TEST, SYSTEM_HEALTH, CREATE_PROJECT, OPEN_PROJECT, SAVE_BIBLE, BIBLE_CHAT, UNKNOWN.' }, { role: 'user', content: 'Modality: ' + $('Layer 1: Prefix Fast-Track').item.json.modality + '\\nMedia URL: ' + ($('Layer 1: Prefix Fast-Track').item.json.mediaUrl || 'none') + '\\nExplicit Mode Hint: ' + ($('Layer 1: Prefix Fast-Track').item.json.mode || 'none') + '\\nUser Input: ' + ($('Layer 1: Prefix Fast-Track').item.json.userPrompt || $('Layer 1: Prefix Fast-Track').item.json.rawText) } ] }, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}",
         "options": {
           "timeout": 10000
         }
@@ -313,25 +325,33 @@
         944
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/episode_states?select=id,episode_no,current_state,is_locked,updated_at&project_id=eq.{{ $json.project_id }}&episode_no=eq.{{ $json.extracted_params.episode_number || 1 }}&current_state=in.(GENERATING,PRODUCTION)&limit=1",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "name": "Content-Type",
+              "value": "application/json"
             },
             {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episode_states?select=id,episode_no,current_state,is_locked,updated_at&project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.extracted_params.episode_number || 1) + \"&current_state=in.(GENERATING,PRODUCTION)&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}"
       }
     },
     {
@@ -346,25 +366,33 @@
         944
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/pending_actions?select=id,action_type,status,action_payload,created_at&project_id=eq.{{ $('Mode & R12 Governance Engine').item.json.project_id }}&status=in.(PENDING,RUNNING,IN_PROGRESS,LOCKED)&limit=20",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "name": "Content-Type",
+              "value": "application/json"
             },
             {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/pending_actions?select=id,action_type,status,action_payload,created_at&project_id=eq.\" + ($('Mode & R12 Governance Engine').item.json.project_id) + \"&status=in.(PENDING,RUNNING,IN_PROGRESS,LOCKED)&limit=20\", method: \"GET\", body: null, prefer: null, command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}"
       }
     },
     {
@@ -394,35 +422,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.extracted_params?.episode_number || null, workflow_name: 'WF-00', action: $json.intent, entity_type: 'COMMAND', reason: $json.userPrompt || $json.rawText, execution_id: $execution.id, new_value: { downstream_command: $json.downstream_command, mode: $json.mode, modality: $json.modality, classifier_layer: $json.classifier_layer, confidence: $json.confidence, idempotency_blocked: $json.idempotency_blocked || false, sanitized_payload: $json.sanitized_payload } }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.extracted_params?.episode_number || null, workflow_name: 'WF-00', action: $json.intent, entity_type: 'COMMAND', reason: $json.userPrompt || $json.rawText, execution_id: $execution.id, new_value: { downstream_command: $json.downstream_command, mode: $json.mode, modality: $json.modality, classifier_layer: $json.classifier_layer, confidence: $json.confidence, idempotency_blocked: $json.idempotency_blocked || false, sanitized_payload: $json.sanitized_payload } }, prefer: \"return=minimal\", command_id: $('Webhook Trigger').first().json.command_id || $('Webhook Trigger').first().json.sessionId, project_id: $json.project_id || $('Webhook Trigger').first().json.project_id }) }}",
         "options": {}
       }
     },

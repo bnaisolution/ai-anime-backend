@@ -44,29 +44,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?select=id,name,story_bible,current_season,is_active&id=eq.{{ $json.project_id }}&limit=1",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/projects?select=id,name,story_bible,current_season,is_active&id=eq.\" + ($json.project_id) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -81,29 +85,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -118,29 +126,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_status?select=character_code,status,status_changed_ep&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -155,29 +167,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/story_rules?select=rule_code,rule_text,priority,tags&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -192,29 +208,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_arcs?select=character_code,arc_name,current_stage,stages,flaw,goal&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_arcs?select=character_code,arc_name,current_stage,stages,flaw,goal&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -229,29 +249,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/power_system?select=power_name,power_level,abilities,limitations&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/power_system?select=power_name,power_level,abilities,limitations&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -266,29 +290,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_relationships?select=char_a_code,char_b_code,trust_level&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_relationships?select=char_a_code,char_b_code,trust_level&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -303,29 +331,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/locations?select=location_code,name,visual_description&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/locations?select=location_code,name,visual_description&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -340,29 +372,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/artifacts?select=artifact_code,name,powers,current_owner_code&project_id=eq.{{ $('Normalize Trigger Input').item.json.project_id }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/artifacts?select=artifact_code,name,powers,current_owner_code&project_id=eq.\" + ($('Normalize Trigger Input').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -377,29 +413,33 @@
         80
       ],
       "parameters": {
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/voice_catalog?select=provider,voice_id,voice_name,gender,language&is_active=eq.true",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Accept",
+              "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
-        "options": {}
+        "options": {},
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/voice_catalog?select=provider,voice_id,voice_name,gender,language&is_active=eq.true\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       }
     },
     {
@@ -428,27 +468,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_ROUTER_ENDPOINT || 'https://api.groq.com/openai/v1/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).groq || {}).api_key || $env.GROQ_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $node.name.includes('Gemini') ? ($env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash') : ($env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b'), temperature: 0.25, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Story & Universe Bible Architect (WF-01). Visual Medium: ' + ($('Context Builder').first().json.visual_medium || 'ANIME') + '. ' + ($('Context Builder').first().json.custom_system_prompt ? ('USER CUSTOM SYSTEM PROMPT (' + $('Context Builder').first().json.system_prompt_title + '): ' + $('Context Builder').first().json.custom_system_prompt + '. ') : 'Speak naturally in Hinglish. ') + 'Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}.' }, { role: 'user', content: 'Current Mode: ' + $('Context Builder').first().json.operation_route + '\\n\\n' + $('Context Builder').first().json.hydrated_context_text + '\\n\\nUser Input: ' + ($('Context Builder').first().json.userPrompt || $('Context Builder').first().json.rawText) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"groq\", path: \"/openai/v1/chat/completions\", body: { model: $node.name.includes('Gemini') ? ($env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash') : ($env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b'), temperature: 0.25, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Story & Universe Bible Architect (WF-01). Visual Medium: ' + ($('Context Builder').first().json.visual_medium || 'ANIME') + '. ' + ($('Context Builder').first().json.custom_system_prompt ? ('USER CUSTOM SYSTEM PROMPT (' + $('Context Builder').first().json.system_prompt_title + '): ' + $('Context Builder').first().json.custom_system_prompt + '. ') : 'Speak naturally in Hinglish. ') + 'Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}.' }, { role: 'user', content: 'Current Mode: ' + $('Context Builder').first().json.operation_route + '\\n\\n' + $('Context Builder').first().json.hydrated_context_text + '\\n\\nUser Input: ' + ($('Context Builder').first().json.userPrompt || $('Context Builder').first().json.rawText) } ] }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 25000
         }
@@ -485,27 +529,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.LLM_FALLBACK_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' }}",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/llm",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ (($('When Executed by Another Workflow').first().json.user_infrastructure || {}).gemini || {}).api_key || $env.GEMINI_API_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ model: $node.name.includes('Gemini') ? ($env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash') : ($env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b'), temperature: 0.25, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Story & Universe Bible Architect (WF-01). Visual Medium: ' + ($('Context Builder').first().json.visual_medium || 'ANIME') + '. ' + ($('Context Builder').first().json.custom_system_prompt ? ('USER CUSTOM SYSTEM PROMPT (' + $('Context Builder').first().json.system_prompt_title + '): ' + $('Context Builder').first().json.custom_system_prompt + '. ') : 'Speak naturally in Hinglish. ') + 'Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}.' }, { role: 'user', content: 'Current Mode: ' + $('Context Builder').first().json.operation_route + '\\n\\n' + $('Context Builder').first().json.hydrated_context_text + '\\n\\nUser Input: ' + ($('Context Builder').first().json.userPrompt || $('Context Builder').first().json.rawText) } ] }) }}",
+        "jsonBody": "={{ JSON.stringify({ provider: \"gemini\", path: \"/v1beta/openai/chat/completions\", body: { model: $node.name.includes('Gemini') ? ($env.LLM_FALLBACK_MODEL || 'models/gemini-2.0-flash') : ($env.LLM_ROUTER_MODEL || 'openai/gpt-oss-120b'), temperature: 0.25, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You are the Lead Story & Universe Bible Architect (WF-01). Visual Medium: ' + ($('Context Builder').first().json.visual_medium || 'ANIME') + '. ' + ($('Context Builder').first().json.custom_system_prompt ? ('USER CUSTOM SYSTEM PROMPT (' + $('Context Builder').first().json.system_prompt_title + '): ' + $('Context Builder').first().json.custom_system_prompt + '. ') : 'Speak naturally in Hinglish. ') + 'Output a single valid JSON object with exact keys: {\"route_mode\": \"BIBLE_SAVE\" | \"BIBLE_CHAT\", \"chat_response\": \"Hinglish response\", \"change_summary\": \"Summary\", \"bible\": {\"title\": \"\", \"logline\": \"\", \"world_overview\": \"\", \"themes\": [], \"tone\": \"\"}, \"characters\": [{\"character_code\": \"CHAR_001\", \"name\": \"\", \"gender\": \"male|female\", \"age\": \"\", \"personality\": \"\", \"voice_id\": \"pick from catalog\", \"visual_dna\": {\"face\": \"\", \"hair\": \"\", \"clothing\": \"\", \"weapons\": \"\", \"color_palette\": \"\"}}], \"arcs\": [{\"character_code\": \"CHAR_001\", \"arc_name\": \"\", \"current_stage\": \"\", \"stages\": [], \"flaw\": \"\", \"goal\": \"\"}], \"powers\": [{\"power_name\": \"\", \"power_level\": \"1\", \"abilities\": [], \"limitations\": []}], \"relationships\": [{\"char_a_code\": \"CHAR_001\", \"char_b_code\": \"CHAR_002\", \"trust_level\": 50}], \"locations\": [{\"location_code\": \"LOC_001\", \"name\": \"\", \"visual_description\": \"\"}], \"artifacts\": [{\"artifact_code\": \"ART_001\", \"name\": \"\", \"powers\": [], \"owner\": \"CHAR_001\"}], \"rules\": [{\"rule_code\": \"RULE_001\", \"rule_text\": \"\", \"priority\": 1, \"tags\": []}]}.' }, { role: 'user', content: 'Current Mode: ' + $('Context Builder').first().json.operation_route + '\\n\\n' + $('Context Builder').first().json.hydrated_context_text + '\\n\\nUser Input: ' + ($('Context Builder').first().json.userPrompt || $('Context Builder').first().json.rawText) } ] }, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 25000
         }
@@ -579,36 +627,32 @@
         0
       ],
       "parameters": {
-        "method": "PATCH",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/projects?id=eq.{{ $json.project_id }}",
+        "method": "POST",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ story_bible: $json.bible_payload.bible, current_season: $json.current_season }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/projects?id=eq.\" + ($json.project_id), method: \"PATCH\", body: { story_bible: $json.bible_payload.bible, current_season: $json.current_season }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -625,35 +669,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/bible_versions",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, season_no: $('Voice Profiler & Visual DNA Validator').item.json.current_season, episode_no: 0, bible_snapshot: $('Voice Profiler & Visual DNA Validator').item.json.bible_payload.bible, change_summary: $('Voice Profiler & Visual DNA Validator').item.json.change_summary }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/bible_versions\", method: \"POST\", body: { project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, season_no: $('Voice Profiler & Visual DNA Validator').item.json.current_season, episode_no: 0, bible_snapshot: $('Voice Profiler & Visual DNA Validator').item.json.bible_payload.bible, change_summary: $('Voice Profiler & Visual DNA Validator').item.json.change_summary }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -684,35 +724,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/characters?on_conflict=project_id,character_code",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.characters_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?on_conflict=project_id,character_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.characters_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -729,35 +765,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_ref_history_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_reference_history?on_conflict=project_id,character_code,reference_version\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_ref_history_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -774,35 +806,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status?on_conflict=project_id,character_code",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_status?on_conflict=project_id,character_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -819,35 +847,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_status_history",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_history_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_status_history\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_status_history_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -864,35 +888,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_arcs",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_arcs_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_arcs\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.char_arcs_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -909,35 +929,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/power_system",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.powers_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/power_system\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.powers_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -954,35 +970,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/character_relationships",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.relationships_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/character_relationships\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.relationships_db, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -999,35 +1011,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/locations?on_conflict=project_id,name",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.locations_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/locations?on_conflict=project_id,name\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.locations_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -1044,35 +1052,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/artifacts?on_conflict=project_id,artifact_code",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.artifacts_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/artifacts?on_conflict=project_id,artifact_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.artifacts_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -1089,35 +1093,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/story_rules?on_conflict=project_id,rule_code",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "resolution=merge-duplicates,return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Split Characters & Prepare Upsert Batches').item.json.db_batches.rules_db) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/story_rules?on_conflict=project_id,rule_code\", method: \"POST\", body: $('Split Characters & Prepare Upsert Batches').item.json.db_batches.rules_db, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
@@ -1134,35 +1134,31 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.SUPABASE_URL }}/rest/v1/audit_log",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/db",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
             },
             {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, workflow_name: 'WF-01', action: $('Voice Profiler & Visual DNA Validator').item.json.operation_route === 'BIBLE_SAVE' ? 'SAVE_BIBLE' : 'BIBLE_CHAT', execution_id: $execution.id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Voice Profiler & Visual DNA Validator').item.json.project_id, workflow_name: 'WF-01', action: $('Voice Profiler & Visual DNA Validator').item.json.operation_route === 'BIBLE_SAVE' ? 'SAVE_BIBLE' : 'BIBLE_CHAT', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       }
     },
