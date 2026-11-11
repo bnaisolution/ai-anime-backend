@@ -5,3 +5,4 @@
 3. [EC2 Memory]: Local compilation causes Linux OOM killer. Never compile JVM artifacts locally; always push to GitHub Actions CI.
 4. [Backend Env]: Batch 4 introduced mandatory `JWT_ISSUER` and `JWT_AUDIENCE` in server `.env`; container fails to start without them.
 5. [Merge Order]: Backend CI checks out Android + Worker siblings at `SIBLING_REF=main`, so merge order MUST be Worker -> Android -> Backend; otherwise backend `main` runs cross-repo contract tests against stale code and goes red.
+6. [Auth 503]: `AUTH_NOT_CONFIGURED` (HTTP 503) means `SUPABASE_ANON_KEY` is empty in container env — NOT a stale build. Correct endpoint is `/api/v1/auth/login` (`/v1/auth/login` returns 404). Login uses the Manager project (`icypjilkcqylgbpmkyes`), not the anime data project.
