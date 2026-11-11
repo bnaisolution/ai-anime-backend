@@ -574,7 +574,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $json.github_worker_url }}/v1/tts/svara",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/worker",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -583,16 +583,24 @@
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, provider: 'Svara TTS', voice_text: $json.voice_text, voice_id: $json.voice_id, emotion: $json.emotion, pitch_multiplier: $json.pitch_multiplier, rate_multiplier: $json.rate_multiplier, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge } }) }}",
+        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/tts/svara', body: ({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, provider: 'Svara TTS', voice_text: $json.voice_text, voice_id: $json.voice_id, emotion: $json.emotion, pitch_multiplier: $json.pitch_multiplier, rate_multiplier: $json.rate_multiplier, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge } }), command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
-          "timeout": 30000
+          "timeout": 60000
         }
       },
       "id": "e4963a55-a338-40a6-a891-717f7a713e4d",
@@ -923,7 +931,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.github_worker_url }}/v1/ffmpeg/render-episode",
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/worker",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -932,14 +940,22 @@
               "value": "application/json"
             },
             {
-              "name": "Bypass-Tunnel-Reminder",
-              "value": "true"
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload) }}",
+        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/ffmpeg/render-episode', body: ($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload), command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 180000
         }

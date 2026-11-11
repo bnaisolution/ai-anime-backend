@@ -63,7 +63,7 @@ test('canonical workflows only call worker endpoints declared by the worker', ()
 
 test('WF-03 TTS payload fields match the worker TTS schema', () => {
   const workflow = workflowSources().find((item) => item.name === 'storywf03.json');
-  const ttsNode = workflow.json.nodes.find((node) => node.parameters?.url?.includes('/v1/tts/svara'));
+  const ttsNode = workflow.json.nodes.find((node) => String(node.parameters?.jsonBody || '').includes("path: '/v1/tts/svara'"));
   assert.ok(ttsNode, 'WF-03 Svara TTS node exists');
   const body = String(ttsNode.parameters.jsonBody);
   const fields = [
@@ -90,7 +90,7 @@ test('WF-03 TTS payload fields match the worker TTS schema', () => {
 
 test('WF-03 FFmpeg payload fields match the worker FFmpeg schema', () => {
   const workflow = workflowSources().find((item) => item.name === 'storywf03.json');
-  const ffmpegNode = workflow.json.nodes.find((node) => node.parameters?.url?.includes('/v1/ffmpeg/render-episode'));
+  const ffmpegNode = workflow.json.nodes.find((node) => String(node.parameters?.jsonBody || '').includes("path: '/v1/ffmpeg/render-episode'"));
   assert.ok(ffmpegNode, 'WF-03 FFmpeg node exists');
   const assembler = workflow.json.nodes.find((node) => String(node.parameters?.jsCode || '').includes('ffmpeg_cpu_payload'));
   assert.ok(assembler, 'WF-03 assembler builds ffmpeg_cpu_payload');

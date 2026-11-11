@@ -83,3 +83,29 @@ test('system-scoped workflows use the system gateway token', () => {
     }
   }
 });
+
+test('CPU worker traffic is routed through the Anime worker gateway', () => {
+  let workerCount = 0;
+  for (const workflow of workflows) {
+    for (const node of httpNodes(workflow)) {
+      const url = String(node.parameters.url || '');
+      assert.equal(/github_worker_url|\$env\.(GITHUB|TTS|FFMPEG)_WORKER_URL/.test(url), false, `${workflow.name} / ${node.name}: direct CPU worker URL`);
+      if (!url.includes('/v1/anime/internal/workflow/worker')) continue;
+      workerCount += 1;
+      const headers = headersOf(node);
+      const token = headers.find((header) => header.name === 'x-anime-workflow-token');
+      assert.ok(token, `${workflow.name} / ${node.name}: worker gateway token header`);
+      assert.match(token.value, /\$env\.ANIME_WORKFLOW_GATEWAY_TOKEN/);
+      assert.ok(headers.some((header) => header.name === 'x-anime-timestamp'), `${workflow.name} / ${node.name}: timestamp`);
+      assert.ok(headers.some((header) => header.name === 'x-anime-nonce'), `${workflow.name} / ${node.name}: nonce`);
+      assert.equal(headers.some((header) => /^(authorization|apikey)$/i.test(header.name)), false, `${workflow.name} / ${node.name}: direct credential header`);
+      const expression = String(node.parameters.jsonBody || '');
+      assert.match(expression, /worker_kind: 'cpu'/, `${workflow.name} / ${node.name}: cpu worker kind`);
+      assert.match(expression, /command_id:/, `${workflow.name} / ${node.name}: command binding`);
+      const pathMatch = expression.match(/path: '([^']+)'/);
+      assert.ok(pathMatch, `${workflow.name} / ${node.name}: worker path`);
+      assert.ok(['/v1/tts/svara', '/v1/tts/supertonic', '/v1/ffmpeg/render-episode'].includes(pathMatch[1]), `${workflow.name} / ${node.name}: allowed worker path`);
+    }
+  }
+  assert.ok(workerCount > 0, 'CPU worker gateway must be used');
+});

@@ -27,6 +27,7 @@ import { supervisorWorker } from './supervisor/supervisor.worker';
 import { registerAnimeDevicesRoutes } from './system/devices.routes';
 import { registerAnimeWorkflowGatewayRoutes } from './internal/workflowGateway.routes';
 import { registerAnimeWorkflowCallbackRoutes } from './internal/workflowCallback.routes';
+import { registerAnimeWorkflowWorkerRoutes } from './internal/workflowWorker.routes';
 import { registerAnimeAdminWorkflowRoutes } from './admin/workflows.routes';
 
 export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
@@ -146,6 +147,7 @@ export async function registerAnimeRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimeHealthRoutes);
   await app.register(registerAnimeWorkflowGatewayRoutes);
   await app.register(registerAnimeWorkflowCallbackRoutes);
+  await app.register(registerAnimeWorkflowWorkerRoutes);
   await app.register(registerAnimeAdminWorkflowRoutes);
   await app.register(registerAnimeDevicesRoutes);
   await app.register(registerAnimeCommandsRoutes);
