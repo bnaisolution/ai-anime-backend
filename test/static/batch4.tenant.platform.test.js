@@ -85,10 +85,14 @@ test('GPU and CPU selection are independent and fail closed', () => {
   assert.match(computeSelector, /PROVIDER_UNAVAILABLE/);
 });
 
-test('replication failover is interface-only, non-destructive, and explicitly simulated', () => {
+test('replication failover is non-destructive, consistency-gated, and never blind', () => {
   assert.match(replicationService, /REPLICATION_NOT_CONFIGURED/);
   assert.match(replicationService, /simulated: true/);
   assert.match(replicationService, /No production database was changed/);
+  assert.match(replicationService, /ANIME_REPLICATION_PRIMARY/);
+  assert.match(replicationService, /ANIME_REPLICATION_SECONDARY/);
+  assert.match(replicationService, /Secondary database is not healthy/);
+  assert.match(replicationService, /consistency tokens differ/);
   assert.equal(/\b(?:pg_switch_wal|ALTER SYSTEM|DROP DATABASE|TRUNCATE)\b/i.test(replicationService), false);
 });
 
