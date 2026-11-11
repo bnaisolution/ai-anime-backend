@@ -1,0 +1,16 @@
+{
+  "permission_rules": {
+    "deny_commands": [
+      "./gradlew*",
+      "gradle*",
+      "rm -rf /",
+      "docker kill ai-assistant*"
+    ],
+    "auto_approve": [
+      "git status",
+      "git diff",
+      "git log*",
+      "curl http://127.0.0.1:3000/health"
+    ]
+  }
+}

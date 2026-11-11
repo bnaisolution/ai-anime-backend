@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.git/
+*.log
+.gradle/
+build/
+*.hprof
+package-lock.json
