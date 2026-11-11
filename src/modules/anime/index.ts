@@ -29,6 +29,7 @@ import { registerAnimeWorkflowGatewayRoutes } from './internal/workflowGateway.r
 import { registerAnimeWorkflowCallbackRoutes } from './internal/workflowCallback.routes';
 import { registerAnimeWorkflowWorkerRoutes } from './internal/workflowWorker.routes';
 import { registerAnimeObservabilityRoutes } from './observability/observability.routes';
+import { registerAnimeStorageRoutes } from './storage/storage.routes';
 import { registerAnimeAdminWorkflowRoutes } from './admin/workflows.routes';
 
 export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
@@ -146,6 +147,7 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
 
 export async function registerAnimeRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimeObservabilityRoutes);
+  await app.register(registerAnimeStorageRoutes);
   await app.register(registerAnimeHealthRoutes);
   await app.register(registerAnimeWorkflowGatewayRoutes);
   await app.register(registerAnimeWorkflowCallbackRoutes);
