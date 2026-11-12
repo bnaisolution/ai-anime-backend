@@ -2,16 +2,17 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM)
-- ai-anime-android: `main` @ `68d84dd696c2b15dc5ea8a22bafce6c3ec58fdff` | pushed to origin
-- ai-backend: `main` @ `5a8dc7e009589af71c70ef2b1961f2bb3a56d505` + docs commits | Container: Up (healthy) | Master Auth Live (HTTP 200)
-- anime-cpu-worker: `main` @ `ee47fdceeba1ae89236d8b6bad0590681827dc5d` | pushed to origin
-- n8n Workflows: 14 Canonical active (WF-00 to WF-13) | 6 duplicate Story workflows purged
+- ai-anime-android: `main` @ `232e290` | pushed to origin
+- ai-backend: `main` @ `805c43a` | Container: Up (healthy, network `ec2-user_default`) | `/health` 200
+- anime-cpu-worker: `main` @ `ee47fdc` | pushed to origin
+- n8n Workflows: 14 Canonical active (WF-00 to WF-13) | 13 App Factory workflows untouched
 
 ## Recent Milestones (Rolling Window - Last 3)
-- [2026-11-11] Master auth unblocked: `admin@example.com` login HTTP 200, refresh HTTP 200, `/auth/me` 200.
-- [2026-11-11] Runtime validation (API layer): auth suite 11/11 expected, n8n 14/14 canonical active, defects opened.
-- [2026-11-12] DB migrations 003/004/005/006 applied to anime project; owner endpoints 200, normal user 403 (RBAC verified). Telegram bot token configured; `testuser@example.com` password set.
+- [2026-11-12] F2.1 Home screen runtime-tested by user: create/refresh/select/production-popup/approvals/bottom tabs all PASS.
+- [2026-11-12] Batch 1+2 shipped: drawer always-expanded, back nav everywhere, AI FAB on Home, `AI: <provider>` badge Home-only, project delete (backend + Android confirm dialog), DB-driven season/episode, human-readable statuses.
+- [2026-11-12] `DELETE /v1/anime/projects/:id` verified live: owner 200 (row removed, cascade), normal user 403, second delete 403. Backend CI `805c43a` success.
 
 ## Active State & Next Immediate Action
-- Current Status: D1 FIXED (owner/pool endpoints 200, RBAC 403 for normal user). D2 open (access token valid ~1h after logout). D3 open (worker CI failed only at `upload-artifact` step; rerun blocked by `startup_failure`). D4 partial (bot token set, test channel missing). D5 open (`workspace_id` empty in `/auth/me` for normal user).
-- Next Action: Provide/confirm Telegram test channel for publish test, re-run worker CI once GitHub recovers, then feature-wise runtime testing with user.
+- F2 status: 2.1 Home DONE (fixes in APK build). 2.2 Project Detail + 2.3 Story Bible READY FOR TEST (checklists in `docs/testing/screens/`).
+- Defects: B-01..B-06/B-08/B-10..B-15 FIXED (verify pending), B-07 (test data) + B-09 (chip contrast) OPEN. D2, D3, D5 OPEN.
+- Next Action: wait for Android CI `232e290` (unit tests + Build APK), hand APK to user, then run F2.2 (`F2-PROJECT-DETAIL.md`) and F2.3 (`F2-BIBLE.md`). Telegram test channel id still needed before F9.
