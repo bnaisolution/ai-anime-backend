@@ -8,10 +8,10 @@
 - n8n Workflows: 14 Canonical active (WF-00 to WF-13) | 6 duplicate Story workflows purged
 
 ## Recent Milestones (Rolling Window - Last 3)
-- [2026-11-11] All Batches (1-5) successfully merged into main branch across all services.
 - [2026-11-11] Master auth unblocked: `admin@example.com` login HTTP 200, refresh HTTP 200, `/auth/me` 200.
-- [2026-11-11] Runtime validation (API layer): auth suite 11/11 expected, n8n 14/14 canonical active, 3 defects opened.
+- [2026-11-11] Runtime validation (API layer): auth suite 11/11 expected, n8n 14/14 canonical active, defects opened.
+- [2026-11-12] DB migrations 003/004/005/006 applied to anime project; owner endpoints 200, normal user 403 (RBAC verified). Telegram bot token configured; `testuser@example.com` password set.
 
 ## Active State & Next Immediate Action
-- Current Status: Login live on `icypjilkcqylgbpmkyes` (Manager project) using `sb_publishable_...` key. Defect D1: owner + pool endpoints 500 (migrations 003/005/006 not applied: `anime_tenants`, `anime_tenant_members`, `anime_platform_*`, `project_prompt_associations`). Defect D2: logout revokes refresh token but access token valid till expiry (~1h). Defect D3: GitHub Actions jobs at `ee47fdc` end in `startup_failure` and backend run stuck queued — suspect Actions minutes/quota.
-- Next Action: Apply `supabase/migrations/005_batch4_tenant_platform.sql` + `006_batch4_platform_pool.sql` (+ missing `003` object) to anime project, clear GitHub Actions queue/quota issue, then E2E smoke.
+- Current Status: D1 FIXED (owner/pool endpoints 200, RBAC 403 for normal user). D2 open (access token valid ~1h after logout). D3 open (worker CI failed only at `upload-artifact` step; rerun blocked by `startup_failure`). D4 partial (bot token set, test channel missing). D5 open (`workspace_id` empty in `/auth/me` for normal user).
+- Next Action: Provide/confirm Telegram test channel for publish test, re-run worker CI once GitHub recovers, then feature-wise runtime testing with user.
