@@ -2,17 +2,23 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM)
-- ai-anime-android: `main` @ `232e290` | pushed to origin
-- ai-backend: `main` @ `805c43a` | Container: Up (healthy, network `ec2-user_default`) | `/health` 200
+- ai-anime-android: `main` @ `5f0088a` | pushed to origin (Build APK ✅, Android Tests ✅)
+- ai-backend: `main` @ `93e42da` | Container: Up (healthy, network `ec2-user_default`) | `/health` 200
 - anime-cpu-worker: `main` @ `ee47fdc` | pushed to origin
 - n8n Workflows: 14 Canonical active (WF-00 to WF-13) | 13 App Factory workflows untouched
 
 ## Recent Milestones (Rolling Window - Last 3)
-- [2026-11-12] F2.1 Home screen runtime-tested by user: create/refresh/select/production-popup/approvals/bottom tabs all PASS.
-- [2026-11-12] Batch 1+2 shipped: drawer always-expanded, back nav everywhere, AI FAB on Home, `AI: <provider>` badge Home-only, project delete (backend + Android confirm dialog), DB-driven season/episode, human-readable statuses.
-- [2026-11-12] `DELETE /v1/anime/projects/:id` verified live: owner 200 (row removed, cascade), normal user 403, second delete 403. Backend CI `805c43a` success.
+- [2026-11-12] Batch A (commits `232e290`, `59e6f92`, `805c43a`): Home + delete + drawer always-expanded + back nav + AI FAB + badge.
+- [2026-11-12] Batch B (commit `5f0088a`): Screen 1 fixes (dropdown restore, owner chip, health label, failed-job link) + Screen 2 fixes (16 callbacks wired, genre chips, medium, save-dirty, dynamic episode label). CI green.
+- [2026-11-12] Screen 2 test: dead taps root-caused to unwired NavHost callbacks; now fixed. Backend delete `DELETE /v1/anime/projects/:id` live-verified (200/403).
 
 ## Active State & Next Immediate Action
-- F2 status: 2.1 Home DONE (fixes in APK build). 2.2 Project Detail + 2.3 Story Bible READY FOR TEST (checklists in `docs/testing/screens/`).
-- Defects: B-01..B-06/B-08/B-10..B-15 FIXED (verify pending), B-07 (test data) + B-09 (chip contrast) OPEN. D2, D3, D5 OPEN.
-- Next Action: wait for Android CI `232e290` (unit tests + Build APK), hand APK to user, then run F2.2 (`F2-PROJECT-DETAIL.md`) and F2.3 (`F2-BIBLE.md`). Telegram test channel id still needed before F9.
+- F2 status: 2.1 Home DONE; 2.2 Project Detail partially done (dead taps fixed, settings/gating pending). F2.3 Story Bible pending.
+- Defects: B-16/B-17 FIXED (verify pending). B-07 (test data), B-09 (chip contrast), D2/D3/D5 OPEN.
+- Next Action: user install kare `5f0088a` (APK run https://github.com/bnaisolution/ai-anime-android/actions/runs/43169281597 → latest run) build par; then re-run Screen 2 checklist (C-07..C-15 bhi implement pending).
+
+## Pending / Next Steps
+1. User install + retest: drawer dropdown, owner chip, back, badge, failed-job, Project Detail tiles, Settings.
+2. Implement C-06 (cover upload), C-11/C-12/C-13 (generate preflight/pending screen), C-14 (control position), C-15 (episode duration/word).
+3. Telegram test channel id wait (F9 publish).
+4. F2 close karke F3 (Episodes) start.
