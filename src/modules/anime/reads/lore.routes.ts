@@ -419,6 +419,41 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     }
   );
 
+  // 17b. DELETE /v1/anime/projects/:id
+  // Hard delete; all project-scoped child rows use ON DELETE CASCADE (verified against the anime schema).
+  app.delete(
+    '/v1/anime/projects/:id',
+    { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(WRITE_ROLES)] },
+    async (request: any, reply: any) => {
+      const projectId = request.params.id;
+      const userId = await requireAuthenticatedUserId(request);
+
+      const { data: existing, error: fetchErr } = await animeSupabase
+        .from('projects')
+        .select('id, user_id, name')
+        .eq('id', projectId)
+        .maybeSingle();
+
+      if (fetchErr || !existing) {
+        throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Project not found', cause: fetchErr });
+      }
+      if (existing.user_id && userId && String(existing.user_id) !== String(userId)) {
+        throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Only the project owner can delete this project' });
+      }
+
+      const { error: deleteErr } = await animeSupabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (deleteErr) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to delete project', cause: deleteErr });
+      }
+
+      return reply.status(200).send({ data: { id: projectId, deleted: true } });
+    }
+  );
+
   // 18. PATCH /v1/anime/projects/:id/bible
   app.patch(
     '/v1/anime/projects/:id/bible',
