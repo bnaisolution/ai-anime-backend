@@ -20,6 +20,13 @@ Status: `OPEN` → `FIXING` → `FIXED (verify pending)` → `CLOSED`
 | B-13 | F2 Home | P2 | Recent Episodes | active project me 0 episodes | section + empty state | section hi gayab | UI | user report | FIXED (verify pending) |
 | B-14 | Global | P0 | Drawer sections | ☰ → section header tap | items expand ho | kuch nahi hota, aage navigation block | UI | user report | FIXED (verify pending) |
 | B-15 | Global | P3 | Provider badge | top bar chip | `AI: <provider>` clear label | "KAGGLE AUTO" unclear | UI | user report | FIXED (verify pending) |
+| B-16 | Global | P2 | Drawer role chip | user email ke bagal `owner admin` tap | Owner Overview khule | kuch nahi hota (`onClick = {}`) | UI | `AppNavGraph.kt` header chip | FIXED (commit `5f0088a`, verify pending) |
+| B-17 | F2 Project Detail | P1 | Canon/Continuity cards, Scenes/Jobs/Queued metrics, 10 Studio Module tiles | tap | respective screen khule | kuch nahi hota | UI | `composable("project_detail")` sirf 6 callbacks wire karta hai, baaki default `{}` | FIXED (commit `5f0088a`, verify pending) |
+| B-18 | F2 Project Detail | P2 | Cover banner | banner tap | upload/change image | URL field only, upload nahi | UI + API | `assets/upload-sessions` backend-ready | OPEN |
+| B-19 | F2 Project Detail | P2 | Project Settings | Genre/Medium fields | selectable chips (genre multi, medium single) | free-text only | UI | user report | OPEN |
+| B-20 | F2 Project Detail | P3 | Save Settings | dialog kholo | change tak disabled | hamesha enabled | UI | user report | OPEN |
+| B-21 | F2 Project Detail | P1 | Generate Next Episode | button | dynamic `Create Episode N`, readiness par hi enabled | static label, bina check enabled | UI + API | user report | OPEN |
+| B-22 | F2 Project Detail | P2 | `READY` badge | tap | pending/readiness list | not clickable | UI + API | user report | OPEN |
 
 ## Fix batch 1 + 2 (commit `232e290` Android, `805c43a` backend)
 
