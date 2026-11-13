@@ -3,24 +3,24 @@
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM)
 - ai-anime-android: `main` @ `b0c350f` | pushed to origin (APK build green; device verification pending)
-- ai-backend: `main` @ `cc9fef5` | Container: rebuilt/recreated (healthy, network `ec2-user_default`) | `/health` 200
+- ai-backend: `main` @ `39916c8` (CI-test fix + C-15 generation settings) | Container healthy, network `ec2-user_default` | `/health` 200
 - anime-cpu-worker: `main` @ `ee47fdc` | pushed to origin
 - n8n Workflows: 14 Canonical active (WF-00 to WF-13) | WF-00 imported/published live (`runOnceForAllItems`, 0 `$input.first`); 13 App Factory workflows untouched
 
 ## Recent Milestones (Rolling Window - Last 3)
-- [2026-11-12] Batch A (commits `232e290`, `59e6f92`, `805c43a`): Home + delete + drawer always-expanded + back nav + AI FAB + badge.
-- [2026-11-12] Batch B (commit `5f0088a`): Screen 1 fixes (dropdown restore, owner chip, health label, failed-job link) + Screen 2 fixes (16 callbacks wired, genre chips, medium, save-dirty, dynamic episode label). CI green.
-- [2026-11-13] Batch C (commit `af59393`, follow-ups `38a830e`/`c6c1001`/`b0c350f`, backend `06f2a88`→`4265de4`): cover upload via storage/upload, readiness preflight screen, readiness-gated dynamic episode generation, Production Control moved below Studio Modules, WF-00 Code nodes made all-items safe, `PUBLISH_NOW` routed to WF-07. APK build + Android Tests green on `b0c350f`.
-- [2026-11-13] Runtime deploy (`918ac74`, `cc9fef5`): backend gateway scopes `projects` by `id`; WF-00 passes ingest `sessionId` as `command_id`; missing gateway token configured for n8n/backend; backend rebuilt and WF-00 imported/published. WF-00 executions now succeed; WF-06/WF-09/WF-12 still fail on `runOnceForEachItem` + `.all()`.
+- [2026-11-13] Batch C (commit `af59393`, follow-ups `38a830e`/`c6c1001`/`b0c350f`): cover upload via storage/upload, readiness preflight screen, readiness-gated dynamic episode generation, Production Control moved below Studio Modules, WF-00 Code nodes made all-items safe, `PUBLISH_NOW` routed to WF-07. APK build + Android Tests green on `b0c350f`.
+- [2026-11-13] Runtime deploy (`918ac74`, `cc9fef5`): backend gateway scopes `projects` by `id`; WF-00 passes ingest `sessionId` as `command_id`; missing gateway token configured for n8n/backend; backend rebuilt and WF-00 imported/published. WF-00 executions now succeed.
+- [2026-11-13] Audit vs `MASTER_COMPLETION_BLUEPRINT_FINAL` (2026-11-10): registry IDs now fully consistent (14/14), n8n credential boundary moved to backend gateway (`ANIME_WORKFLOW_GATEWAY_TOKEN`, no service-role/provider keys in JSON), callbacks+retry+stop nodes in all 14, worker signed auth, provider/model catalog, platform pool, key registry, S3 storage, Media3 playback implemented. Backend CI fix pushed at `39916c8`; WF-03 runtime error; release signing, DB restricted role/RLS, BYOI split, real replication, backup schedule still open.
 
 ## Active State & Next Immediate Action
-- F2 status: 2.1 Home DONE; 2.2 Project Detail source-complete (device verify pending); F2.3 Story Bible pending.
+- F2 status: 2.1 Home DONE; 2.2 Project Detail source-complete; 2.3 Story Bible screen exists (`BibleScreen.kt`), wiring/verify pending.
 - Defects: B-16/B-17 FIXED (verify pending). B-07 (test data), B-09 (chip contrast), D2/D3/D5 OPEN.
-- Next Action: fix remaining sub-workflow Code node modes (WF-06/WF-09/WF-12), import/activate them, then install the green `b0c350f` APK and run the Screen 2 checklist.
+- Next Action: Backend CI fix verified locally (routes 96/96, static canonical 63/63, unit 138/138, cross-repo 14/14) and pushed; confirm GitHub `Backend Tests` green. Android APK for retest = run `43368507933` (artifact `anime-debug-apk`, `b0c350f`).
 
 ## Pending / Next Steps
-1. Android device retest: cover upload, readiness/preflight, generation gating, Studio module taps (APK from `b0c350f` run).
-2. Fix sub-workflow Code node modes (WF-06/WF-09/WF-12) and import/activate live; verify generate-episode reaches WF-02.
-3. Implement C-15 (episode duration + script word count).
-4. Telegram test channel id wait (F9 publish).
-5. F2 close karke F3 (Episodes) start.
+1. Android: reinstall APK from run `43368507933` (`b0c350f`), retest Screen 1/2; log only failures that reproduce.
+2. Backend CI: fixed stale assertions (gateway `id=eq` scope, WF-02 `$env.WF_03_PROD_ID` dispatch, auth 503 category) -> push and confirm green.
+3. WF-03 live error (last 4 runs) -> fix media pipeline; then WF-01/04/05/07/08/10/11 runtime.
+4. DB: apply 003/005/006 (owner tables missing -> Owner Overview 500), restricted role + RLS (B1-10).
+5. C-15 complete: `normalizeGenerationSetting` helper, columns/migration, Android fields.
+6. Later: BYOI split (B4-03), real replication (B4-07), worker deploy (B3-07), GPU (B3-05), Telegram (B3-10), chat streaming (B3-14), backup drill (B4-22), signing (B4-23), E2E (B4-15).
