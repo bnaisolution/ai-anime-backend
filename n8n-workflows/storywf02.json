@@ -903,7 +903,7 @@
       ],
       "parameters": {
         "source": "database",
-        "workflowId": "={{ $json.next_workflow_id }}",
+        "workflowId": "{{ $env.WF_03_PROD_ID || 's4RGuFSDlevgD5nC' }}",
         "mode": "once",
         "options": {
           "waitForSubWorkflow": false
