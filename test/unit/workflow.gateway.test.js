@@ -12,13 +12,17 @@ const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_PROJECT_ID = '22222222-2222-4222-8222-222222222222';
 const USER_ID = 'user-1';
 
-test('database gateway injects the authenticated project filter', () => {
-  const scoped = buildScopedDbRequest({ path: '/rest/v1/projects?select=id,name', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID });
-  assert.match(scoped.path, new RegExp(`project_id=eq\\.${PROJECT_ID}`));
+test('database gateway scopes projects by id and other tables by project_id', () => {
+  const project = buildScopedDbRequest({ path: '/rest/v1/projects?select=id,name', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID });
+  assert.match(project.path, new RegExp(`id=eq\\.${PROJECT_ID}`));
+  assert.doesNotMatch(project.path, /project_id=/);
+  const episode = buildScopedDbRequest({ path: '/rest/v1/episodes?select=id', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID });
+  assert.match(episode.path, new RegExp(`project_id=eq\\.${PROJECT_ID}`));
 });
 
 test('database gateway rejects a mismatched project filter', () => {
-  assert.throws(() => buildScopedDbRequest({ path: `/rest/v1/projects?project_id=eq.${OTHER_PROJECT_ID}`, method: 'GET', project_id: PROJECT_ID, user_id: USER_ID }), /does not match/);
+  assert.throws(() => buildScopedDbRequest({ path: `/rest/v1/projects?id=eq.${OTHER_PROJECT_ID}`, method: 'GET', project_id: PROJECT_ID, user_id: USER_ID }), /does not match/);
+  assert.throws(() => buildScopedDbRequest({ path: `/rest/v1/projects?project_id=eq.${PROJECT_ID}`, method: 'GET', project_id: PROJECT_ID, user_id: USER_ID }), /scoped by id/);
 });
 
 test('database gateway rejects disallowed tables and methods', () => {
@@ -36,7 +40,10 @@ test('database gateway injects project and audit user into writes', () => {
   const scoped = buildScopedDbRequest({ path: '/rest/v1/audit_log', method: 'POST', body: { action: 'X' }, project_id: PROJECT_ID, user_id: USER_ID });
   assert.equal(scoped.body.project_id, PROJECT_ID);
   assert.equal(scoped.body.user_id, USER_ID);
-  assert.throws(() => buildScopedDbRequest({ path: '/rest/v1/projects', method: 'PATCH', body: { project_id: OTHER_PROJECT_ID }, project_id: PROJECT_ID, user_id: USER_ID }), /does not match/);
+  assert.throws(() => buildScopedDbRequest({ path: '/rest/v1/projects', method: 'PATCH', body: { id: OTHER_PROJECT_ID }, project_id: PROJECT_ID, user_id: USER_ID }), /does not match/);
+  const projectWrite = buildScopedDbRequest({ path: '/rest/v1/projects', method: 'PATCH', body: { name: 'Renamed' }, project_id: PROJECT_ID, user_id: USER_ID });
+  assert.equal(projectWrite.body.id, PROJECT_ID);
+  assert.equal(projectWrite.body.project_id, undefined);
 });
 
 test('database gateway separates system and project scopes', () => {

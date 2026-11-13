@@ -35,17 +35,25 @@ function parseQuery(path: string): { base: string; params: URLSearchParams } {
   return { base, params };
 }
 
-function enforceProjectFilter(params: URLSearchParams, projectId: string): void {
-  const values = params.getAll('project_id');
-  if (values.length > 1) badRequest('Multiple project_id filters are not allowed.');
+function scopeColumn(table: string): string {
+  return table === 'projects' ? 'id' : 'project_id';
+}
+
+function enforceProjectFilter(params: URLSearchParams, projectId: string, table: string): void {
+  if (table === 'projects' && params.has('project_id')) {
+    badRequest('Projects must be scoped by id.');
+  }
+  const column = scopeColumn(table);
+  const values = params.getAll(column);
+  if (values.length > 1) badRequest(`Multiple ${column} filters are not allowed.`);
   if (values.length === 1) {
     const expected = `eq.${projectId}`;
-    if (values[0] !== expected) badRequest('Request project_id does not match the authenticated project.');
+    if (values[0] !== expected) badRequest(`Request ${column} does not match the authenticated project.`);
   } else {
-    params.append('project_id', `eq.${projectId}`);
+    params.append(column, `eq.${projectId}`);
   }
   for (const compound of ['or', 'and', 'not']) {
-    if (params.has(compound) && String(params.get(compound)).includes('project_id')) {
+    if (params.has(compound) && String(params.get(compound)).includes(column)) {
       badRequest('Compound filters may not override project scope.');
     }
   }
@@ -55,6 +63,12 @@ function injectProjectIntoBody(body: any, projectId: string, userId: string, tab
   if (body === undefined || body === null) return body;
   const inject = (row: any): any => {
     if (!row || typeof row !== 'object' || Array.isArray(row)) badRequest('Database write body must be an object or array of objects.');
+    if (table === 'projects') {
+      if (row.id !== undefined && String(row.id) !== projectId) {
+        badRequest('Write body id does not match the authenticated project.');
+      }
+      return { ...row, id: projectId };
+    }
     if (row.project_id !== undefined && String(row.project_id) !== projectId) {
       badRequest('Write body project_id does not match the authenticated project.');
     }
@@ -117,7 +131,7 @@ export function buildScopedDbRequest(input: {
   }
 
   const { base, params } = parseQuery(input.path);
-  if (!input.system && isProject) enforceProjectFilter(params, input.project_id);
+  if (!input.system && isProject) enforceProjectFilter(params, input.project_id, table);
   const prefer = sanitizePrefer(input.prefer);
   let body = input.body;
   if (method !== 'GET') {
