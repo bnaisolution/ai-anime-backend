@@ -896,7 +896,7 @@
       "id": "a1b2c3d4-0002-4000-8000-000000000002",
       "name": "Execute WF-03 Media Pipeline",
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
+      "typeVersion": 1,
       "position": [
         5680,
         80
