@@ -902,9 +902,7 @@
         80
       ],
       "parameters": {
-        "source": "database",
-        "workflowId": "{{ $env.WF_03_PROD_ID || 's4RGuFSDlevgD5nC' }}",
-        "mode": "once",
+        "workflowId": "={{ $env.WF_03_PROD_ID || 's4RGuFSDlevgD5nC' }}",
         "options": {
           "waitForSubWorkflow": false
         }
