@@ -2,7 +2,7 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM)
-- ai-anime-android: `main` @ `e875db3` (C-15 generation settings wiring) | pushed to origin (APK build running)
+- ai-anime-android: `main` @ `8909993` (C-15 wiring fix; APK build green) | pushed to origin
 - ai-backend: `main` @ `81e703a` (n8n callback/LLM fix published live + backend redeploy; C-15 live) | Container healthy, network `ec2-user_default` | `/health` 200
 - anime-cpu-worker: `main` @ `ee47fdc` | pushed to origin
 - n8n Workflows: 14 Canonical active (WF-00 to WF-13) | WF-00 imported/published live (`runOnceForAllItems`, 0 `$input.first`); 13 App Factory workflows untouched
@@ -19,9 +19,10 @@
 - Phase B status (2026-11-13): DONE except owner-blocked DB migration apply. CI fix pushed+green; n8n `$node.name`/LLM fix published live; backend redeployed; C-15 Android wiring committed (`e875db3`). NEXT: DB migrations 003/005/006 apply + owner endpoints verify; then GPU worker deploy → WF-03 re-run; Phase C/D. Android APK for retest = run `43368507933` (artifact `anime-debug-apk`, `b0c350f`).
 
 ## Pending / Next Steps
-1. Android: reinstall APK from run `43368507933` (`b0c350f`), retest Screen 1/2; log only failures that reproduce.
+1. Android: reinstall APK from run `43368507933` (artifact `anime-debug-apk`, `b0c350f`) / latest green `8909993`, retest Screen 1/2; log only failures that reproduce.
 2. Backend CI: fixed stale assertions (gateway `id=eq` scope, WF-02 `$env.WF_03_PROD_ID` dispatch, auth 503 category) -> push and confirm green.
 3. WF-03 live error (last 4 runs) -> fix media pipeline; then WF-01/04/05/07/08/10/11 runtime.
 4. DB: apply 003/005/006 (owner tables missing -> Owner Overview 500), restricted role + RLS (B1-10).
-5. C-15 complete: `normalizeGenerationSetting` helper, columns/migration, Android fields.
-6. Later: BYOI split (B4-03), real replication (B4-07), worker deploy (B3-07), GPU (B3-05), Telegram (B3-10), chat streaming (B3-14), backup drill (B4-22), signing (B4-23), E2E (B4-15).
+5. C-15 complete: `normalizeGenerationSetting` helper, columns/migration, Android fields (done: helper + android wiring; columns not needed - story_bible JSONB).
+6. Phase C status (2026-11-13): worker deploy + GPU + Telegram + backup + signing -> BLOCKED/TODO; 14 workflows runtime sweep pending.
+7. Later: BYOI split (B4-03), real replication (B4-07), worker deploy (B3-07), GPU (B3-05), Telegram (B3-10), chat streaming (B3-14), backup drill (B4-22), signing (B4-23), E2E (B4-15).
