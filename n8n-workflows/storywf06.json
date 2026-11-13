@@ -842,7 +842,7 @@
         ],
         [
           {
-            "node": "Backend: Error Callback",
+            "node": "Fallback Gemini Continuity Evaluator",
             "type": "main",
             "index": 0
           }

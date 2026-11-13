@@ -1201,7 +1201,7 @@
         ],
         [
           {
-            "node": "Backend: Error Callback",
+            "node": "Stage 1B: Gemini Fallback Script Writer",
             "type": "main",
             "index": 0
           }
@@ -1266,7 +1266,7 @@
         ],
         [
           {
-            "node": "Backend: Error Callback",
+            "node": "Stage 2B: Gemini Fallback Scene Router",
             "type": "main",
             "index": 0
           }

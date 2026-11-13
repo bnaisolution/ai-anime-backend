@@ -606,7 +606,7 @@
         ],
         [
           {
-            "node": "Backend: Error Callback",
+            "node": "Fallback Gemini Canon Evaluator",
             "type": "main",
             "index": 0
           }
