@@ -913,7 +913,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('Ingest Gate & Aankh Inspector').first().json.project_id || null), command_id: ($json.sessionId || $json.command_id || $('Ingest Gate & Aankh Inspector').first().json.sessionId || null), wf_key: \"WF-00\", status: \"DISPATCHED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('Ingest Gate & Aankh Inspector').first().json.project_id || null), command_id: ($json.sessionId || $json.command_id || $('Ingest Gate & Aankh Inspector').first().json.sessionId || null), wf_key: \"WF-00\", status: \"DISPATCHED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + 'SUCCESS', result: $json }) }}",
         "options": {
           "timeout": 10000
         }
@@ -958,7 +958,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('Ingest Gate & Aankh Inspector').first().json.project_id || null), command_id: ($json.sessionId || $json.command_id || $('Ingest Gate & Aankh Inspector').first().json.sessionId || null), wf_key: \"WF-00\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('Ingest Gate & Aankh Inspector').first().json.project_id || null), command_id: ($json.sessionId || $json.command_id || $('Ingest Gate & Aankh Inspector').first().json.sessionId || null), wf_key: \"WF-00\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + 'FAILED', error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
         "options": {
           "timeout": 10000
         }

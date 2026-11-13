@@ -344,7 +344,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || null), command_id: ($json.command_id || null), wf_key: \"WF-13\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || null), command_id: ($json.command_id || null), wf_key: \"WF-13\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + 'SUCCESS', result: $json }) }}",
         "options": {
           "timeout": 10000
         }
@@ -389,7 +389,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || null), command_id: ($json.command_id || null), wf_key: \"WF-13\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || null), command_id: ($json.command_id || null), wf_key: \"WF-13\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + 'FAILED', error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
         "options": {
           "timeout": 10000
         }

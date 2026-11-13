@@ -9,13 +9,14 @@
 
 ## Recent Milestones (Rolling Window - Last 3)
 - [2026-11-13] Batch C (commit `af59393`, follow-ups `38a830e`/`c6c1001`/`b0c350f`): cover upload via storage/upload, readiness preflight screen, readiness-gated dynamic episode generation, Production Control moved below Studio Modules, WF-00 Code nodes made all-items safe, `PUBLISH_NOW` routed to WF-07. APK build + Android Tests green on `b0c350f`.
+- [2026-11-13] Batch C follow-up: backend CI fixed (stale tests) + pushed at `39916c8`; Backend Tests green (`43412070136`). n8n error/success callback `$node.name` bug fixed in all 14 canonical workflows + WF-01 LLM model expressions -> updated + published live via n8n API. GPU runtime (dead tunnel) still pending.
 - [2026-11-13] Runtime deploy (`918ac74`, `cc9fef5`): backend gateway scopes `projects` by `id`; WF-00 passes ingest `sessionId` as `command_id`; missing gateway token configured for n8n/backend; backend rebuilt and WF-00 imported/published. WF-00 executions now succeed.
 - [2026-11-13] Audit vs `MASTER_COMPLETION_BLUEPRINT_FINAL` (2026-11-10): registry IDs now fully consistent (14/14), n8n credential boundary moved to backend gateway (`ANIME_WORKFLOW_GATEWAY_TOKEN`, no service-role/provider keys in JSON), callbacks+retry+stop nodes in all 14, worker signed auth, provider/model catalog, platform pool, key registry, S3 storage, Media3 playback implemented. Backend CI fix pushed at `39916c8`; WF-03 runtime error; release signing, DB restricted role/RLS, BYOI split, real replication, backup schedule still open.
 
 ## Active State & Next Immediate Action
 - F2 status: 2.1 Home DONE; 2.2 Project Detail source-complete; 2.3 Story Bible screen exists (`BibleScreen.kt`), wiring/verify pending.
 - Defects: B-16/B-17 FIXED (verify pending). B-07 (test data), B-09 (chip contrast), D2/D3/D5 OPEN.
-- Next Action: Backend CI fix verified locally (routes 96/96, static canonical 63/63, unit 138/138, cross-repo 14/14) and pushed; confirm GitHub `Backend Tests` green. Android APK for retest = run `43368507933` (artifact `anime-debug-apk`, `b0c350f`).
+- Next Action: n8n `$node.name` callback/LLM bug fixed + published live; commit next. Remaining: DB migrations 003/005/006 apply, C-15 columns/migration + Android fields, GPU worker deploy, WF-03 end-to-end re-run, Phases C/D. Android APK for retest = run `43368507933` (artifact `anime-debug-apk`, `b0c350f`).
 
 ## Pending / Next Steps
 1. Android: reinstall APK from run `43368507933` (`b0c350f`), retest Screen 1/2; log only failures that reproduce.

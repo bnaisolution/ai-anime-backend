@@ -1203,7 +1203,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-04\", status: ($('Rule 18 Gate: Invoke WF-07 Publisher').isExecuted ? \"DISPATCHED\" : \"COMPLETED\"), execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-04\", status: ($('Rule 18 Gate: Invoke WF-07 Publisher').isExecuted ? \"DISPATCHED\" : \"COMPLETED\"), execution_id: $execution.id, callback_id: $execution.id + ':completed:' + 'SUCCESS', result: $json }) }}",
         "options": {
           "timeout": 10000
         }
@@ -1248,7 +1248,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-04\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-04\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + 'FAILED', error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
         "options": {
           "timeout": 10000
         }
