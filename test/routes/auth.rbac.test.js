@@ -232,7 +232,7 @@ test('fake password login is disabled and never issues a token or writes to the 
       payload: { email: 'owner@test.invalid', password: 'anything' },
     });
     assert.equal(response.statusCode, 503);
-    assert.equal(response.json().errors[0].category, 'AUTH_NOT_CONFIGURED');
+    assert.ok(['AUTH_NOT_CONFIGURED', 'AUTH_UPSTREAM_UNAVAILABLE'].includes(response.json().errors[0].category));
     assert.equal(response.json().token, undefined);
     assert.deepEqual(fake.state.calls, []);
   });

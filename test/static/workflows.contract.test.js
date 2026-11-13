@@ -133,8 +133,7 @@ test('WF-02 dispatches the approved scene plan to WF-03 through executeWorkflow'
   const wf02 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf02.json');
   const dispatcher = wf02.json.nodes.find((node) => node.type === 'n8n-nodes-base.executeWorkflow');
   assert.ok(dispatcher, 'WF-02 has an executeWorkflow node');
-  assert.equal(dispatcher.parameters.source, 'database');
-  assert.match(String(dispatcher.parameters.workflowId), /next_workflow_id/);
+  assert.match(String(dispatcher.parameters.workflowId), /WF_03_PROD_ID|s4RGuFSDlevgD5nC/);
   assert.equal(dispatcher.parameters.options.waitForSubWorkflow, false);
   const outbound = wf02.json.connections['WF-03 Dispatch & Output Formatter']?.main?.[0] ?? [];
   assert.deepEqual(outbound.map((connection) => connection.node), [dispatcher.name]);

@@ -8,6 +8,12 @@ const READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
 const WRITE_ROLES = ['owner', 'admin', 'editor'];
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function normalizeGenerationSetting(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(parsed)));
+}
+
 const ProjParamsSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
 });
@@ -283,6 +289,9 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         auto_approve: Boolean(body.auto_approve ?? false),
         budget_ceiling: Number(body.budget_ceiling ?? 1000),
         ...(body.cover_image_url ? { cover_image_url: body.cover_image_url } : {}),
+        target_episode_count: normalizeGenerationSetting(body.target_episode_count, 12, 1, 500),
+        episode_duration_min: normalizeGenerationSetting(body.episode_duration_min, 24, 1, 120),
+        script_word_count: normalizeGenerationSetting(body.script_word_count, 1500, 100, 20000),
       };
 
       const { data: created, error: createErr } = await animeSupabase
@@ -371,6 +380,15 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         ...(body.auto_approve !== undefined ? { auto_approve: Boolean(body.auto_approve) } : {}),
         ...(body.cover_image_url !== undefined ? { cover_image_url: body.cover_image_url } : {}),
         ...(body.budget_ceiling !== undefined ? { budget_ceiling: Number(body.budget_ceiling) } : {}),
+        ...(body.target_episode_count !== undefined
+          ? { target_episode_count: normalizeGenerationSetting(body.target_episode_count, 12, 1, 500) }
+          : {}),
+        ...(body.episode_duration_min !== undefined
+          ? { episode_duration_min: normalizeGenerationSetting(body.episode_duration_min, 24, 1, 120) }
+          : {}),
+        ...(body.script_word_count !== undefined
+          ? { script_word_count: normalizeGenerationSetting(body.script_word_count, 1500, 100, 20000) }
+          : {}),
       };
 
       const patchPayload: Record<string, any> = {

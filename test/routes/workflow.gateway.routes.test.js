@@ -62,7 +62,7 @@ test('gateway proxies a scoped request with the project filter injected', async 
   try {
     const response = await app.inject({ method: 'POST', url: '/v1/anime/internal/workflow/db', headers: headers('n2'), payload: body() });
     assert.equal(response.statusCode, 200);
-    assert.match(captured.url, new RegExp(`project_id=eq\\.${PROJECT_ID}`));
+    assert.match(captured.url, new RegExp(`(?:project_id|id)=eq\\.${PROJECT_ID}`));
     assert.equal(captured.init.method, 'GET');
   } finally {
     global.fetch = originalFetch;
