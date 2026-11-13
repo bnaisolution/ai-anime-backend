@@ -456,7 +456,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.llm_stage1_request_body) }}",
         "options": {
-          "timeout": 45000
+          "timeout": 120000
         }
       },
       "onError": "continueErrorOutput",
@@ -521,7 +521,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.llm_stage1_fallback_request_body) }}",
         "options": {
-          "timeout": 45000
+          "timeout": 180000
         }
       },
       "onError": "continueErrorOutput",
@@ -581,7 +581,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.llm_stage2_request_body) }}",
         "options": {
-          "timeout": 45000
+          "timeout": 120000
         }
       },
       "onError": "continueErrorOutput",
@@ -646,7 +646,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.llm_stage2_fallback_request_body) }}",
         "options": {
-          "timeout": 45000
+          "timeout": 180000
         }
       },
       "onError": "continueErrorOutput",
