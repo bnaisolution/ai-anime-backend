@@ -60,7 +60,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/kaggle_sessions?select=id,session_name,status,api_endpoint,gpu_id,updated_at&order=updated_at.desc&limit=5\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/kaggle_sessions?select=id,session_name,status,api_endpoint,gpu_id,updated_at&order=updated_at.desc&limit=5\", method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "046a20db-2753-4f94-a429-53994aad4579",
       "name": "Supabase: Worker Health & Session Gate",
@@ -105,7 +105,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/scenes?select=*&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id) + \"&episode_no=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.episode_no) + \"&order=scene_order.asc\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/scenes?select=*&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id) + \"&episode_no=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.episode_no) + \"&order=scene_order.asc\", method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "0daead3a-96f5-4679-b5e7-7a8ddd711d0f",
       "name": "Supabase: Fetch Episode Scenes",
@@ -150,7 +150,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?select=*&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id) + \"&episode_no=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.episode_no) + \"&order=scene_order.asc\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?select=*&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id) + \"&episode_no=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.episode_no) + \"&order=scene_order.asc\", method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "21225711-d221-45b2-836e-32ee0fae6111",
       "name": "Supabase: Fetch Clips & Checkpoints",
@@ -195,7 +195,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/characters?select=character_code,name,visual_dna,voice_config,reference_version,image_file_id&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "fce49ca4-70c5-4456-8f00-8fd4f5d25f91",
       "name": "Supabase: Fetch Characters & DNA",
@@ -240,7 +240,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/scene_library?select=reuse_key,location_code,image_url&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "31b4ba48-8cb1-45e0-8d44-0321587ac1c6",
       "name": "Supabase: Fetch Scene Library Cache",
@@ -285,7 +285,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/motion_library?select=motion_key,age_group,motion_type,video_url,duration&project_id=eq.\" + ($('Normalize Input & Enforce SAVE Mode').item.json.project_id), method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "8f26d621-b6d9-487c-bdeb-6ff9c8a001d1",
       "name": "Supabase: Fetch Motion Library Cache",
@@ -330,7 +330,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/bgm_library?select=id,track_name,genre,mood,file_url,duration_sec\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/bgm_library?select=id,track_name,genre,mood,file_url,duration_sec\", method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "93cf2ace-134b-4d28-ab1d-a78ee1c4cbff",
       "name": "Supabase: Fetch BGM Library",
@@ -375,7 +375,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/sfx_library?select=id,sfx_name,category,file_url,duration_sec\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/sfx_library?select=id,sfx_name,category,file_url,duration_sec\", method: \"GET\", body: null, prefer: null, command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "id": "35d53113-8100-40fa-b48f-e01053b02133",
       "name": "Supabase: Fetch SFX Library",
@@ -522,7 +522,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,episode_no,scene_order\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, image_url: $json.image_url, image_ready_at: $json.image_ready_at, checkpoint_stage: $json.checkpoint_stage }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,episode_no,scene_order\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, image_url: $json.image_url, image_ready_at: $json.image_ready_at, checkpoint_stage: $json.checkpoint_stage }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "07f5e4b9-afdd-4bb0-bf72-9bb40c001ca6",
@@ -598,7 +598,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/tts/svara', body: ({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, provider: 'Svara TTS', voice_text: $json.voice_text, voice_id: $json.voice_id, emotion: $json.emotion, pitch_multiplier: $json.pitch_multiplier, rate_multiplier: $json.rate_multiplier, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge } }), command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/tts/svara', body: ({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, provider: 'Svara TTS', voice_text: $json.voice_text, voice_id: $json.voice_id, emotion: $json.emotion, pitch_multiplier: $json.pitch_multiplier, rate_multiplier: $json.rate_multiplier, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge } }), command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 60000
         }
@@ -715,7 +715,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,episode_no,scene_order\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, audio_url: $json.audio_url, checkpoint_stage: $json.checkpoint_stage }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,episode_no,scene_order\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, audio_url: $json.audio_url, checkpoint_stage: $json.checkpoint_stage }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "b98018f7-43e9-46c7-8b3d-40ff9fb31f98",
@@ -844,7 +844,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,episode_no,scene_order\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, video_url: $json.video_url, video_ready_at: $json.video_ready_at, checkpoint_stage: $json.checkpoint_stage }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,episode_no,scene_order\", method: \"POST\", body: { project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, video_url: $json.video_url, video_ready_at: $json.video_ready_at, checkpoint_stage: $json.checkpoint_stage }, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "ebc086f9-155e-4864-840e-9b89b74be6bd",
@@ -913,7 +913,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audio_usage_log\", method: \"POST\", body: $json.audio_usage_log_batch, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audio_usage_log\", method: \"POST\", body: $json.audio_usage_log_batch, prefer: \"return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "af2ed5f7-9899-4895-b90c-092adaef86e4",
@@ -955,7 +955,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/ffmpeg/render-episode', body: ($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload), command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/ffmpeg/render-episode', body: ($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload), command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 180000
         }
@@ -1015,7 +1015,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.episode_no), method: \"PATCH\", body: { checkpoint_stage: 'MIXED', status: 'COMPLETED' }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.episode_no), method: \"PATCH\", body: { checkpoint_stage: 'MIXED', status: 'COMPLETED' }, prefer: \"return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "5b43b16a-a675-4ee7-b980-bd70b875092e",
@@ -1057,7 +1057,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?project_id=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.project_id) + \"&episode_no=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no), method: \"PATCH\", body: { output_media: $('Verify Final Master Video & Prepare DB Finalization').first().json.output_media, telegram_file_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.telegram_master_file_id, current_state: 'MIXED', qc_status: 'PENDING' }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?project_id=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.project_id) + \"&episode_no=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no), method: \"PATCH\", body: { output_media: $('Verify Final Master Video & Prepare DB Finalization').first().json.output_media, telegram_file_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.telegram_master_file_id, current_state: 'MIXED', qc_status: 'PENDING' }, prefer: \"return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "79c38e03-8c86-46e1-9203-8bfbc1a85868",
@@ -1099,7 +1099,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episode_states?project_id=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.project_id) + \"&episode_no=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no), method: \"PATCH\", body: { current_state: 'MIXED' }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episode_states?project_id=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.project_id) + \"&episode_no=eq.\" + ($('Verify Final Master Video & Prepare DB Finalization').first().json.episode_no), method: \"PATCH\", body: { current_state: 'MIXED' }, prefer: \"return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "9d4fe113-8b5e-4b60-bb6f-128cda96eb7e",
@@ -1141,7 +1141,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/audit_log\", method: \"POST\", body: { project_id: $('Verify Final Master Video & Prepare DB Finalization').first().json.project_id, workflow_name: 'WF-03', action: 'PRODUCTION_COMPLETE', execution_id: $execution.id }, prefer: \"return=minimal\", command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "id": "ca0f088e-a055-4745-9fb6-59085bacce7c",
@@ -1205,7 +1205,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-03\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('Normalize Input & Enforce SAVE Mode').first().json.command_id || null), wf_key: \"WF-03\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + $node.name, result: $json }) }}",
         "options": {
           "timeout": 10000
         }
@@ -1250,7 +1250,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId || null), wf_key: \"WF-03\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($('Normalize Input & Enforce SAVE Mode').first().json.command_id || null), wf_key: \"WF-03\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + $node.name, error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
         "options": {
           "timeout": 10000
         }
