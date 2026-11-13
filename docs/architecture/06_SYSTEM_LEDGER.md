@@ -2,8 +2,8 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM)
-- ai-anime-android: `main` @ `b0c350f` | pushed to origin (APK build green; device verification pending)
-- ai-backend: `main` @ `39916c8` (CI-test fix + C-15 generation settings) | Container healthy, network `ec2-user_default` | `/health` 200
+- ai-anime-android: `main` @ `e875db3` (C-15 generation settings wiring) | pushed to origin (APK build running)
+- ai-backend: `main` @ `81e703a` (n8n callback/LLM fix published live + backend redeploy; C-15 live) | Container healthy, network `ec2-user_default` | `/health` 200
 - anime-cpu-worker: `main` @ `ee47fdc` | pushed to origin
 - n8n Workflows: 14 Canonical active (WF-00 to WF-13) | WF-00 imported/published live (`runOnceForAllItems`, 0 `$input.first`); 13 App Factory workflows untouched
 
@@ -16,7 +16,7 @@
 ## Active State & Next Immediate Action
 - F2 status: 2.1 Home DONE; 2.2 Project Detail source-complete; 2.3 Story Bible screen exists (`BibleScreen.kt`), wiring/verify pending.
 - Defects: B-16/B-17 FIXED (verify pending). B-07 (test data), B-09 (chip contrast), D2/D3/D5 OPEN.
-- Next Action: n8n `$node.name` callback/LLM bug fixed + published live; commit next. Remaining: DB migrations 003/005/006 apply, C-15 columns/migration + Android fields, GPU worker deploy, WF-03 end-to-end re-run, Phases C/D. Android APK for retest = run `43368507933` (artifact `anime-debug-apk`, `b0c350f`).
+- Phase B status (2026-11-13): DONE except owner-blocked DB migration apply. CI fix pushed+green; n8n `$node.name`/LLM fix published live; backend redeployed; C-15 Android wiring committed (`e875db3`). NEXT: DB migrations 003/005/006 apply + owner endpoints verify; then GPU worker deploy → WF-03 re-run; Phase C/D. Android APK for retest = run `43368507933` (artifact `anime-debug-apk`, `b0c350f`).
 
 ## Pending / Next Steps
 1. Android: reinstall APK from run `43368507933` (`b0c350f`), retest Screen 1/2; log only failures that reproduce.
