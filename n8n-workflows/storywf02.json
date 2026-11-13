@@ -526,8 +526,8 @@
       },
       "onError": "continueErrorOutput",
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1000
+      "maxTries": 4,
+      "waitBetweenTries": 4000
     },
     {
       "id": "b7eedd08-b9cd-46ff-8d5c-e62efb3c5796",
@@ -651,8 +651,8 @@
       },
       "onError": "continueErrorOutput",
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1000
+      "maxTries": 4,
+      "waitBetweenTries": 4000
     },
     {
       "id": "503b36b7-ae36-4510-996c-d9d03aa393fc",

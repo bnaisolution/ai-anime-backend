@@ -483,8 +483,8 @@
       },
       "onError": "continueErrorOutput",
       "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 1000
+      "maxTries": 4,
+      "waitBetweenTries": 4000
     },
     {
       "id": "b547a37e-67cf-4e61-8070-c1c173ef8bb3",
