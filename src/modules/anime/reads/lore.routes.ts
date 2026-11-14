@@ -14,6 +14,17 @@ function normalizeGenerationSetting(value: unknown, fallback: number, min: numbe
   return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
+function requireIntegerSetting(value: unknown, label: string, min: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `${label} must be a whole number.` });
+  }
+  if (parsed < min || parsed > max) {
+    throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `${label} must be between ${min} and ${max}.` });
+  }
+  return parsed;
+}
+
 const ProjParamsSchema = Type.Object({
   id: Type.String({ format: 'uuid' }),
 });
@@ -292,6 +303,12 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         target_episode_count: normalizeGenerationSetting(body.target_episode_count, 12, 1, 500),
         episode_duration_min: normalizeGenerationSetting(body.episode_duration_min, 24, 1, 120),
         script_word_count: normalizeGenerationSetting(body.script_word_count, 1500, 100, 20000),
+        total_seasons: body.total_seasons !== undefined
+          ? requireIntegerSetting(body.total_seasons, 'Total seasons', 1, 100)
+          : normalizeGenerationSetting(body.story_bible?.total_seasons, 1, 1, 100),
+        episodes_per_season: body.episodes_per_season !== undefined
+          ? requireIntegerSetting(body.episodes_per_season, 'Episodes per season', 1, 500)
+          : normalizeGenerationSetting(body.story_bible?.episodes_per_season, 12, 1, 500),
       };
 
       const { data: created, error: createErr } = await animeSupabase
@@ -389,6 +406,12 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         ...(body.script_word_count !== undefined
           ? { script_word_count: normalizeGenerationSetting(body.script_word_count, 1500, 100, 20000) }
           : {}),
+        ...(body.total_seasons !== undefined
+          ? { total_seasons: requireIntegerSetting(body.total_seasons, 'Total seasons', 1, 100) }
+          : {}),
+        ...(body.episodes_per_season !== undefined
+          ? { episodes_per_season: requireIntegerSetting(body.episodes_per_season, 'Episodes per season', 1, 500) }
+          : {}),
       };
 
       const patchPayload: Record<string, any> = {
@@ -432,6 +455,9 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
           auto_approve: Boolean(updatedBible.auto_approve ?? false),
           cover_image_url: updatedBible.cover_image_url ?? null,
           budget_ceiling: Number(updatedBible.budget_ceiling ?? 1000),
+          total_seasons: Number(updatedBible.total_seasons ?? 1),
+          episodes_per_season: Number(updatedBible.episodes_per_season ?? updatedBible.target_episode_count ?? 12),
+          episode_duration_min: Number(updatedBible.episode_duration_min ?? 24),
         },
       };
     }

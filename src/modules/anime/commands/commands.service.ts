@@ -129,18 +129,41 @@ async function resolveDynamicPromptAndInfra(
   let systemPromptId: string | null = null;
   let systemPromptCategory: string | null = null;
   let episodePromptOverride = false;
+  let seriesConfig: Record<string, number> = {
+    total_seasons: 1,
+    episodes_per_season: 12,
+    episode_duration_min: 24,
+  };
 
   try {
     const { data: projectRow } = await animeSupabase
       .from('projects')
-      .select('visual_medium, active_system_prompt_id')
+      .select('visual_medium, active_system_prompt_id, story_bible')
       .eq('id', projectId)
       .eq('user_id', userId)
-      .maybeSingle<{ visual_medium?: string; active_system_prompt_id?: string | null }>();
+      .maybeSingle<{
+        visual_medium?: string;
+        active_system_prompt_id?: string | null;
+        story_bible?: Record<string, unknown> | null;
+      }>();
 
     if (projectRow?.visual_medium) {
       visualMedium = projectRow.visual_medium.toUpperCase();
     }
+
+    const bible = (projectRow?.story_bible && typeof projectRow.story_bible === 'object')
+      ? projectRow.story_bible
+      : {};
+    const bounded = (value: unknown, fallback: number, min: number, max: number): number => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return fallback;
+      return Math.min(max, Math.max(min, Math.round(parsed)));
+    };
+    seriesConfig = {
+      total_seasons: bounded(bible.total_seasons, 1, 1, 100),
+      episodes_per_season: bounded(bible.episodes_per_season, bounded(bible.target_episode_count, 12, 1, 500), 1, 500),
+      episode_duration_min: bounded(bible.episode_duration_min, 24, 1, 120),
+    };
 
     let promptQuery = animeSupabase
       .from('user_system_prompts')
@@ -216,6 +239,7 @@ async function resolveDynamicPromptAndInfra(
     systemPromptId,
     systemPromptCategory,
     episodePromptOverride,
+    seriesConfig,
   };
 }
 
@@ -297,6 +321,7 @@ export async function submitAnimeCommand(
     visual_medium: resolvedVisualMedium,
     title: resolvedPromptTitle,
     prompt_text: resolvedCustomSystemPrompt,
+    series_config: dynamicCtx.seriesConfig,
   };
 
   const imagePromptConfig = {
@@ -315,6 +340,10 @@ export async function submitAnimeCommand(
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
     image_system_prompt: resolvedImageSystemPrompt,
+    series_config: dynamicCtx.seriesConfig,
+    total_seasons: dynamicCtx.seriesConfig.total_seasons,
+    episodes_per_season: dynamicCtx.seriesConfig.episodes_per_season,
+    episode_duration_min: dynamicCtx.seriesConfig.episode_duration_min,
   };
 
   const userInfrastructure = {
@@ -354,6 +383,7 @@ export async function submitAnimeCommand(
     image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
+    series_config: dynamicCtx.seriesConfig,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},
@@ -385,6 +415,7 @@ export async function submitAnimeCommand(
     image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
+    series_config: dynamicCtx.seriesConfig,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},
