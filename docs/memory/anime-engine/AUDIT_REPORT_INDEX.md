@@ -1,0 +1,61 @@
+# Audit Report Index (Anime Engine)
+
+Scope: ai-backend/docs (55 files).
+
+| Path | Type |
+|---|---|
+| `docs/architecture/06_SYSTEM_LEDGER.md` | architecture |
+| `docs/architecture/07_AGENT_LEARNINGS.md` | architecture |
+| `docs/architecture/08_SESSION_HANDOFF.md` | architecture |
+| `docs/audit/master-system/ACCESSIBILITY_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/ANDROID_ALL_SCREENS_BUTTONS_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/ANDROID_AWS_END_TO_END_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/AWS_OWNER_RUNTIME_RECOVERY_CHECKLIST.md` | audit |
+| `docs/audit/master-system/BACKEND_DATABASE_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_1_ANDROID_CLOUD_CI_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_1_BACKEND_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_1_BLOCKERS_AND_HANDOFF.md` | audit |
+| `docs/audit/master-system/BATCH_1_DATABASE_MIGRATION_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_1_FINAL_OWNER_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_1_IMPLEMENTATION_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_1_INTEGRATED_E2E_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_1_N8N_RELIABILITY_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_2_FINAL_OWNER_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_3_FINAL_OWNER_REPORT.md` | audit |
+| `docs/audit/master-system/BATCH_4_FINAL_OWNER_REPORT.md` | audit |
+| `docs/audit/master-system/BYOD_MULTI_USER_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/COMPLETE_FEATURE_INVENTORY.md` | audit |
+| `docs/audit/master-system/COMPLETE_OWNER_REQUIREMENTS_TRACEABILITY_MATRIX.md` | audit |
+| `docs/audit/master-system/COMPLETE_PROJECT_HISTORY_AND_IMPLEMENTATION_AUDIT.md` | audit |
+| `docs/audit/master-system/CPU_WORKER_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/FINAL_PLANNING_REVIEW.md` | audit |
+| `docs/audit/master-system/FINAL_SYSTEM_ACCEPTANCE_REPORT.md` | audit |
+| `docs/audit/master-system/GPU_WORKER_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/MASTER_EXECUTION_ROADMAP.md` | audit |
+| `docs/audit/master-system/MASTER_READINESS_AND_BLOCKERS_REPORT.md` | audit |
+| `docs/audit/master-system/N8N_RUNTIME_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/PROMPT_STUDIO_FULL_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/TELEGRAM_STORAGE_TEST_REPORT.md` | audit |
+| `docs/audit/master-system/UNIFIED_AUDIT_REPORT_INVENTORY.md` | audit |
+| `docs/audit/master-system/UNIFIED_EVIDENCE_RECONCILIATION_REPORT.md` | audit |
+| `docs/memory/README.md` | memory |
+| `docs/memory/anime-engine/REPORT_A_SCREEN_INVENTORY.md` | memory |
+| `docs/memory/anime-engine/REPORT_B_WF03_ROOT_CAUSE.md` | memory |
+| `docs/memory/anime-engine/REPORT_C_MIGRATION_SAFETY.md` | memory |
+| `docs/memory/anime-engine/SCREEN_BUTTON_REGISTRY.md` | memory |
+| `docs/memory/anime-engine/STATUS.md` | memory |
+| `docs/memory/anime-engine/TASKS.md` | memory |
+| `docs/memory/assistant-app/README.md` | memory |
+| `docs/operations/BACKUP_DR_RUNBOOK.md` | operations |
+| `docs/operations/DEPLOYMENT_PACKAGE.md` | operations |
+| `docs/operations/KEY_ROTATION_RUNBOOK.md` | operations |
+| `docs/operations/OBSERVABILITY_RUNBOOK.md` | operations |
+| `docs/operations/PLATFORM_POOL_RUNBOOK.md` | operations |
+| `docs/operations/REPLICATION_RUNBOOK.md` | operations |
+| `docs/testing/BACKEND-UI-GAPS.md` | testing |
+| `docs/testing/BUG_LIST.md` | testing |
+| `docs/testing/FEATURE_TEST_MATRIX.md` | testing |
+| `docs/testing/PENDING-CHANGES.md` | testing |
+| `docs/testing/screens/F2-BIBLE.md` | testing |
+| `docs/testing/screens/F2-HOME.md` | testing |
+| `docs/testing/screens/F2-PROJECT-DETAIL.md` | testing |

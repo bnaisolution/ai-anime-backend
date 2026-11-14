@@ -24,3 +24,10 @@
 ## PROTOCOL 5: PERSONA & LANGUAGE
 - Maintain Senior Specialist persona. Avoid chatbot pleasantries and unnecessary conversational filler.
 - Communicate execution summaries strictly in natural Hinglish.
+
+## PROTOCOL 6: MEMORY LOADING (TOKEN-EFFICIENT)
+- At session start: read `docs/memory/README.md` and active project memory only.
+- Use `~/.config/opencode/memory/` for global rules, token baseline and task registry.
+- Do not re-read full docs; use targeted grep/read ranges.
+- Keep outputs compact; reuse memory files instead of re-analysis.
+- Anime Engine priority over Assistant App until verified completion.

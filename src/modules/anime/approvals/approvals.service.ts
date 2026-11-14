@@ -3,7 +3,7 @@ import { writeAudit } from '../audit/audit.writer';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { clampLimit, type CursorPage, type CursorPaginationInput } from '../reads/reads.types';
-import { type ApprovalRecord, ApprovalStatus, ApprovalType } from './approvals.types';
+import { type ApprovalRecord, ApprovalStatus, ApprovalType, RESTRICTED_APPROVAL_TYPES } from './approvals.types';
 import { insertCommandAtomic } from '../commands/commands.repo';
 export async function listApprovals(projectId: string, options: CursorPaginationInput & { status?: ApprovalStatus }): Promise<CursorPage<ApprovalRecord>> {
   const limit = clampLimit(options.limit);
@@ -17,9 +17,9 @@ export async function listApprovals(projectId: string, options: CursorPagination
 }
 export async function createCanonApproval(input: { project_id: string, resource_id: string, requested_by: string, reason?: string, proposed_changes?: any }): Promise<ApprovalRecord> {
   // Prevent duplicate: if a PENDING approval already exists for this project+resource, return it
-  const existingPending = await animeSupabase.from('approval_decisions').select('*').eq('project_id', input.project_id).eq('resource_id', input.resource_id).eq('status', ApprovalStatus.PENDING).maybeSingle<ApprovalRecord>();
+  const { data: existingPending } = await animeSupabase.from('approval_decisions').select('*').eq('project_id', input.project_id).eq('resource_id', input.resource_id).eq('status', ApprovalStatus.PENDING).maybeSingle<ApprovalRecord>();
   if (existingPending !== null && existingPending !== undefined) {
-    return existingPending as ApprovalRecord;
+    return existingPending;
   }
   const { data, error } = await animeSupabase.from('approval_decisions').insert({
     project_id: input.project_id,
@@ -44,7 +44,7 @@ export async function decideApproval(input: { project_id: string, approval_id: s
   if (existing.status !== ApprovalStatus.PENDING) throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Already decided.' });
   if (existing.resource_version !== input.expected_resource_version) throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Version mismatch.' });
   if (RESTRICTED_APPROVAL_TYPES.has(existing.type) && existing.requested_by === input.actor_user_id) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, httpStatus: 403, message: 'Self-approval not allowed.' });
-  const auditEventId = randomUUID(); const decidedAtIso = new Date().toISOString;
+  const auditEventId = randomUUID(); const decidedAtIso = new Date().toISOString();
   const { data: updated, error: updateError } = await animeSupabase.from('approval_decisions').update({ status: input.decision, decision: input.decision, decision_reason: input.reason, decision_by: input.actor_user_id, decided_at: decidedAtIso, audit_event_id: auditEventId, updated_at: decidedAtIso }).eq('project_id', input.project_id).eq('id', input.approval_id).eq('resource_version', input.expected_resource_version).eq('status', ApprovalStatus.PENDING).select('*').maybeSingle<ApprovalRecord>();
   if (updateError !== null || updated === null) throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Concurrent conflict.' });
   await writeAudit({ project_id: input.project_id, user_id: input.actor_user_id, workflow_name: 'APPROVAL_ENGINE', action: `APPROVAL_${input.decision}`, entity_type: existing.type, entity_id: existing.resource_id, new_value: { approval_id: updated.id, status: updated.status, decision: updated.decision }, reason: input.reason, request_id: input.request_id });

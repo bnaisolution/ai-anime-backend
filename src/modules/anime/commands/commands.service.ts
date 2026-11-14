@@ -262,6 +262,16 @@ export async function submitAnimeCommand(
   );
 
   const payloadObj = (params.body.payload ?? {}) as Record<string, unknown>;
+  const baseHash = typeof payloadObj.base_hash === 'string'
+    ? payloadObj.base_hash
+    : typeof payloadObj.baseHash === 'string'
+      ? payloadObj.baseHash
+      : '';
+  const baseVersion = typeof payloadObj.base_version === 'number'
+    ? payloadObj.base_version
+    : typeof payloadObj.baseVersion === 'number'
+      ? payloadObj.baseVersion
+      : 0;
   const resolvedVisualMedium =
     (typeof payloadObj.visual_medium === 'string' ? payloadObj.visual_medium : null) ??
     params.body.project_style?.visual_style ??
