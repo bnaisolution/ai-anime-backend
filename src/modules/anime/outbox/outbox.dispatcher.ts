@@ -37,7 +37,7 @@ async function processDispatchEvent(event: any): Promise<void> {
   try {
     const dispatchPayload = await hydrateDispatchPayload(payload);
     const dispatchResult = await dispatchToWf00(dispatchPayload);
-    const isCompletedSynchronously = dispatchResult.ok && ['COMPLETED', 'SUCCEEDED', 'BIBLE_SAVED', 'BIBLE_CHAT_COMPLETED', 'STORY_GENERATED'].includes(String(dispatchResult.status).toUpperCase());
+    const isCompletedSynchronously = dispatchResult.ok && ['COMPLETED', 'SUCCEEDED'].includes(String(dispatchResult.status).toUpperCase());
     const nextCmdStatus = isCompletedSynchronously ? CommandStatus.SUCCEEDED : CommandStatus.DISPATCHED;
     const persistedCommandPayload = redactSensitivePayload({ ...(payload.payload || {}), n8n_response: dispatchResult.raw || {}, execution_id: dispatchResult.execution_id });
     await animeSupabase.from('api_commands').update({ status: nextCmdStatus, payload: persistedCommandPayload }).eq('project_id', projectId).eq('id', commandId);

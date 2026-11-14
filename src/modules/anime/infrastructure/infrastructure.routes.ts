@@ -720,6 +720,8 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
 
     if (projectId) {
       dbQuery = dbQuery.or(`project_id.eq.${projectId},project_id.is.null`);
+      // Include prompts associated with this project
+      dbQuery = dbQuery.or(`id IN (SELECT prompt_id FROM project_prompt_associations WHERE project_id = ${projectId})`);
     }
     if (query.prompt_category) dbQuery = dbQuery.eq('prompt_category', String(query.prompt_category).toUpperCase());
     if (query.genre) dbQuery = dbQuery.eq('genre', query.genre);
