@@ -95,7 +95,9 @@ export function requireProjectRole(allowedRoles: string[], options?: { bodyProje
     assertNoIdentitySubstitution(request, authenticatedUserId);
 
     const projectId = options?.bodyProjectId
-      ? (typeof (request as any).body?.project_id === 'string' ? (request as any).body.project_id : null)
+      ? (typeof (request as any).body?.project_id === 'string'
+        ? (request as any).body.project_id
+        : (typeof (request as any).query?.project_id === 'string' ? (request as any).query.project_id : null))
       : extractProjectId(request);
     if (!projectId) {
       throw projectForbidden('Missing project_id.');
