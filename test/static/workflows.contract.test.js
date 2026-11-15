@@ -11,7 +11,7 @@ const ALL_DIR = path.join(H.backendRoot, 'n8n-workflows-all');
 
 const EXPECTED = {
   'StoryWF-00_Main_Router.json': { id: 'U4pLz7pXmG2OqXlt', nodes: 37 },
-  'StoryWF-01.json': { id: 'UeEXeimGGwqIh84T', nodes: 36 },
+  'StoryWF-01.json': { id: 'UeEXeimGGwqIh84T', nodes: 24 },
   'storywf02.json': { id: 'qRUdhg1PNDK2wJk6', nodes: 29 },
   'storywf03.json': { id: 's4RGuFSDlevgD5nC', nodes: 41 },
   'storywf04.json': { id: '8q9tF3VE0mLUZQfa', nodes: 33 },
@@ -155,4 +155,18 @@ test('WF-03 composes the IMAGE system prompt into scene visual prompts', () => {
   assert.match(normalizer.parameters.jsCode, /image_system_prompt/);
   assert.match(resolver.parameters.jsCode, /composedPrompt/);
   assert.match(resolver.parameters.jsCode, /imageSystemPrompt/);
+});
+
+
+test('WF-01 never writes story_bible directly and only returns an approval patch', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'StoryWF-01.json'), 'utf8'));
+  const names = workflow.nodes.map((node) => node.name);
+  assert.ok(names.includes('Prepare Bible Patch'));
+  assert.ok(!names.some((name) => /Update Master Bible|Upsert Characters|Insert Story Rules/.test(name)));
+  const saveEdges = workflow.connections['Intent Switch (BIBLE_SAVE vs BIBLE_CHAT)'].main[0];
+  assert.deepEqual(saveEdges.map((edge) => edge.node), ['Prepare Bible Patch']);
+  const saveNodes = workflow.nodes.filter((node) => node.name === 'Prepare Bible Patch');
+  assert.equal(saveNodes.length, 1);
+  assert.match(saveNodes[0].parameters.jsCode, /base_hash/);
+  assert.match(saveNodes[0].parameters.jsCode, /changed_fields/);
 });

@@ -9,6 +9,7 @@ import { registerAnimeOwnerBatch4Routes } from './owner/owner.batch4.routes';
 import { registerAnimePlatformRoutes } from './platform/platform.routes';
 import { registerAnimeTenantRoutes } from './tenant/tenant.routes';
 import { registerAnimeApprovalsRoutes } from './approvals/approvals.routes';
+import { registerAnimeBiblePatchRoutes } from './bible/bible.patch.routes';
 import { registerAnimeCallbacksRoutes } from './callbacks/callbacks.routes';
 import { registerAnimeCommandsRoutes } from './commands/commands.routes';
 import { animeErrorHandler } from './errors/anime.errors';

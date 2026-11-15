@@ -33,7 +33,7 @@ function makeHandler() {
   return async (call) => {
     if (call.table === 'token_blacklist') return { data: null, error: null };
     if (call.table === 'projects' && call.action === 'select') {
-      return { data: { id: PROJECT, user_id: OWNER, visual_medium: 'ANIME', active_system_prompt_id: null }, error: null };
+      return { data: { id: PROJECT, user_id: OWNER, genre: 'Action', story_bible: { genre: 'Action' }, active_system_prompt_id: null }, error: null };
     }
     if (call.table === 'user_system_prompts' && call.action === 'select') {
       if (call.mode === 'maybeSingle' || call.mode === 'single') return { data: promptRow(), error: null };
@@ -189,6 +189,27 @@ test('project creation associates selected prompts and activates the Bible promp
       (entry) => entry.table === 'projects' && entry.action === 'update'
     );
     assert.ok(projectUpdate, 'active Bible prompt is activated');
+    assert.equal(projectUpdate.payload.active_system_prompt_id, PROMPT);
+  });
+});
+
+
+test('prompt activation performs the association and active-prompt write in one API call', async () => {
+  await withApp(async (app, fake) => {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/v1/anime/prompts/${PROMPT}/activate`,
+      headers: auth(app),
+      payload: { project_id: PROJECT, surface: 'BIBLE' },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().data.active_system_prompt_id, PROMPT);
+    const upsert = fake.state.calls.find((entry) => entry.table === 'project_prompt_associations' && entry.action === 'upsert');
+    assert.ok(upsert);
+    assert.equal(upsert.payload[0].project_id, PROJECT);
+    assert.equal(upsert.payload[0].prompt_id, PROMPT);
+    const projectUpdate = fake.state.calls.find((entry) => entry.table === 'projects' && entry.action === 'update');
+    assert.ok(projectUpdate);
     assert.equal(projectUpdate.payload.active_system_prompt_id, PROMPT);
   });
 });

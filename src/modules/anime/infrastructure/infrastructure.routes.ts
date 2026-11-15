@@ -585,7 +585,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
   const guardOptionalPromptProject = (roles: string[]) => async (request: any, reply: any) => {
     const projectId = request.body?.project_id ?? request.query?.project_id;
     if (projectId === undefined || projectId === null || projectId === '') return;
-    await requireProjectRole(roles)(request, reply);
+    await requireProjectRole(roles, { bodyProjectId: true })(request, reply);
   };
 
   app.get('/v1/anime/infrastructure', { preHandler: [app.authenticate] }, async (request: any) => {
@@ -881,6 +881,55 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
       .order('version', { ascending: false });
     if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: error.message });
     return { data: data ?? [], meta: { request_id: request.anime?.request_id } };
+  });
+
+
+  app.post('/v1/anime/prompts/:id/activate', { schema: { params: IdParams }, preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_WRITE_ROLES)] }, async (request: any) => {
+    const userId = authCheck(request);
+    const projectId = String(request.body?.project_id || '');
+    const surface = String(request.body?.surface || 'BIBLE').toUpperCase();
+    if (!projectId) throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'project_id is required.' });
+    const { data: project, error: projectError } = await animeSupabase
+      .from('projects')
+      .select('id, user_id, genre, story_bible')
+      .eq('id', projectId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (projectError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: projectError.message });
+    if (!project) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Project not found.' });
+    const { data: prompt, error: promptError } = await animeSupabase
+      .from('user_system_prompts')
+      .select('id, prompt_category, genre')
+      .eq('id', request.params.id)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (promptError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: promptError.message });
+    if (!prompt) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Prompt not found.' });
+    const promptCategory = String(prompt.prompt_category || 'BIBLE').toUpperCase();
+    if (surface === 'BIBLE' && promptCategory !== 'BIBLE') {
+      throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Only BIBLE prompts can be activated for Story Bible.' });
+    }
+    const projectGenre = String(project.genre || (project.story_bible && project.story_bible.genre) || '').trim().toLowerCase();
+    const promptGenre = String(prompt.genre || '').trim().toLowerCase();
+    if (projectGenre && promptGenre && !projectGenre.includes(promptGenre) && !promptGenre.includes(projectGenre)) {
+      throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `Prompt genre ${prompt.genre} does not match project genre.` });
+    }
+    const { error: associateError } = await animeSupabase
+      .from('project_prompt_associations')
+      .upsert([{ project_id: projectId, prompt_id: request.params.id, user_id: userId, surface: promptCategory }], { onConflict: 'project_id,prompt_id' });
+    if (associateError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: associateError.message });
+    const { data: updated, error: activateError } = await animeSupabase
+      .from('projects')
+      .update({ active_system_prompt_id: request.params.id })
+      .eq('id', projectId)
+      .eq('user_id', userId)
+      .select('id, active_system_prompt_id')
+      .single();
+    if (activateError) {
+      await animeSupabase.from('project_prompt_associations').delete().eq('project_id', projectId).eq('prompt_id', request.params.id);
+      throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: activateError.message });
+    }
+    return { data: { ...updated, association: { project_id: projectId, prompt_id: request.params.id, surface: promptCategory } }, meta: { request_id: request.anime?.request_id } };
   });
 
   app.post('/v1/anime/prompts/:id/associate', { schema: { params: IdParams }, preHandler: [app.authenticate, guardOptionalPromptProject(PROMPT_WRITE_ROLES)] }, async (request: any) => {

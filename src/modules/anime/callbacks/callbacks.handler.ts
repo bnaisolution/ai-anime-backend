@@ -5,6 +5,7 @@ import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { redactSensitivePayload } from '../../../security/payloadRedaction';
 import { insertCallback } from './callbacks.repo';
+import { persistBiblePatchFromCallback } from '../bible/bible.patch.service';
 import { verifyCallbackSignature } from './signature';
 export async function handleCallbackRequest(input: { source: 'n8n' | 'worker'; rawBody: string; signatureHeader: string | undefined; timestampHeader: string | undefined; nonceHeader: string | undefined; requestId: string; }): Promise<any> {
   const secret = input.source === 'n8n' ? animeEnv.ANIME_N8N_CALLBACK_SECRET : animeEnv.ANIME_WORKER_CALLBACK_SECRET;
@@ -29,6 +30,12 @@ export async function handleCallbackRequest(input: { source: 'n8n' | 'worker'; r
   const storedPayload = redactSensitivePayload(payload);
   const dedupe = await insertCallback({ project_id: projectId, source: input.source, callback_id: callbackId, raw_payload: storedPayload, verified: true });
   if (dedupe.duplicate) return { accepted: true, duplicate: true, callback_id: callbackId, project_id: projectId };
+  try {
+    await persistBiblePatchFromCallback({ project_id: projectId, command_id: commandId, callback: storedPayload, request_id: input.requestId });
+  } catch (patchError) {
+    await animeSupabase.from('callback_inbox').delete().eq('project_id', projectId).eq('callback_id', callbackId);
+    throw patchError;
+  }
   const { error: outboxError } = await animeSupabase.from('outbox_events').insert({ id: randomUUID(), type: 'reconcile_command', payload: { project_id: projectId, command_id: commandId, callback_id: callbackId, source: input.source, request_id: input.requestId, callback_payload: storedPayload }, status: 'pending', attempts: 0 });
   if (outboxError) {
     await animeSupabase.from('callback_inbox').delete().eq('project_id', projectId).eq('callback_id', callbackId);

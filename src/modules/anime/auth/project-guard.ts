@@ -76,7 +76,7 @@ function resolveProjectRole(authContext: any, isOwner: boolean): string | null {
   return null;
 }
 
-export function requireProjectRole(allowedRoles: string[]) {
+export function requireProjectRole(allowedRoles: string[], options?: { bodyProjectId?: boolean }) {
   const permittedRoles = new Set(allowedRoles);
 
   return async function projectRolePreHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -94,7 +94,9 @@ export function requireProjectRole(allowedRoles: string[]) {
 
     assertNoIdentitySubstitution(request, authenticatedUserId);
 
-    const projectId = extractProjectId(request);
+    const projectId = options?.bodyProjectId
+      ? (typeof (request as any).body?.project_id === 'string' ? (request as any).body.project_id : null)
+      : extractProjectId(request);
     if (!projectId) {
       throw projectForbidden('Missing project_id.');
     }
