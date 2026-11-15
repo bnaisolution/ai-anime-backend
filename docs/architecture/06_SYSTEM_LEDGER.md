@@ -2,12 +2,14 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM)
-- ai-anime-android: `main` @ `7c3b281` (Screen 3 safe patch UI + CI test fixes) | APK CI green (`43683474414`), Android Tests green (`43683477477`)
-- ai-backend: `main` @ `64b73ef` (Screen 3 patch lifecycle + atomic prompt activation) | live container `anime-backend:64b73ef`, network `ec2-user_default`, `/health` 200
+- ai-anime-android: `main` @ `79ebe23` (dynamic genre/medium UI + CI test fixes) | APK CI green (`43742858229`), Android Tests green (`43742858203`)
+- ai-backend: `main` @ `2614dd9` (creative prompts + season identity + workflow fallback test fix) | live container still `anime-backend:64b73ef`
 - anime-cpu-worker: `main` @ `ee47fdc` | pushed to origin
-- n8n Workflows: canonical `StoryWF-01` (`UeEXeimGGwqIh84T`) updated live: 24 nodes, active, patch-only, no direct `story_bible` writer; pre-update backup in `~/backups/StoryWF-01-20261115T065839Z.json`
+- n8n Workflows: canonical `StoryWF-01` (`UeEXeimGGwqIh84T`) live; WF-02/WF-03 dynamic-prompt patches committed but not deployed
 
 ## Recent Milestones (Rolling Window - Last 3)
+- [2026-11-15] Android dynamic genre/medium prompt work CI green at `79ebe23`; backend season-aware work + workflow reliability fix green at `2614dd9` (`43744749249`). Migration 007/deploy pending.
+- [2026-11-15] Live DB probe: `episodes.season_no` exists; `episode_states`, `scenes`, `clips` lack `season_no`; no DB URL/password available on EC2/local to back up or apply migration 007.
 - [2026-11-15] Screen 3 deployed: backend `effff5e` + route-registration fix `64b73ef`; canonical WF-01 replaced live with 24-node patch-only flow; Android CI green at `7c3b281`. Rollback tags: `ec2-user-backend:rollback-cf44557`, `anime-backend:rollback-effff5e`.
 - [2026-11-13] OpenCode intelligence upgrade (non-risky): global memory files, task registry, token baseline, 9 specialized agents, AGENTS.md memory protocol, project memory scaffold. Free usage limit hit during fresh-session validation (retry ~8.7h). No risky ops performed.
 - [2026-11-13] Batch C follow-up: backend CI fixed (stale tests) + pushed at `39916c8`; Backend Tests green (`43412070136`). n8n error/success callback `$node.name` bug fixed in all 14 canonical workflows + WF-01 LLM model expressions -> updated + published live via n8n API. GPU runtime (dead tunnel) still pending.
@@ -16,17 +18,14 @@
 
 ## Active State & Next Immediate Action
 - OpenCode intelligence implemented; fresh-session validation blocked by free usage limit (retry ~8.7h).
-- Anime prep done: screen/button registry, WF-03 root cause, migration safety review, migration runbook, truth matrix. Backend safe tests: 138 pass, 0 fail with sibling mounts; one workflow reliability failure is design conflict (Stage 1A fallback vs direct error callback). Security: env backup perms fixed (chmod 600), DB backup script added. No production changes.
-- Approval still required for PAT rotation, port restriction, and DB migrations; Screen 3 backend redeploy completed 2026-11-15.
-- F2 status: 2.1 Home DONE; 2.2 Project Detail source-complete; 2.3 Story Bible source + backend + n8n deployed; runtime APK validation pending.
-- WF-09 unchanged by design: canon check/mutation engine already exists; Screen 3 patch approvals use WF-01 only. Canon Viewer manual commit payload mismatch remains open.
-- Defects: B-16/B-17 FIXED (verify pending). B-07, B-09, B-18..B-22, D2/D3/D5 OPEN.
-- NEXT: install Screen 3 APK and verify patch approve/reject + prompt activation against live backend; then WF-03 fix.
+- Backend static reliability test now follows bounded provider fallbacks; `npm run test:static` passes 119/119.
+- Migration 007 needs a production DB URL/password for `pg_dump` backup and `psql -v ON_ERROR_STOP=1 -1`; no direct DB URL exists in EC2 env, local env, or repo secrets.
+- Do not deploy backend/WF-02/WF-03 before migration 007; season-aware reads/upserts expect missing columns.
+- PAT rotation, port restriction, restricted DB role/RLS, WF-03 GPU runtime, release signing remain open.
+- NEXT: load DB URL securely, back up, apply 007, verify constraints/indexes, deploy backend + WF-02/WF-03, then isolated fixture validation.
 
 ## Pending / Next Steps
-1. Owner approval: PAT rotation, port restriction, file perms, DB migration apply.
-2. Validate OpenCode memory in fresh session after free limit resets (~8.7h); record before/after tokens.
-3. Anime: DB backup/rollback plan, then apply 003/004/005/006 (approval required).
-4. Anime: fix n8n WF-03 (GPU tunnel + $node.name callbacks) and verify.
-5. Anime: Android secure token storage + screen/button test registry.
-6. Later: BYOI split, replication, worker deploy, GPU, Telegram, backup drill, signing, E2E.
+1. Provide production DB URL/password securely or apply `007_season_episode_identity.sql` via Supabase SQL editor.
+2. Back up with `pg_dump -Fc`, apply 007 transactionally, verify columns/constraints/indexes.
+3. Rebuild backend image at `2614dd9`, recreate `ai-backend` on `ec2-user_default`, import/publish WF-02/WF-03.
+4. Verify dynamic genre/medium + season fixture without touching live Nagraj canon.
