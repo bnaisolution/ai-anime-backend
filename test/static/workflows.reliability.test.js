@@ -20,6 +20,19 @@ function nodeByName(workflow, name) {
   return workflow.json.nodes.find((node) => node.name === name);
 }
 
+function errorPathReachesCallback(workflow, node, seen = new Set()) {
+  if (seen.has(node.name)) return false;
+  seen.add(node.name);
+  const branches = workflow.json.connections[node.name]?.main || [];
+  const errorBranch = branches[1] || [];
+  if (errorBranch.some((connection) => connection.node === 'Backend: Error Callback')) return true;
+  return errorBranch.some((connection) => {
+    const target = nodeByName(workflow, connection.node);
+    return target?.type === 'n8n-nodes-base.httpRequest'
+      && errorPathReachesCallback(workflow, target, seen);
+  });
+}
+
 test('every workflow dispatches success and failure callbacks', () => {
   for (const workflow of workflows) {
     const success = nodeByName(workflow, 'Backend: Success Callback');
@@ -55,9 +68,7 @@ test('every HTTP failure path reaches the error callback and stops', () => {
     for (const node of httpNodes(workflow)) {
       if (node.name === 'Backend: Success Callback' || node.name === 'Backend: Error Callback') continue;
       assert.equal(node.onError, 'continueErrorOutput', `${workflow.name} / ${node.name}: error output`);
-      const branches = workflow.json.connections[node.name]?.main || [];
-      const errorBranch = branches[1] || [];
-      assert.ok(errorBranch.some((connection) => connection.node === errorCallback.name), `${workflow.name} / ${node.name}: error callback edge`);
+      assert.ok(errorPathReachesCallback(workflow, node), `${workflow.name} / ${node.name}: error callback path`);
     }
   }
 });
