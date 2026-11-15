@@ -762,7 +762,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/scenes?on_conflict=project_id,season_no,episode_no,scene_order,scene_order\", method: \"POST\", body: $('Output Validator, Rule 37 & JSON Sanitizer').item.json.scenes_db_batch, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/scenes?on_conflict=project_id,season_no,episode_no,scene_order\", method: \"POST\", body: $('Output Validator, Rule 37 & JSON Sanitizer').item.json.scenes_db_batch, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "onError": "continueErrorOutput"
@@ -804,7 +804,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,season_no,episode_no,scene_order,scene_order\", method: \"POST\", body: $('Output Validator, Rule 37 & JSON Sanitizer').item.json.clips_db_batch, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/clips?on_conflict=project_id,season_no,episode_no,scene_order\", method: \"POST\", body: $('Output Validator, Rule 37 & JSON Sanitizer').item.json.clips_db_batch, prefer: \"resolution=merge-duplicates,return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "onError": "continueErrorOutput"

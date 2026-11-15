@@ -203,6 +203,7 @@ class TelegramUploadConfig(BaseModel):
 
 class GenerateImageRequest(BaseModel):
     project_id: str
+    season_no: int = 1
     episode_no: int
     scene_order: int
     visual_medium: str = "ANIME"
@@ -218,6 +219,7 @@ class GenerateImageRequest(BaseModel):
 
 class VideoAssemblyRequest(BaseModel):
     project_id: str
+    season_no: int = 1
     episode_no: int
     scene_order: int
     visual_medium: str = "ANIME"
@@ -258,7 +260,7 @@ def update_supabase_clip_checkpoint(payload: Dict[str, Any]):
     if not SUPABASE_URL or not SUPABASE_KEY: return
     try:
         headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}
-        requests.post(f"{SUPABASE_URL}/rest/v1/clips?on_conflict=project_id,episode_no,scene_order", json=payload, headers=headers, timeout=15)
+        requests.post(f"{SUPABASE_URL}/rest/v1/clips?on_conflict=project_id,season_no,episode_no,scene_order", json=payload, headers=headers, timeout=15)
     except Exception: pass
 
 def notify_n8n_webhook(callback_url: Optional[str], result_payload: Dict[str, Any]):
@@ -319,20 +321,20 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
             medium_tag = "photorealistic 8k cinema, raw photo, real human skin texture" if req.visual_medium.upper() == "REAL_HUMAN" else "anime masterpiece, ufotable cel-shaded lighting, crisp lineart"
             full_prompt = f"{medium_tag}, {req.prompt}" + (f", character details: {dna_str}" if dna_str else "")
             neg_prompt = "deformed, blurry, bad anatomy, disfigured, extra limbs, text, watermark, low quality"
-            seed = abs(hash(f"{req.project_id}_{req.episode_no}_{req.scene_order}")) % (2**31)
+            seed = abs(hash(f"{req.project_id}_{req.season_no}_{req.episode_no}_{req.scene_order}")) % (2**31)
             generator = torch.Generator(device=DEVICE_0).manual_seed(seed)
             with torch.inference_mode():
                 image: Image.Image = pipe(prompt=full_prompt, negative_prompt=neg_prompt, num_inference_steps=4, guidance_scale=0.0, width=1280, height=720, generator=generator).images[0]
             with tempfile.TemporaryDirectory() as tmpdir:
-                out_png = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_ep{req.episode_no}_sc{req.scene_order}.png")
+                out_png = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_s{req.season_no}_ep{req.episode_no}_sc{req.scene_order}.png")
                 image.save(out_png, format="PNG", optimize=True)
                 file_size = os.path.getsize(out_png)
-                caption = f"KEYFRAME Project: {req.project_id} | Ep: {req.episode_no} | Scene: {req.scene_order}"
+                caption = f"KEYFRAME Project: {req.project_id} | S{req.season_no} Ep: {req.episode_no} | Scene: {req.scene_order}"
                 tg_res = upload_media_to_telegram(out_png, caption, req.telegram_upload)
                 clear_vram(DEVICE_0)
-                result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "episode_no": req.episode_no, "scene_order": req.scene_order, "engine": req.engine, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "image_url": tg_res["telegram_url"]}
+                result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "engine": req.engine, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "image_url": tg_res["telegram_url"]}
                 if tg_res["telegram_url"]:
-                    update_supabase_clip_checkpoint({"project_id": req.project_id, "episode_no": req.episode_no, "scene_order": req.scene_order, "image_url": tg_res["telegram_url"], "tg_image_file_id": tg_res["file_id"], "checkpoint_stage": "IMAGE_READY"})
+                    update_supabase_clip_checkpoint({"project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "image_url": tg_res["telegram_url"], "tg_image_file_id": tg_res["file_id"], "checkpoint_stage": "IMAGE_READY"})
                 JOBS_STORE[job_id] = result_payload
                 notify_n8n_webhook(req.callback_url, result_payload)
                 return result_payload
@@ -377,7 +379,7 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
                     export_to_video(frames, anim_mp4, fps=8)
                     current_media = anim_mp4
                 clear_vram(DEVICE_0)
-            final_mp4 = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_ep{req.episode_no}_sc{req.scene_order}_gpu.mp4")
+            final_mp4 = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_s{req.season_no}_ep{req.episode_no}_sc{req.scene_order}_gpu.mp4")
             is_image = current_media.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
             cmd = ["ffmpeg", "-y"] + (["-loop", "1", "-i", current_media] if is_image else ["-stream_loop", "-1", "-i", current_media])
             if local_audio and os.path.exists(local_audio):
@@ -386,11 +388,11 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
                 cmd += ["-t", str(req.duration_sec), "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p", "-c:v", "libx264", "-preset", "fast", final_mp4]
             subprocess.run(cmd, check=True)
             file_size = os.path.getsize(final_mp4)
-            caption = f"GPU CLIP Project: {req.project_id} | Ep: {req.episode_no} | Scene: {req.scene_order}"
+            caption = f"GPU CLIP Project: {req.project_id} | S{req.season_no} Ep: {req.episode_no} | Scene: {req.scene_order}"
             tg_res = upload_media_to_telegram(final_mp4, caption, req.telegram_upload)
-            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
+            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
             if tg_res["telegram_url"]:
-                update_supabase_clip_checkpoint({"project_id": req.project_id, "episode_no": req.episode_no, "scene_order": req.scene_order, "video_url": tg_res["telegram_url"], "tg_video_file_id": tg_res["file_id"], "checkpoint_stage": "VIDEO_READY"})
+                update_supabase_clip_checkpoint({"project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "video_url": tg_res["telegram_url"], "tg_video_file_id": tg_res["file_id"], "checkpoint_stage": "VIDEO_READY"})
             JOBS_STORE[job_id] = result_payload
             notify_n8n_webhook(req.callback_url, result_payload)
             return result_payload
