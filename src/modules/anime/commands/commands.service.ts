@@ -3,6 +3,8 @@ import { writeAudit } from '../audit/audit.writer';
 import { getHydratedInfrastructureForUser } from '../infrastructure/infrastructure.service';
 import { animeSupabase } from '../db/anime.supabase';
 import { redactSensitivePayload } from '../../../security/payloadRedaction';
+import { DEFAULT_DOMAIN_PROMPTS, canonicalMediumKey, type PromptCategory } from '../prompts/creative.registry';
+import { buildProjectCreativeContext, creativeConfigurationSnapshot, loadCreativePromptRows, type ProjectCreativeContext } from '../prompts/creative.service';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import {
   findCommandById,
@@ -89,15 +91,17 @@ function assertIdempotencyMatch(
 async function resolveEpisodePromptOverride(
   userId: string,
   projectId: string,
-  episodeNo: number
-): Promise<{ id: string; title: string; visual_medium?: string; prompt_text: string; prompt_category?: string } | null> {
+  episodeNo: number,
+  seasonNo: number
+): Promise<{ id: string; title: string; prompt_text: string; prompt_category?: string; version?: number } | null> {
   if (!Number.isInteger(episodeNo) || episodeNo < 1) return null;
-  const { data: episodeRow } = await animeSupabase
+  let episodeQuery = animeSupabase
     .from('episodes')
     .select('script_json')
     .eq('project_id', projectId)
-    .eq('episode_no', episodeNo)
-    .maybeSingle<{ script_json?: Record<string, unknown> | null }>();
+    .eq('episode_no', episodeNo);
+  if (Number.isInteger(seasonNo) && seasonNo > 0) episodeQuery = episodeQuery.eq('season_no', seasonNo);
+  const { data: episodeRow } = await episodeQuery.maybeSingle<{ script_json?: Record<string, unknown> | null }>();
   const scriptJson = episodeRow?.script_json;
   const promptId = scriptJson && typeof scriptJson === 'object'
     ? scriptJson.prompt_id
@@ -106,10 +110,11 @@ async function resolveEpisodePromptOverride(
 
   const { data: promptRows } = await animeSupabase
     .from('user_system_prompts')
-    .select('id, title, visual_medium, prompt_text, prompt_category')
+    .select('id, title, prompt_text, prompt_category, version')
     .eq('id', promptId)
     .eq('user_id', userId)
     .eq('is_archived', false)
+    .or(`project_id.eq.${projectId},project_id.is.null`)
     .limit(1);
   const prompt = Array.isArray(promptRows) ? promptRows[0] : null;
   if (!prompt || String(prompt.prompt_category || '').toUpperCase() !== 'EPISODE') return null;
@@ -120,98 +125,111 @@ async function resolveDynamicPromptAndInfra(
   userId: string,
   projectId: string,
   workflowKey: WorkflowKey,
-  episodeNo: number
+  episodeNo: number,
+  seasonNo: number
 ) {
-  let visualMedium = 'ANIME';
-  let systemPromptTitle = 'Default Storyteller';
-  let customSystemPrompt = '';
-  let imageSystemPrompt = '';
+  let systemPromptTitle = 'Default Story Bible Architect';
+  let customSystemPrompt = DEFAULT_DOMAIN_PROMPTS.BIBLE;
+  let imageSystemPrompt = DEFAULT_DOMAIN_PROMPTS.IMAGE;
+  let imageSystemPromptTitle = 'Default Visual Keyframe Prompt';
+  let imageSystemPromptId: string | null = null;
+  let imageSystemPromptVersion = 1;
   let systemPromptId: string | null = null;
-  let systemPromptCategory: string | null = null;
+  let systemPromptCategory: PromptCategory | null = 'BIBLE';
+  let systemPromptVersion = 1;
   let episodePromptOverride = false;
   let seriesConfig: Record<string, number> = {
     total_seasons: 1,
     episodes_per_season: 12,
     episode_duration_min: 24,
+    script_word_count: 1500,
+    target_duration_sec: 1440,
+    total_episode_capacity: 12,
+    target_episode_count: 12,
   };
+  let creativeContext: ProjectCreativeContext = buildProjectCreativeContext(
+    { id: projectId, genre: 'Action Fantasy', visual_medium: 'ANIME', story_bible: {} },
+    []
+  );
 
   try {
     const { data: projectRow } = await animeSupabase
       .from('projects')
-      .select('visual_medium, active_system_prompt_id, story_bible')
+      .select('id, genre, visual_medium, active_system_prompt_id, story_bible')
       .eq('id', projectId)
       .eq('user_id', userId)
       .maybeSingle<{
-        visual_medium?: string;
+        id?: string;
+        genre?: string | null;
+        visual_medium?: string | null;
         active_system_prompt_id?: string | null;
         story_bible?: Record<string, unknown> | null;
       }>();
 
-    if (projectRow?.visual_medium) {
-      visualMedium = projectRow.visual_medium.toUpperCase();
+    if (projectRow) {
+      const bible = (projectRow.story_bible && typeof projectRow.story_bible === 'object')
+        ? projectRow.story_bible
+        : {};
+      const bounded = (value: unknown, fallback: number, min: number, max: number): number => {
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) return fallback;
+        return Math.min(max, Math.max(min, Math.round(parsed)));
+      };
+      const totalSeasons = bounded(bible.total_seasons, 1, 1, 100);
+      const episodesPerSeason = bounded(bible.episodes_per_season, 12, 1, 500);
+      const episodeDurationMin = bounded(bible.episode_duration_min, 24, 1, 120);
+      seriesConfig = {
+        total_seasons: totalSeasons,
+        episodes_per_season: episodesPerSeason,
+        episode_duration_min: episodeDurationMin,
+        script_word_count: bounded(bible.script_word_count, 1500, 100, 20000),
+        target_duration_sec: episodeDurationMin * 60,
+        total_episode_capacity: totalSeasons * episodesPerSeason,
+        target_episode_count: bounded(bible.target_episode_count, totalSeasons * episodesPerSeason, 1, 50000),
+      };
+
+      const creativeRows = await loadCreativePromptRows(userId, projectId);
+      creativeContext = buildProjectCreativeContext({
+        id: projectId,
+        genre: projectRow.genre,
+        visual_medium: projectRow.visual_medium,
+        story_bible: projectRow.story_bible,
+      }, creativeRows);
     }
-
-    const bible = (projectRow?.story_bible && typeof projectRow.story_bible === 'object')
-      ? projectRow.story_bible
-      : {};
-    const bounded = (value: unknown, fallback: number, min: number, max: number): number => {
-      const parsed = Number(value);
-      if (!Number.isFinite(parsed)) return fallback;
-      return Math.min(max, Math.max(min, Math.round(parsed)));
-    };
-    seriesConfig = {
-      total_seasons: bounded(bible.total_seasons, 1, 1, 100),
-      episodes_per_season: bounded(bible.episodes_per_season, bounded(bible.target_episode_count, 12, 1, 500), 1, 500),
-      episode_duration_min: bounded(bible.episode_duration_min, 24, 1, 120),
-    };
-
-    let promptQuery = animeSupabase
-      .from('user_system_prompts')
-      .select('id, title, visual_medium, prompt_text, prompt_category')
-      .eq('user_id', userId)
-      .eq('prompt_category', 'BIBLE')
-      .or(`project_id.eq.${projectId},project_id.is.null`)
-      .order('created_at', { ascending: false })
-      .limit(1);
 
     if (projectRow?.active_system_prompt_id) {
-      promptQuery = animeSupabase
+      const { data: promptRows } = await animeSupabase
         .from('user_system_prompts')
-        .select('id, title, visual_medium, prompt_text, prompt_category')
+        .select('id, title, prompt_text, prompt_category, version')
         .eq('id', projectRow.active_system_prompt_id)
         .eq('user_id', userId)
+        .eq('is_archived', false)
         .limit(1);
-    }
-
-    const { data: promptRows } = await promptQuery;
-    const activePrompt = Array.isArray(promptRows) ? promptRows[0] : null;
-    if (activePrompt) {
-      systemPromptId = activePrompt.id || null;
-      systemPromptCategory = String(activePrompt.prompt_category || 'BIBLE').toUpperCase();
-      systemPromptTitle = activePrompt.title || systemPromptTitle;
-      customSystemPrompt = activePrompt.prompt_text || '';
-      if (activePrompt.visual_medium) {
-        visualMedium = String(activePrompt.visual_medium).toUpperCase();
+      const activePrompt = Array.isArray(promptRows) ? promptRows[0] : null;
+      if (activePrompt && String(activePrompt.prompt_category || '').toUpperCase() === 'BIBLE') {
+        systemPromptId = activePrompt.id || null;
+        systemPromptCategory = 'BIBLE';
+        systemPromptVersion = Number(activePrompt.version || 1);
+        systemPromptTitle = activePrompt.title || systemPromptTitle;
+        customSystemPrompt = activePrompt.prompt_text || customSystemPrompt;
       }
     }
 
     if (workflowKey === 'WF-02') {
-      const episodePrompt = await resolveEpisodePromptOverride(userId, projectId, episodeNo);
+      const episodePrompt = await resolveEpisodePromptOverride(userId, projectId, episodeNo, seasonNo);
       if (episodePrompt) {
         episodePromptOverride = true;
         systemPromptId = episodePrompt.id;
         systemPromptCategory = 'EPISODE';
+        systemPromptVersion = Number(episodePrompt.version || 1);
         systemPromptTitle = episodePrompt.title || systemPromptTitle;
-        customSystemPrompt = episodePrompt.prompt_text || '';
-        if (episodePrompt.visual_medium) {
-          visualMedium = String(episodePrompt.visual_medium).toUpperCase();
-        }
+        customSystemPrompt = episodePrompt.prompt_text || customSystemPrompt;
       }
     }
 
     const { data: imageRows } = await animeSupabase
       .from('user_system_prompts')
-      .select('id, title, prompt_text')
+      .select('id, title, prompt_text, version')
       .eq('user_id', userId)
       .eq('prompt_category', 'IMAGE')
       .eq('is_archived', false)
@@ -222,6 +240,9 @@ async function resolveDynamicPromptAndInfra(
     const imagePrompt = Array.isArray(imageRows) ? imageRows[0] : null;
     if (imagePrompt?.prompt_text) {
       imageSystemPrompt = imagePrompt.prompt_text;
+      imageSystemPromptTitle = imagePrompt.title || imageSystemPromptTitle;
+      imageSystemPromptId = imagePrompt.id || null;
+      imageSystemPromptVersion = Number(imagePrompt.version || 1);
     }
   } catch (_) {}
 
@@ -231,13 +252,21 @@ async function resolveDynamicPromptAndInfra(
   } catch (_) {}
 
   return {
-    visualMedium,
+    visualMedium: creativeContext.visualMedium,
+    visualMediumTitle: creativeContext.visualMediumTitle,
+    genreContext: creativeContext.genrePromptContext,
+    mediumPromptContext: creativeContext.mediumPromptContext,
+    creativeContext,
     systemPromptTitle,
     customSystemPrompt,
     imageSystemPrompt,
+    imageSystemPromptTitle,
+    imageSystemPromptId,
+    imageSystemPromptVersion,
     hydratedInfra,
     systemPromptId,
     systemPromptCategory,
+    systemPromptVersion,
     episodePromptOverride,
     seriesConfig,
   };
@@ -282,7 +311,8 @@ export async function submitAnimeCommand(
     params.userId,
     params.body.project_id,
     wfKey,
-    episodeNo
+    episodeNo,
+    seasonNo
   );
 
   const payloadObj = (params.body.payload ?? {}) as Record<string, unknown>;
@@ -296,11 +326,17 @@ export async function submitAnimeCommand(
     : typeof payloadObj.baseVersion === 'number'
       ? payloadObj.baseVersion
       : 0;
-  const resolvedVisualMedium =
+  const requestedVisualMediumRaw =
     (typeof payloadObj.visual_medium === 'string' ? payloadObj.visual_medium : null) ??
-    params.body.project_style?.visual_style ??
-    dynamicCtx.visualMedium ??
-    'ANIME';
+    (typeof (params.body.project_style as Record<string, unknown> | undefined)?.visual_medium === 'string'
+      ? String((params.body.project_style as Record<string, unknown>).visual_medium)
+      : null);
+  const requestedVisualMedium = requestedVisualMediumRaw ? canonicalMediumKey(requestedVisualMediumRaw) : null;
+  const resolvedVisualMedium = dynamicCtx.visualMedium;
+  const mediumConflict = Boolean(requestedVisualMedium && requestedVisualMedium !== resolvedVisualMedium);
+  const renderFamily = ['REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC'].includes(resolvedVisualMedium)
+    ? 'REALISTIC'
+    : 'ANIME';
 
   const resolvedPromptTitle =
     (typeof payloadObj.system_prompt_title === 'string' ? payloadObj.system_prompt_title : null) ??
@@ -317,34 +353,80 @@ export async function submitAnimeCommand(
   const systemPromptConfig = {
     id: dynamicCtx.systemPromptId,
     prompt_category: dynamicCtx.systemPromptCategory,
+    prompt_version: dynamicCtx.systemPromptVersion,
     episode_override: dynamicCtx.episodePromptOverride,
     visual_medium: resolvedVisualMedium,
+    visual_medium_title: dynamicCtx.visualMediumTitle,
+    visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
+    visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
+      key: prompt.key,
+      title: prompt.title,
+      prompt_id: prompt.promptId,
+      version: prompt.version,
+      custom: prompt.custom,
+    })),
     title: resolvedPromptTitle,
     prompt_text: resolvedCustomSystemPrompt,
     series_config: dynamicCtx.seriesConfig,
   };
 
   const imagePromptConfig = {
+    id: dynamicCtx.imageSystemPromptId,
+    version: dynamicCtx.imageSystemPromptVersion,
+    title: dynamicCtx.imageSystemPromptTitle,
     visual_medium: resolvedVisualMedium,
+    visual_medium_title: dynamicCtx.visualMediumTitle,
+    visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
+    visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    visual_medium_prompt: dynamicCtx.mediumPromptContext,
     prompt_text: resolvedImageSystemPrompt,
   };
 
   const projectStyle = {
     ...(params.body.project_style ?? {}),
     ...((payloadObj.project_style as Record<string, unknown> | undefined) ?? {}),
-    visual_style: resolvedVisualMedium === 'REAL_HUMAN' ? 'REALISTIC' : 'ANIME',
+    visual_style: renderFamily,
+    render_family: renderFamily,
     visual_medium: resolvedVisualMedium,
+    visual_medium_title: dynamicCtx.visualMediumTitle,
+    visual_medium_prompt: dynamicCtx.mediumPromptContext,
+    visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
+    visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
+      key: prompt.key,
+      title: prompt.title,
+      prompt_id: prompt.promptId,
+      version: prompt.version,
+      prompt_text: prompt.promptText,
+      custom: prompt.custom,
+    })),
+    genre_prompt_context: dynamicCtx.genreContext,
+    requested_visual_medium: requestedVisualMedium,
+    medium_conflict: mediumConflict,
     system_prompt_id: dynamicCtx.systemPromptId,
     system_prompt_category: dynamicCtx.systemPromptCategory,
+    system_prompt_version: dynamicCtx.systemPromptVersion,
     episode_prompt_override: dynamicCtx.episodePromptOverride,
     system_prompt_title: resolvedPromptTitle,
     custom_system_prompt: resolvedCustomSystemPrompt,
     image_system_prompt: resolvedImageSystemPrompt,
+    image_prompt_config: imagePromptConfig,
     series_config: dynamicCtx.seriesConfig,
     total_seasons: dynamicCtx.seriesConfig.total_seasons,
     episodes_per_season: dynamicCtx.seriesConfig.episodes_per_season,
     episode_duration_min: dynamicCtx.seriesConfig.episode_duration_min,
+    script_word_count: dynamicCtx.seriesConfig.script_word_count,
+    target_duration_sec: dynamicCtx.seriesConfig.target_duration_sec,
   };
+
+  const configurationSnapshot = creativeConfigurationSnapshot(
+    { id: params.body.project_id, genre: dynamicCtx.creativeContext.selectedGenres.join(', '), visual_medium: resolvedVisualMedium },
+    dynamicCtx.creativeContext,
+    dynamicCtx.seriesConfig
+  );
 
   const userInfrastructure = {
     ...dynamicCtx.hydratedInfra,
@@ -374,6 +456,23 @@ export async function submitAnimeCommand(
     baseHash,
     baseVersion,
     visual_medium: resolvedVisualMedium,
+    visual_medium_title: dynamicCtx.visualMediumTitle,
+    visual_medium_prompt: dynamicCtx.mediumPromptContext,
+    visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
+    visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    requested_visual_medium: requestedVisualMedium,
+    medium_conflict: mediumConflict,
+    selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
+      key: prompt.key,
+      title: prompt.title,
+      prompt_id: prompt.promptId,
+      version: prompt.version,
+      prompt_text: prompt.promptText,
+      custom: prompt.custom,
+    })),
+    genre_prompt_context: dynamicCtx.genreContext,
+    configuration_snapshot: configurationSnapshot,
     system_prompt_id: dynamicCtx.systemPromptId,
     system_prompt_category: dynamicCtx.systemPromptCategory,
     episode_prompt_override: dynamicCtx.episodePromptOverride,
@@ -406,6 +505,23 @@ export async function submitAnimeCommand(
     baseHash,
     baseVersion,
     visual_medium: resolvedVisualMedium,
+    visual_medium_title: dynamicCtx.visualMediumTitle,
+    visual_medium_prompt: dynamicCtx.mediumPromptContext,
+    visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
+    visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    requested_visual_medium: requestedVisualMedium,
+    medium_conflict: mediumConflict,
+    selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
+      key: prompt.key,
+      title: prompt.title,
+      prompt_id: prompt.promptId,
+      version: prompt.version,
+      prompt_text: prompt.promptText,
+      custom: prompt.custom,
+    })),
+    genre_prompt_context: dynamicCtx.genreContext,
+    configuration_snapshot: configurationSnapshot,
     system_prompt_id: dynamicCtx.systemPromptId,
     system_prompt_category: dynamicCtx.systemPromptCategory,
     episode_prompt_override: dynamicCtx.episodePromptOverride,
@@ -461,6 +577,9 @@ export async function submitAnimeCommand(
       command_id: createdOrExisting.id,
       status: createdOrExisting.status,
       mode: effectiveMode,
+      visual_medium: resolvedVisualMedium,
+      selected_genres: dynamicCtx.creativeContext.selectedGenres,
+      medium_conflict: mediumConflict,
       project_style: projectStyle,
       idempotency_key: rawKey,
     },

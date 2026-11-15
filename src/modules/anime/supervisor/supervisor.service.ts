@@ -32,7 +32,7 @@ export async function reconcileCommand(input: { project_id: string, command_id: 
             thumbnail_url: cb.thumbnail_url || cb.output_media?.thumbnail_url || null,
             rendered_at: new Date().toISOString()
           }
-        }).eq('project_id', input.project_id).eq('episode_no', Number(epNo));
+        }).eq('project_id', input.project_id).eq('season_no', Number(cb.season_no || cb.season_number || 1)).eq('episode_no', Number(epNo));
         await writeAudit({ project_id: input.project_id, user_id: snap.command.user_id, workflow_name: 'SUPERVISOR_MEDIA_SAVE', action: 'EPISODE_MEDIA_SAVED', entity_type: 'EPISODE', entity_id: String(epNo), new_value: { final_video_url: vUrl, full_audio_url: aUrl }, request_id: input.request_id });
       }
     }

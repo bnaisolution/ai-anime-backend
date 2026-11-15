@@ -45,9 +45,10 @@ export async function getJobDetail(projectId: string, jobId: string) {
   if (error || !command) throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Job not found.', cause: error });
 
   const episodeNo = command.payload?.episode_no ?? command.payload?.episode_number ?? null;
+  const seasonNo = command.payload?.season_no ?? command.payload?.season_number ?? 1;
 
   const [epRes, paRes] = await Promise.all([
-    episodeNo ? animeSupabase.from('episodes').select('*').eq('project_id', projectId).eq('episode_no', episodeNo).maybeSingle() : Promise.resolve({ data: null }),
+    episodeNo ? animeSupabase.from('episodes').select('*').eq('project_id', projectId).eq('season_no', seasonNo).eq('episode_no', episodeNo).maybeSingle() : Promise.resolve({ data: null }),
     animeSupabase.from('pending_actions').select('*').eq('project_id', projectId).in('status', ['PENDING', 'RUNNING', 'RETRY_SCHEDULED', 'pending', 'running', 'retry_scheduled']),
   ]);
 

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireProjectRole } from '../auth/project-guard';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { canonicalMediumKey, parseGenreList } from '../prompts/creative.registry';
 
 const READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
 const WRITE_ROLES = ['owner', 'admin', 'editor'];
@@ -389,11 +390,17 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       const currentBible = (existing.story_bible && typeof existing.story_bible === 'object') ? existing.story_bible : {};
       const incomingBible = (body.story_bible && typeof body.story_bible === 'object') ? body.story_bible : {};
 
+      const normalizedGenres = body.genre !== undefined || incomingBible.genre !== undefined
+        ? parseGenreList(body.genre, incomingBible.genre).join(', ')
+        : undefined;
+      const normalizedMedium = body.visual_medium !== undefined || incomingBible.visual_medium !== undefined
+        ? canonicalMediumKey(body.visual_medium ?? incomingBible.visual_medium)
+        : undefined;
       const updatedBible = {
         ...currentBible,
         ...incomingBible,
-        ...(body.visual_medium !== undefined ? { visual_medium: body.visual_medium } : {}),
-        ...(body.genre !== undefined ? { genre: body.genre } : {}),
+        ...(normalizedMedium !== undefined ? { visual_medium: normalizedMedium } : {}),
+        ...(normalizedGenres !== undefined ? { genre: normalizedGenres } : {}),
         ...(body.auto_approve !== undefined ? { auto_approve: Boolean(body.auto_approve) } : {}),
         ...(body.cover_image_url !== undefined ? { cover_image_url: body.cover_image_url } : {}),
         ...(body.budget_ceiling !== undefined ? { budget_ceiling: Number(body.budget_ceiling) } : {}),
@@ -420,11 +427,11 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       if (typeof body.name === 'string' && body.name.trim().length > 0) {
         patchPayload.name = body.name.trim();
       }
-      if (body.visual_medium !== undefined) {
-        patchPayload.visual_medium = String(body.visual_medium).toUpperCase();
+      if (normalizedMedium !== undefined) {
+        patchPayload.visual_medium = normalizedMedium;
       }
-      if (body.genre !== undefined) {
-        patchPayload.genre = String(body.genre);
+      if (normalizedGenres !== undefined) {
+        patchPayload.genre = normalizedGenres;
       }
       if (body.description !== undefined) {
         patchPayload.description = body.description === null ? null : String(body.description);
@@ -451,13 +458,15 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         data: {
           ...updated,
           visual_medium: updatedBible.visual_medium ?? 'ANIME',
-          genre: updatedBible.genre ?? 'Action / Fantasy',
+          genre: updatedBible.genre ?? 'Action Fantasy',
           auto_approve: Boolean(updatedBible.auto_approve ?? false),
           cover_image_url: updatedBible.cover_image_url ?? null,
           budget_ceiling: Number(updatedBible.budget_ceiling ?? 1000),
           total_seasons: Number(updatedBible.total_seasons ?? 1),
-          episodes_per_season: Number(updatedBible.episodes_per_season ?? updatedBible.target_episode_count ?? 12),
+          episodes_per_season: Number(updatedBible.episodes_per_season ?? 12),
           episode_duration_min: Number(updatedBible.episode_duration_min ?? 24),
+          script_word_count: Number(updatedBible.script_word_count ?? 1500),
+          total_episode_capacity: Number(updatedBible.total_seasons ?? 1) * Number(updatedBible.episodes_per_season ?? 12),
         },
       };
     }
@@ -691,11 +700,13 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       const projectId = request.params.id;
       const episodeNo = Number(request.params.episodeNo);
       const body = (request.body ?? {}) as Record<string, any>;
+      const seasonNo = Number(body.season_no || request.query?.seasonNo || 1);
 
       const { data: existingEp } = await animeSupabase
         .from('episodes')
         .select('script_json')
         .eq('project_id', projectId)
+        .eq('season_no', seasonNo)
         .eq('episode_no', episodeNo)
         .maybeSingle();
 
@@ -727,6 +738,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         .from('episodes')
         .update(patchData)
         .eq('project_id', projectId)
+        .eq('season_no', seasonNo)
         .eq('episode_no', episodeNo)
         .select('*')
         .single();
