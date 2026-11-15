@@ -163,6 +163,7 @@ export async function registerAnimeRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimeMediaRoutes);
   await app.register(registerAnimeAnalyticsRoutes);
   await app.register(registerAnimeApprovalsRoutes);
+  await app.register(registerAnimeBiblePatchRoutes);
   await app.register(registerAnimeAdminWorkersRoutes);
   await app.register(registerAnimeAdminLedgerRoutes);
   await app.register(registerAnimeAdminSystemRoutes);

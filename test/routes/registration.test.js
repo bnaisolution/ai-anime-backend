@@ -32,3 +32,12 @@ test('GET project detail is served by the registered reads router', async () => 
   assert.equal(has(app, { method: 'GET', path: '/v1/anime/projects/:id' }), true);
   await app.close();
 });
+
+
+test('Bible patch routes are registered on the anime module', async () => {
+  const { app } = await buildApp({ includeLore: false });
+  assert.equal(has(app, { method: 'GET', path: '/v1/anime/projects/:id/bible/patches' }), true);
+  assert.equal(has(app, { method: 'POST', path: '/v1/anime/projects/:id/bible/patches/:patchId/approve' }), true);
+  assert.equal(has(app, { method: 'POST', path: '/v1/anime/projects/:id/bible/patches/:patchId/reject' }), true);
+  await app.close();
+});
