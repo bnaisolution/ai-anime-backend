@@ -21,6 +21,8 @@ ALTER TABLE public.episode_states DROP CONSTRAINT IF EXISTS episode_states_proje
 ALTER TABLE public.scenes DROP CONSTRAINT IF EXISTS uq_scenes_proj_ep_scene;
 ALTER TABLE public.clips DROP CONSTRAINT IF EXISTS clips_project_ep_scene_uniq;
 ALTER TABLE public.clips DROP CONSTRAINT IF EXISTS clips_project_ep_scene_unique;
+DROP INDEX IF EXISTS public.uq_episodes_proj_epno;
+DROP INDEX IF EXISTS public.uq_clips_proj_ep_scene;
 
 DO $$
 BEGIN

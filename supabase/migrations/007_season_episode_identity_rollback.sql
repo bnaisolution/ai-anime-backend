@@ -12,6 +12,8 @@ ALTER TABLE public.scenes
     ADD CONSTRAINT uq_scenes_proj_ep_scene UNIQUE (project_id, episode_no, scene_order);
 ALTER TABLE public.clips
     ADD CONSTRAINT clips_project_ep_scene_uniq UNIQUE (project_id, episode_no, scene_order);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_episodes_proj_epno ON public.episodes (project_id, episode_no);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clips_proj_ep_scene ON public.clips (project_id, episode_no, scene_order);
 
 DROP INDEX IF EXISTS public.idx_episodes_project_season_ep;
 DROP INDEX IF EXISTS public.idx_episode_states_project_season_ep;
