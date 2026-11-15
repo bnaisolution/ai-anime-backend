@@ -61,7 +61,8 @@ export function buildProjectCreativeContext(
   const bible = (project.story_bible && typeof project.story_bible === 'object')
     ? project.story_bible as Record<string, unknown>
     : {};
-  const selectedGenres = parseGenreList(project.genre, bibleValue(bible, 'genre'));
+  const projectGenres = parseGenreList(project.genre);
+  const selectedGenres = projectGenres.length > 0 ? projectGenres : parseGenreList(bibleValue(bible, 'genre'));
   const visualMedium = canonicalMediumKey(project.visual_medium ?? bibleValue(bible, 'visual_medium') ?? 'ANIME');
   const visualMediumTitle = canonicalMediumTitle(project.visual_medium ?? bibleValue(bible, 'visual_medium') ?? visualMedium);
   const genrePrompts = selectedGenres.map((genre) => resolveGenrePrompt(genre, promptRows));
@@ -116,7 +117,8 @@ export function genreDisplayListForProject(project: ProjectCreativeRow): string[
   const bible = (project.story_bible && typeof project.story_bible === 'object')
     ? project.story_bible as Record<string, unknown>
     : {};
-  return parseGenreList(project.genre, bibleValue(bible, 'genre'));
+  const projectGenres = parseGenreList(project.genre);
+  return projectGenres.length > 0 ? projectGenres : parseGenreList(bibleValue(bible, 'genre'));
 }
 
 export function canonicalizeProjectGenreInput(value: unknown): string {
