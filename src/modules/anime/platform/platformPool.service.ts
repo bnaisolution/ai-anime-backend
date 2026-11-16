@@ -1,6 +1,7 @@
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { assertPlatformManagedEnabled, getPlatformManagedStatus } from './platform.service';
+import { assertWalletCanReserve } from './wallet.service';
 
 export type PoolResource = 'gpu' | 'cpu' | 'llm' | 'storage';
 
@@ -122,6 +123,7 @@ export async function getPlatformPoolStatus(): Promise<{
 
 export async function reservePlatformCapacity(input: PoolReservationInput): Promise<PoolReservationResult> {
   assertPlatformManagedEnabled('pool reservation');
+  await assertWalletCanReserve(input.tenantId);
   const units = positiveUnits(input.units);
   const ttlSeconds = Math.min(86_400, Math.max(30, Math.floor(input.ttlSeconds ?? 900)));
   const { data, error } = await animeSupabase.rpc('reserve_anime_platform_capacity', {

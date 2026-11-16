@@ -8,6 +8,7 @@ import { registerAnimeInfrastructureLifecycleRoutes } from './infrastructure/inf
 import { registerAnimeOwnerBatch4Routes } from './owner/owner.batch4.routes';
 import { registerAnimePlatformRoutes } from './platform/platform.routes';
 import { registerAnimeTenantRoutes } from './tenant/tenant.routes';
+import { registerAnimeTenantDatabaseRoutes } from './tenant/tenantDatabase.routes';
 import { registerAnimeApprovalsRoutes } from './approvals/approvals.routes';
 import { registerAnimeBiblePatchRoutes } from './bible/bible.patch.routes';
 import { registerAnimeCallbacksRoutes } from './callbacks/callbacks.routes';
@@ -166,6 +167,7 @@ export async function registerAnimeRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimeAdminLedgerRoutes);
   await app.register(registerAnimeAdminSystemRoutes);
   await app.register(registerAnimeTenantRoutes);
+  await app.register(registerAnimeTenantDatabaseRoutes);
   await app.register(registerAnimePlatformRoutes);
   await app.register(registerAnimeOwnerBatch4Routes);
   await app.register(registerAnimeInfrastructureLifecycleRoutes);
