@@ -25,7 +25,6 @@ export async function recoverStaleProcessing(staleMinutes = STALE_PROCESSING_MIN
 }
 
 export async function claimBatch(type: string, batchSize = 10): Promise<any[]> {
-  await recoverStaleProcessing();
   const { data, error } = await animeSupabase.rpc('claim_outbox_batch', { p_type: type, p_batch_size: batchSize });
   if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Claim failed', cause: error });
   return data ?? [];
@@ -35,6 +34,15 @@ export async function redactExpiredPayloads(retentionHours = 24): Promise<number
   if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Expired payload redaction failed', cause: error });
   return typeof data === 'number' ? data : 0;
 }
-export async function markDispatched(outboxId: string): Promise<void> { await animeSupabase.from('outbox_events').update({ status: 'dispatched', dispatched_at: new Date().toISOString(), processing_started_at: null, last_error: null }).eq('id', outboxId); }
-export async function markFailed(outboxId: string, attempts: number, nextAttemptAtIso: string, lastError: string): Promise<void> { await animeSupabase.from('outbox_events').update({ status: 'pending', attempts, next_attempt_at: nextAttemptAtIso, processing_started_at: null, last_error: lastError.slice(0, 1000) }).eq('id', outboxId); }
-export async function markDeadLetter(outboxId: string, attempts: number, lastError: string): Promise<void> { await animeSupabase.from('outbox_events').update({ status: 'dead_letter', attempts, processing_started_at: null, last_error: lastError.slice(0, 1000) }).eq('id', outboxId); }
+export async function markDispatched(outboxId: string): Promise<void> {
+  const { error } = await animeSupabase.from('outbox_events').update({ status: 'dispatched', dispatched_at: new Date().toISOString(), processing_started_at: null, last_error: null }).eq('id', outboxId);
+  if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Outbox mark-dispatched failed', cause: error });
+}
+export async function markFailed(outboxId: string, attempts: number, nextAttemptAtIso: string, lastError: string): Promise<void> {
+  const { error } = await animeSupabase.from('outbox_events').update({ status: 'pending', attempts, next_attempt_at: nextAttemptAtIso, processing_started_at: null, last_error: lastError.slice(0, 1000) }).eq('id', outboxId);
+  if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Outbox mark-failed failed', cause: error });
+}
+export async function markDeadLetter(outboxId: string, attempts: number, lastError: string): Promise<void> {
+  const { error } = await animeSupabase.from('outbox_events').update({ status: 'dead_letter', attempts, processing_started_at: null, last_error: lastError.slice(0, 1000) }).eq('id', outboxId);
+  if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Outbox dead-letter update failed', cause: error });
+}

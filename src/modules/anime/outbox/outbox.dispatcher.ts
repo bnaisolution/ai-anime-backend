@@ -3,10 +3,25 @@ import { writeAudit } from '../audit/audit.writer';
 import { CommandStatus } from '../commands/commands.types';
 import { animeSupabase } from '../db/anime.supabase';
 import { getHydratedInfrastructureForUser } from '../infrastructure/infrastructure.service';
+import { ensureKaggleWorkerForUser } from '../infrastructure/infrastructure.routes';
 import { redactSensitivePayload } from '../../../security/payloadRedaction';
 import { claimBatch, markDeadLetter, markDispatched, markFailed, redactExpiredPayloads } from './outbox.repo';
 
 const MAX_RETRIES = 5;
+const GPU_INTENTS = new Set(['GENERATE_EPISODE', 'REGENERATE_EPISODE', 'CONTINUE_EPISODE']);
+
+async function maybeStartGpu(payload: any, userId: string): Promise<void> {
+  const intent = String(payload?.intent || '').toUpperCase();
+  if (!GPU_INTENTS.has(intent)) return;
+  const routing = payload?.gpu_routing || payload?.user_infrastructure?.gpu_routing || {};
+  if (String(routing.preferred_mode || '').toUpperCase() === 'CUSTOM_GPU') return;
+  try {
+    const tenantId = payload?.tenant_id || payload?.user_infrastructure?.tenant_id || null;
+    await ensureKaggleWorkerForUser(userId, tenantId);
+  } catch (error) {
+    console.warn('[OutboxDispatcher] Kaggle ensure skipped', error instanceof Error ? error.message : error);
+  }
+}
 const BASE_BACKOFF_MS = 2000;
 export function computeExponentialBackoffIso(attempts: number): string { return new Date(Date.now() + BASE_BACKOFF_MS * Math.pow(2, Math.max(0, attempts - 1))).toISOString(); }
 
@@ -36,6 +51,7 @@ async function processDispatchEvent(event: any): Promise<void> {
   if (!projectId || !commandId) { await markDeadLetter(event.id, event.attempts, 'Missing project_id or command_id'); return; }
   try {
     const dispatchPayload = await hydrateDispatchPayload(payload);
+    if (typeof payload.user_id === 'string' && payload.user_id) await maybeStartGpu(dispatchPayload, payload.user_id);
     const dispatchResult = await dispatchToWf00(dispatchPayload);
     const isCompletedSynchronously = dispatchResult.ok && ['COMPLETED', 'SUCCEEDED'].includes(String(dispatchResult.status).toUpperCase());
     const nextCmdStatus = isCompletedSynchronously ? CommandStatus.SUCCEEDED : CommandStatus.DISPATCHED;
@@ -54,15 +70,24 @@ async function processDispatchEvent(event: any): Promise<void> {
     await markFailed(event.id, event.attempts, computeExponentialBackoffIso(event.attempts), errMsg);
   }
 }
+function positiveNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export class OutboxDispatcher {
-  private timer: any = null; private running = false;
-  public start(pollIntervalMs = 2000): void { if (this.timer) return; this.timer = setInterval(() => void this.tick(), pollIntervalMs); void this.tick(); }
+  private timer: any = null; private running = false; private lastRedactionAt = 0;
+  public start(pollIntervalMs = 10000): void { if (this.timer) return; this.timer = setInterval(() => void this.tick(), pollIntervalMs); void this.tick(); }
   public stop(): void { if (this.timer) { clearInterval(this.timer); this.timer = null; } }
   public async tick(): Promise<void> {
     if (this.running) return; this.running = true;
     try {
-      const retentionHours = Number(process.env.ANIME_PAYLOAD_REDACTION_TTL_HOURS ?? 24);
-      try { await redactExpiredPayloads(Number.isFinite(retentionHours) && retentionHours > 0 ? retentionHours : 24); } catch (e) { console.error('[OutboxDispatcher] payload redaction', e); }
+      const redactionIntervalMs = positiveNumber(process.env.ANIME_PAYLOAD_REDACTION_INTERVAL_MS, 15 * 60 * 1000);
+      if (Date.now() - this.lastRedactionAt >= redactionIntervalMs) {
+        this.lastRedactionAt = Date.now();
+        const retentionHours = positiveNumber(process.env.ANIME_PAYLOAD_REDACTION_TTL_HOURS, 24);
+        try { await redactExpiredPayloads(retentionHours); } catch (e) { console.error('[OutboxDispatcher] payload redaction', e); }
+      }
       const batch = await claimBatch('dispatch_n8n', 10);
       for (const item of batch) { await processDispatchEvent(item); }
     } catch (e) { console.error('[OutboxDispatcher]', e); } finally { this.running = false; }

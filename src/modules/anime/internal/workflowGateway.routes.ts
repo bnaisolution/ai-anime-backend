@@ -5,6 +5,7 @@ import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { buildScopedDbRequest } from './workflowGateway.db';
 import { buildProviderRequest } from './workflowGateway.llm';
 import { verifyWorkflowGatewayRequest } from './workflowGateway.auth';
+import { getDecryptedMapForUser } from '../infrastructure/infrastructure.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -71,8 +72,19 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
     const body = request.body as any;
     if (!body || typeof body !== 'object') authInvalid('Request body is required.');
     verifyWorkflowGatewayRequest(request, false);
-    await resolveCommandBinding(body);
-    const providerRequest = buildProviderRequest({ provider: body.provider, path: body.path, body: body.body });
+    const binding = await resolveCommandBinding(body);
+    const providerName = String(body.provider || '').toLowerCase();
+    const userInfrastructure = await getDecryptedMapForUser(binding.user_id);
+    const providerConfig = userInfrastructure[providerName];
+    const userApiKey = providerConfig && typeof providerConfig === 'object'
+      ? providerConfig.api_key
+      : null;
+    const providerRequest = buildProviderRequest({
+      provider: body.provider,
+      path: body.path,
+      body: body.body,
+      apiKey: typeof userApiKey === 'string' ? userApiKey : null,
+    });
     const response = await fetch(providerRequest.url, {
       method: 'POST',
       headers: providerRequest.headers,

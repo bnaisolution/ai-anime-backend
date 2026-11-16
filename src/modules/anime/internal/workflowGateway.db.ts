@@ -59,6 +59,20 @@ function enforceProjectFilter(params: URLSearchParams, projectId: string, table:
   }
 }
 
+function enforceUserFilter(params: URLSearchParams, userId: string): void {
+  const values = params.getAll('user_id');
+  if (values.length > 1) badRequest('Multiple user_id filters are not allowed.');
+  if (values.length === 1 && values[0] !== `eq.${userId}`) {
+    badRequest('Request user_id does not match the authenticated user.');
+  }
+  if (values.length === 0) params.append('user_id', `eq.${userId}`);
+  for (const compound of ['or', 'and', 'not']) {
+    if (params.has(compound) && String(params.get(compound)).includes('user_id')) {
+      badRequest('Compound filters may not override user scope.');
+    }
+  }
+}
+
 function injectProjectIntoBody(body: any, projectId: string, userId: string, table: string): any {
   if (body === undefined || body === null) return body;
   const inject = (row: any): any => {
@@ -132,6 +146,7 @@ export function buildScopedDbRequest(input: {
 
   const { base, params } = parseQuery(input.path);
   if (!input.system && isProject) enforceProjectFilter(params, input.project_id, table);
+  if (!input.system && table === 'kaggle_sessions') enforceUserFilter(params, input.user_id);
   const prefer = sanitizePrefer(input.prefer);
   let body = input.body;
   if (method !== 'GET') {

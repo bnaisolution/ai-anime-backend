@@ -4,8 +4,11 @@ import { requireProjectRole } from '../auth/project-guard';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { animeSupabase } from '../db/anime.supabase';
 import * as svc from './infrastructure.service';
+import { maskConfig } from './infrastructure.crypto';
+import { resolveTenant } from '../tenant/tenant.service';
 import { PROMPT_CATEGORIES, canonicalGenreTitle, canonicalMediumKey, canonicalMediumTitle, parseGenreList, slugifyCreativeTitle } from '../prompts/creative.registry';
 import { buildCreativeMetadata, genreDisplayListForProject } from '../prompts/creative.service';
+import { mintWorkerJobToken } from '../workers/workerToken';
 
 const PROMPT_READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
 const PROMPT_WRITE_ROLES = ['owner', 'admin', 'editor'];
@@ -43,6 +46,39 @@ const GpuSetupBody = Type.Object({
   kaggle_secondary: Type.Optional(Type.Object({ username: Type.String(), api_key: Type.String(), notebook_slug: Type.Optional(Type.String()), worker_url: Type.Optional(Type.String()) })),
   telegram_storage: Type.Optional(Type.Object({ bot_token: Type.String(), storage_chat_id: Type.String(), stream_bridge_base_url: Type.Optional(Type.String()) })),
   github_worker_url: Type.Optional(Type.String()),
+  tenant_id: Type.Optional(Type.String({ format: 'uuid' })),
+  github_worker: Type.Optional(Type.Object({
+    worker_url: Type.Optional(Type.String()),
+    token: Type.Optional(Type.String()),
+    repository: Type.Optional(Type.String()),
+    workflow: Type.Optional(Type.String()),
+  })),
+  github_token: Type.Optional(Type.String()),
+  primary_llm_provider: Type.Optional(Type.String({ maxLength: 40 })),
+  fallback_llm_provider: Type.Optional(Type.String({ maxLength: 40 })),
+  vision_provider: Type.Optional(Type.String({ maxLength: 40 })),
+  primary_llm_model: Type.Optional(Type.String({ maxLength: 120 })),
+  fallback_llm_model: Type.Optional(Type.String({ maxLength: 120 })),
+  vision_model: Type.Optional(Type.String({ maxLength: 120 })),
+  gpu_choice: Type.Optional(Type.String({ maxLength: 40 })),
+  cpu_choice: Type.Optional(Type.String({ maxLength: 40 })),
+  storage_choice: Type.Optional(Type.String({ maxLength: 40 })),
+  cpu_worker: Type.Optional(Type.Object({
+    mode: Type.Optional(Type.String({ maxLength: 40 })),
+    worker_url: Type.Optional(Type.String()),
+    token: Type.Optional(Type.String()),
+    repository: Type.Optional(Type.String()),
+  })),
+  groq_api_key: Type.Optional(Type.String()),
+  gemini_api_key: Type.Optional(Type.String()),
+  kaggle_username: Type.Optional(Type.String()),
+  kaggle_key: Type.Optional(Type.String()),
+  telegram_chat_id: Type.Optional(Type.String()),
+  telegram_bot_token: Type.Optional(Type.String()),
+});
+
+const EnsureGpuBody = Type.Object({
+  tenant_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
 
 const PROMPT_FORMATS = ['SERIES', 'MOVIE', 'SHORT', 'MUSIC_VIDEO', 'TRAILER'] as const;
@@ -139,8 +175,8 @@ function escapeLike(value: string): string {
 
 
 function buildKaggleLocalTunnelScript(
-  supabaseUrl: string,
-  supabaseServiceKey: string,
+  backendBaseUrl: string,
+  sessionToken: string,
   sessionSlot: string
 ): string {
   return `import os
@@ -156,6 +192,7 @@ import threading
 import tempfile
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 import torch
 import requests
@@ -179,8 +216,8 @@ def discover_model_paths() -> Dict[str, Optional[str]]:
     return paths
 
 MODEL_PATHS = discover_model_paths()
-SUPABASE_URL = "${supabaseUrl}".rstrip("/")
-SUPABASE_KEY = "${supabaseServiceKey}"
+BACKEND_BASE = "${backendBaseUrl}".rstrip("/")
+SESSION_TOKEN = "${sessionToken}"
 SESSION_SLOT = "${sessionSlot}"
 DEFAULT_TG_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 DEFAULT_TG_CHAT_ID = os.getenv("TELEGRAM_STORAGE_CHAT_ID", "")
@@ -256,13 +293,6 @@ def upload_media_to_telegram(file_path: str, caption: str, tg_cfg: Optional[Tele
         except Exception: time.sleep(2)
     return {"file_id": None, "telegram_url": None}
 
-def update_supabase_clip_checkpoint(payload: Dict[str, Any]):
-    if not SUPABASE_URL or not SUPABASE_KEY: return
-    try:
-        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}
-        requests.post(f"{SUPABASE_URL}/rest/v1/clips?on_conflict=project_id,season_no,episode_no,scene_order", json=payload, headers=headers, timeout=15)
-    except Exception: pass
-
 def notify_n8n_webhook(callback_url: Optional[str], result_payload: Dict[str, Any]):
     if not callback_url: return
     try: requests.post(callback_url, json=result_payload, headers={"Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true"}, timeout=30)
@@ -333,8 +363,6 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
                 tg_res = upload_media_to_telegram(out_png, caption, req.telegram_upload)
                 clear_vram(DEVICE_0)
                 result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "engine": req.engine, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "image_url": tg_res["telegram_url"]}
-                if tg_res["telegram_url"]:
-                    update_supabase_clip_checkpoint({"project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "image_url": tg_res["telegram_url"], "tg_image_file_id": tg_res["file_id"], "checkpoint_stage": "IMAGE_READY"})
                 JOBS_STORE[job_id] = result_payload
                 notify_n8n_webhook(req.callback_url, result_payload)
                 return result_payload
@@ -392,7 +420,6 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
             tg_res = upload_media_to_telegram(final_mp4, caption, req.telegram_upload)
             result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
             if tg_res["telegram_url"]:
-                update_supabase_clip_checkpoint({"project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "video_url": tg_res["telegram_url"], "tg_video_file_id": tg_res["file_id"], "checkpoint_stage": "VIDEO_READY"})
             JOBS_STORE[job_id] = result_payload
             notify_n8n_webhook(req.callback_url, result_payload)
             return result_payload
@@ -432,10 +459,9 @@ async def health():
 def register_tunnel_in_supabase(tunnel_url: str):
     global PUBLIC_TUNNEL_URL
     PUBLIC_TUNNEL_URL = tunnel_url
-    if SUPABASE_URL and SUPABASE_KEY:
+    if BACKEND_BASE and SESSION_TOKEN:
         try:
-            headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"}
-            requests.post(f"{SUPABASE_URL}/rest/v1/kaggle_sessions?on_conflict=session_name", json={"session_name": SESSION_SLOT, "status": "active", "api_endpoint": tunnel_url, "gpu_id": "T4x2"}, headers=headers, timeout=15)
+            requests.post(f"{BACKEND_BASE}/v1/anime/internal/worker/session", json={"session_name": SESSION_SLOT, "api_endpoint": tunnel_url, "gpu_id": "T4x2"}, headers={"Authorization": f"Bearer {SESSION_TOKEN}", "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true"}, timeout=15)
         except Exception: pass
 
 def start_tunnel_daemon():
@@ -472,18 +498,25 @@ async function pushKaggleKernel(
   apiKey: string,
   rawNotebookSlug: string,
   datasetSlug: string,
-  slotName: string
+  slotName: string,
+  userId: string,
+  tenantId: string | null
 ) {
+  const backendBaseUrl = String(process.env.ANIME_PUBLIC_BASE_URL || 'https://api.bnai.dpdns.org').replace(/\/+$/, '');
+  const sessionToken = mintWorkerJobToken({
+    job_id: `gpu-session:${slotName}:${userId}`,
+    project_id: 'gpu-session',
+    tenant_id: tenantId,
+    user_id: userId,
+    scope: ['gpu_session'],
+    ttl_seconds: 21600,
+  });
   const cleanSlug = rawNotebookSlug.replace(/^.*\/+/, '').trim() || 'anime-gpu-worker';
   const fullSlug = `${username.trim()}/${cleanSlug}`;
   const payload = {
     slug: fullSlug,
     newTitle: cleanSlug,
-    text: buildKaggleLocalTunnelScript(
-      process.env.ANIME_SUPABASE_URL || process.env.SUPABASE_URL || '',
-      process.env.ANIME_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-      slotName
-    ),
+    text: buildKaggleLocalTunnelScript(backendBaseUrl, sessionToken, slotName),
     language: 'python',
     kernelType: 'script',
     isPrivate: 'true',
@@ -503,6 +536,185 @@ async function pushKaggleKernel(
   });
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, data };
+}
+
+function asRecord(value: unknown): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
+}
+
+function mergeConfig(
+  existing: Record<string, any>,
+  input: Record<string, any> | undefined,
+  secretFields: string[] = []
+): Record<string, any> {
+  if (!input) return { ...existing };
+  const next: Record<string, any> = { ...existing, ...input };
+  for (const field of secretFields) {
+    if (!next[field] && existing[field]) next[field] = existing[field];
+  }
+  return next;
+}
+
+async function upsertProviderConfig(
+  userId: string,
+  providerType: 'groq' | 'gemini',
+  name: string,
+  apiKey: string,
+  requestId?: string
+): Promise<void> {
+  const items = await svc.list(userId);
+  const existing = items.find((item) => item.provider_type === providerType && item.name === name);
+  const config = { api_key: apiKey };
+  if (existing) {
+    await svc.update(existing.id, userId, { config, status: 'active', request_id: requestId });
+  } else {
+    await svc.create(userId, {
+      name,
+      provider_type: providerType,
+      config,
+      is_default: true,
+      request_id: requestId,
+    });
+  }
+}
+
+function gpuPresentation(
+  items: Awaited<ReturnType<typeof svc.list>>,
+  gpuRow: Awaited<ReturnType<typeof svc.list>>[number] | undefined
+): Record<string, any> {
+  const config = asRecord(gpuRow?.config_masked);
+  const routing = asRecord(config.gpu_routing);
+  const primary = asRecord(routing.kaggle_primary);
+  const secondary = asRecord(routing.kaggle_secondary);
+  const telegram = asRecord(config.telegram_storage);
+  const github = asRecord(config.github_worker);
+  return {
+    ...config,
+    preferred_mode: config.preferred_mode ?? routing.preferred_mode ?? 'KAGGLE_AUTO',
+    models_dataset_slug: config.models_dataset_slug ?? 'bnaisolution/anime-engine-models-v1',
+    primary_llm_provider: config.primary_llm_provider ?? 'groq',
+    fallback_llm_provider: config.fallback_llm_provider ?? 'gemini',
+    vision_provider: config.vision_provider ?? 'gemini',
+    primary_llm_model: config.primary_llm_model ?? '',
+    fallback_llm_model: config.fallback_llm_model ?? '',
+    vision_model: config.vision_model ?? '',
+    gpu_choice: config.gpu_choice ?? (String(config.preferred_mode || '').toUpperCase() === 'CUSTOM_GPU' ? 'CUSTOM_GPU' : 'KAGGLE_PRIMARY'),
+    cpu_choice: config.cpu_choice ?? 'GITHUB_CPU',
+    storage_choice: config.storage_choice ?? 'TELEGRAM',
+    cpu_worker: asRecord(config.cpu_worker),
+    gpu_routing: {
+      ...routing,
+      kaggle_primary: primary,
+      kaggle_secondary: secondary,
+    },
+    kaggle_primary: primary,
+    kaggle_secondary: secondary,
+    kaggle_username: primary.username ?? '',
+    kaggle_key: primary.api_key ?? '',
+    telegram_storage: telegram,
+    telegram_chat_id: telegram.storage_chat_id ?? '',
+    github_worker: github,
+    github_worker_url: github.worker_url ?? '',
+    groq_api_key: items.some((item) => item.provider_type === 'groq') ? '****' : '',
+    gemini_api_key: items.some((item) => item.provider_type === 'gemini') ? '****' : '',
+  };
+}
+
+export interface KaggleEnsureResult {
+  status: 'healthy' | 'starting' | 'custom_gpu';
+  endpoint: string | null;
+  deployed: boolean;
+  reason: string;
+}
+
+function isAllowedWorkerEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(String(endpoint || ''));
+    const host = url.hostname.toLowerCase();
+    return url.protocol === 'https:'
+      && !url.username
+      && !url.password
+      && ['.trycloudflare.com', '.loca.lt'].some((suffix) => host.endsWith(suffix));
+  } catch { return false; }
+}
+
+async function workerIsHealthy(endpoint: string): Promise<boolean> {
+  if (!isAllowedWorkerEndpoint(endpoint)) return false;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(`${endpoint.replace(/\/+$/, '')}/health`, {
+      signal: controller.signal,
+      headers: { 'Bypass-Tunnel-Reminder': 'true' },
+    });
+    clearTimeout(timer);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureKaggleWorkerForUser(userId: string, tenantId?: string | null): Promise<KaggleEnsureResult> {
+  const hydrated = await svc.getHydratedInfrastructureForUser(userId, tenantId ?? undefined);
+  const routing = asRecord(hydrated.gpu_routing);
+  const customGpu = asRecord(routing.custom_gpu);
+  if (customGpu.enabled && customGpu.worker_url) {
+    return { status: 'custom_gpu', endpoint: String(customGpu.worker_url), deployed: false, reason: 'Custom GPU worker is configured.' };
+  }
+
+  const primary = asRecord(routing.kaggle_primary);
+  const username = String(primary.username || '').trim();
+  const apiKey = String(primary.api_key || '').trim();
+  if (!username || !apiKey) {
+    throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: 'Kaggle credentials are not configured.' });
+  }
+
+  const sessionName = 'kaggle_story_engine';
+  const { data: session, error } = await animeSupabase
+    .from('kaggle_sessions')
+    .select('session_name,status,api_endpoint,updated_at')
+    .eq('user_id', userId)
+    .eq('session_name', sessionName)
+    .maybeSingle();
+  if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Kaggle session lookup failed.', cause: error });
+
+  const endpoint = typeof session?.api_endpoint === 'string' ? session.api_endpoint : '';
+  if (endpoint && await workerIsHealthy(endpoint)) {
+    return { status: 'healthy', endpoint, deployed: false, reason: 'Kaggle worker is healthy.' };
+  }
+
+  const updatedAt = session?.updated_at ? new Date(session.updated_at).getTime() : 0;
+  if (session?.status === 'starting' && Number.isFinite(updatedAt) && Date.now() - updatedAt < 10 * 60 * 1000) {
+    return { status: 'starting', endpoint: null, deployed: false, reason: 'Kaggle worker is already starting.' };
+  }
+
+  const datasetSlug = String(asRecord(hydrated.kaggle ?? hydrated.own_gpu).models_dataset_slug || 'bnaisolution/anime-engine-models-v1');
+  const deploy = await pushKaggleKernel(
+    username,
+    apiKey,
+    String(primary.notebook_slug || 'anime-gpu-worker-primary'),
+    datasetSlug,
+    sessionName,
+    userId,
+    tenantId ?? null
+  );
+  if (!deploy.ok) {
+    const message = typeof (deploy.data as any)?.message === 'string' ? (deploy.data as any).message : `Kaggle push failed with HTTP ${deploy.status}.`;
+    throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message });
+  }
+
+  const { error: sessionError } = await animeSupabase.from('kaggle_sessions').upsert({
+    user_id: userId,
+    tenant_id: tenantId ?? null,
+    session_name: sessionName,
+    status: 'starting',
+    api_endpoint: null,
+    gpu_id: 'T4x2',
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,session_name' });
+  if (sessionError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Kaggle session could not be recorded.', cause: sessionError });
+
+  return { status: 'starting', endpoint: null, deployed: true, reason: 'Kaggle kernel pushed; waiting for the tunnel.' };
 }
 
 function normalizePromptCategory(value: unknown): string {
@@ -592,10 +804,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     const items = await svc.list(userId);
     const gpuRow = items.find((i: any) => i.name === 'gpu_routing_master' || i.provider_type === 'own_gpu' || i.provider_type === 'kaggle');
     return {
-      data: (gpuRow?.config_masked as Record<string, unknown>) ?? {
-        preferred_mode: 'KAGGLE_AUTO',
-        models_dataset_slug: 'bnaisolution/anime-engine-models-v1',
-      },
+      data: gpuPresentation(items, gpuRow),
       meta: { request_id: request.anime?.request_id },
     };
   });
@@ -603,25 +812,70 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
   app.post('/v1/anime/infrastructure/gpu', { schema: { body: GpuSetupBody }, preHandler: [app.authenticate] }, async (request: any) => {
     const userId = authCheck(request);
     const body = request.body;
+    const requestId = request.anime?.request_id;
     const datasetSlug = body.models_dataset_slug || 'bnaisolution/anime-engine-models-v1';
+    const tenantId = body.tenant_id ? (await resolveTenant(userId, body.tenant_id)).tenant.id : null;
 
-    const configPayload: Record<string, unknown> = {
-      preferred_mode: body.preferred_mode,
-      models_dataset_slug: datasetSlug,
-      gpu_routing: {
-        preferred_mode: body.preferred_mode,
-        custom_gpu: body.custom_gpu ?? { enabled: false, worker_url: '' },
-        kaggle_primary: body.kaggle_primary ?? { username: '', api_key: '' },
-        kaggle_secondary: body.kaggle_secondary ?? { username: '', api_key: '' },
-      },
-      telegram_storage: body.telegram_storage ?? {
+    const existingHydrated = await svc.getHydratedInfrastructureForUser(userId);
+    const existingTop = asRecord(existingHydrated.kaggle ?? existingHydrated.own_gpu);
+    const existingRouting = asRecord(existingHydrated.gpu_routing);
+    const existingTelegram = asRecord(existingHydrated.telegram_storage ?? existingTop.telegram_storage);
+    const existingGithub = asRecord(existingHydrated.github_worker ?? existingTop.github_worker);
+    const existingCpuWorker = asRecord(existingTop.cpu_worker);
+
+    const legacyKaggle = (body.kaggle_username || body.kaggle_key)
+      ? { username: body.kaggle_username ?? '', api_key: body.kaggle_key ?? '' }
+      : undefined;
+    const primaryInput = body.kaggle_primary ?? legacyKaggle;
+    const nextPrimary = mergeConfig(asRecord(existingRouting.kaggle_primary), primaryInput, ['api_key']);
+    const nextSecondary = mergeConfig(asRecord(existingRouting.kaggle_secondary), body.kaggle_secondary, ['api_key']);
+    const nextCustomGpu = mergeConfig(asRecord(existingRouting.custom_gpu), body.custom_gpu, ['api_key']);
+
+    const telegramInput = body.telegram_storage ?? ((body.telegram_bot_token || body.telegram_chat_id)
+      ? { bot_token: body.telegram_bot_token ?? '', storage_chat_id: body.telegram_chat_id ?? '' }
+      : undefined);
+    let nextTelegram = mergeConfig(existingTelegram, telegramInput, ['bot_token']);
+    if (!nextTelegram.bot_token && !nextTelegram.storage_chat_id) {
+      nextTelegram = {
         bot_token: process.env.TELEGRAM_BOT_TOKEN || '',
         storage_chat_id: process.env.TELEGRAM_STORAGE_CHAT_ID || '',
         stream_bridge_base_url: 'https://api.bnai.dpdns.org/v1/media/telegram',
+      };
+    }
+
+    const githubInput = body.github_worker ?? ((body.github_worker_url || body.github_token)
+      ? { worker_url: body.github_worker_url ?? '', token: body.github_token ?? '' }
+      : undefined);
+    const nextGithub = mergeConfig(existingGithub, githubInput, ['token']);
+    const nextCpuWorker = mergeConfig(existingCpuWorker, body.cpu_worker, ['token']);
+
+    const primaryLlmProvider = body.primary_llm_provider || existingTop.primary_llm_provider || 'groq';
+    const fallbackLlmProvider = body.fallback_llm_provider || existingTop.fallback_llm_provider || 'gemini';
+    const visionProvider = body.vision_provider || existingTop.vision_provider || 'gemini';
+
+    const configPayload: Record<string, unknown> = {
+      ...existingTop,
+      preferred_mode: body.preferred_mode,
+      models_dataset_slug: datasetSlug,
+      primary_llm_provider: primaryLlmProvider,
+      fallback_llm_provider: fallbackLlmProvider,
+      vision_provider: visionProvider,
+      primary_llm_model: body.primary_llm_model ?? existingTop.primary_llm_model ?? '',
+      fallback_llm_model: body.fallback_llm_model ?? existingTop.fallback_llm_model ?? '',
+      vision_model: body.vision_model ?? existingTop.vision_model ?? '',
+      gpu_choice: body.gpu_choice ?? existingTop.gpu_choice ?? (body.preferred_mode === 'CUSTOM_GPU' ? 'CUSTOM_GPU' : 'KAGGLE_PRIMARY'),
+      cpu_choice: body.cpu_choice ?? existingTop.cpu_choice ?? 'GITHUB_CPU',
+      storage_choice: body.storage_choice ?? existingTop.storage_choice ?? 'TELEGRAM',
+      cpu_worker: Object.keys(nextCpuWorker).length > 0 ? nextCpuWorker : undefined,
+      gpu_routing: {
+        ...existingRouting,
+        preferred_mode: body.preferred_mode,
+        custom_gpu: Object.keys(nextCustomGpu).length > 0 ? nextCustomGpu : { enabled: false, worker_url: '' },
+        kaggle_primary: nextPrimary,
+        kaggle_secondary: nextSecondary,
       },
-      github_worker: {
-        worker_url: body.github_worker_url || process.env.GITHUB_WORKER_URL || '',
-      },
+      telegram_storage: nextTelegram,
+      github_worker: Object.keys(nextGithub).length > 0 ? nextGithub : { worker_url: process.env.GITHUB_WORKER_URL || '' },
     };
 
     const existingList = await svc.list(userId);
@@ -632,7 +886,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
         config: configPayload,
         status: 'active',
         is_default: true,
-        request_id: request.anime?.request_id,
+        request_id: requestId,
       });
     } else {
       await svc.create(userId, {
@@ -640,38 +894,61 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
         provider_type: body.preferred_mode === 'CUSTOM_GPU' ? 'own_gpu' : 'kaggle',
         config: configPayload,
         is_default: true,
-        request_id: request.anime?.request_id,
+        request_id: requestId,
       });
     }
 
+    if (typeof body.groq_api_key === 'string' && body.groq_api_key.trim()) {
+      await upsertProviderConfig(userId, 'groq', 'groq_default', body.groq_api_key.trim(), requestId);
+    }
+    if (typeof body.gemini_api_key === 'string' && body.gemini_api_key.trim()) {
+      await upsertProviderConfig(userId, 'gemini', 'gemini_default', body.gemini_api_key.trim(), requestId);
+    }
+
     const kaggleDeployResult: Record<string, unknown> = {};
-    if (body.auto_deploy_kaggle && body.kaggle_primary?.username && body.kaggle_primary?.api_key) {
+    if (body.auto_deploy_kaggle && nextPrimary.username && nextPrimary.api_key) {
       kaggleDeployResult.primary = await pushKaggleKernel(
-        body.kaggle_primary.username,
-        body.kaggle_primary.api_key,
-        body.kaggle_primary.notebook_slug || 'anime-gpu-worker-primary',
+        String(nextPrimary.username),
+        String(nextPrimary.api_key),
+        nextPrimary.notebook_slug || 'anime-gpu-worker-primary',
         datasetSlug,
-        'kaggle_story_engine'
+        'kaggle_story_engine',
+        userId,
+        tenantId
       );
     }
-    if (body.auto_deploy_kaggle && body.kaggle_secondary?.username && body.kaggle_secondary?.api_key) {
+    if (body.auto_deploy_kaggle && nextSecondary.username && nextSecondary.api_key) {
       kaggleDeployResult.secondary = await pushKaggleKernel(
-        body.kaggle_secondary.username,
-        body.kaggle_secondary.api_key,
-        body.kaggle_secondary.notebook_slug || 'anime-gpu-worker-secondary',
+        String(nextSecondary.username),
+        String(nextSecondary.api_key),
+        nextSecondary.notebook_slug || 'anime-gpu-worker-secondary',
         datasetSlug,
-        'kaggle_secondary_engine'
+        'kaggle_secondary_engine',
+        userId,
+        tenantId
       );
     }
 
+    const refreshedList = await svc.list(userId);
+    const refreshedMaster = refreshedList.find((item) => item.name === 'gpu_routing_master');
     return {
       data: {
         ok: true,
         preferred_mode: body.preferred_mode,
         kaggle_deploy: kaggleDeployResult,
+        config: gpuPresentation(refreshedList, refreshedMaster),
       },
-      meta: { request_id: request.anime?.request_id },
+      meta: { request_id: requestId },
     };
+  });
+
+  app.post('/v1/anime/infrastructure/gpu/ensure', { schema: { body: EnsureGpuBody }, preHandler: [app.authenticate] }, async (request: any) => {
+    const userId = authCheck(request);
+    const tenantId = request.body?.tenant_id
+      ? (await resolveTenant(userId, request.body.tenant_id)).tenant.id
+      : null;
+    const data = await ensureKaggleWorkerForUser(userId, tenantId);
+    return { data, meta: { request_id: request.anime?.request_id } };
   });
 
   app.get('/v1/anime/prompts/library/meta', { preHandler: [app.authenticate] }, async (request: any) => {

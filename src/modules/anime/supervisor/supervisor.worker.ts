@@ -5,7 +5,7 @@ import { reconcileCommand } from './supervisor.service';
 const MAX_ATTEMPTS = 5;
 export class SupervisorWorker {
   private t1: any = null; private t2: any = null; private busy = false;
-  public start(poll = 2500, drift = 60000): void { if (!this.t1) { this.t1 = setInterval(() => void this.processReconcileOutbox(), poll); void this.processReconcileOutbox(); } if (!this.t2) { this.t2 = setInterval(() => void this.runDriftScan(), drift); } }
+  public start(poll = 10000, drift = 60000): void { if (!this.t1) { this.t1 = setInterval(() => void this.processReconcileOutbox(), poll); void this.processReconcileOutbox(); } if (!this.t2) { this.t2 = setInterval(() => void this.runDriftScan(), drift); } }
   public stop(): void { if (this.t1) clearInterval(this.t1); if (this.t2) clearInterval(this.t2); }
   public async processReconcileOutbox(): Promise<void> {
     if (this.busy) return; this.busy = true;

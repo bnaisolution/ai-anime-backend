@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const H = require('../helpers/env');
 const { installFakeSupabase } = require('../helpers/fake-supabase');
 
-const { recoverStaleProcessing } = H.dist('modules/anime/outbox/outbox.repo.js');
+const { recoverStaleProcessing, markDispatched, markFailed, markDeadLetter } = H.dist('modules/anime/outbox/outbox.repo.js');
 
 test('recoverStaleProcessing requeues stale processing leases', async () => {
   const { state } = installFakeSupabase(async (call) => {
@@ -40,4 +40,16 @@ test('recoverStaleProcessing falls back to created_at when the lease column is a
   const updates = state.calls.filter((call) => call.table === 'outbox_events' && call.action === 'update');
   assert.equal(updates.length, 2);
   assert.ok(updates[1].filters.some((filter) => filter.op === 'lt' && filter.col === 'created_at'));
+});
+
+test('outbox state transitions fail closed when the update is rejected', async () => {
+  installFakeSupabase(async (call) => {
+    if (call.table === 'outbox_events' && call.action === 'update') {
+      return { data: null, error: { code: '42703', message: 'column processing_started_at does not exist' } };
+    }
+    return { data: null, error: null };
+  });
+  await assert.rejects(() => markDispatched('event-1'), /mark-dispatched failed/);
+  await assert.rejects(() => markFailed('event-1', 1, new Date().toISOString(), 'boom'), /mark-failed failed/);
+  await assert.rejects(() => markDeadLetter('event-1', 5, 'boom'), /dead-letter update failed/);
 });

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { animeSupabase } from '../db/anime.supabase';
 import { getHydratedInfrastructureForUser } from '../infrastructure/infrastructure.service';
-import { mintWorkerJobToken, type WorkerJobScope } from '../workers/workerToken';
+import { mintWorkerJobToken, verifyWorkerJobToken, type WorkerJobScope } from '../workers/workerToken';
 import { verifyWorkflowGatewayRequest } from './workflowGateway.auth';
 import { resolveCommandBinding } from './workflowGateway.routes';
 
@@ -69,7 +70,54 @@ async function proxyJson(reply: any, response: Response): Promise<void> {
   reply.send(text);
 }
 
+const GPU_SESSION_NAMES = new Set(['kaggle_story_engine', 'kaggle_secondary_engine']);
+const TUNNEL_HOST_SUFFIXES = ['.trycloudflare.com', '.loca.lt'];
+
+function bearerToken(request: any): string {
+  const header = String(request?.headers?.authorization || '');
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) invalid('Worker token is required.');
+  return match[1].trim();
+}
+
+function validateTunnelEndpoint(value: unknown): string {
+  let url: URL;
+  try { url = new URL(String(value || '')); } catch { invalid('Tunnel endpoint must be a valid URL.'); }
+  const host = url.hostname.toLowerCase();
+  if (
+    url.protocol !== 'https:'
+    || url.username
+    || url.password
+    || host.length > 253
+    || !TUNNEL_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix))
+  ) {
+    invalid('Tunnel endpoint must be a public HTTPS URL.');
+  }
+  return url.toString().replace(/\/+$/, '');
+}
+
 export async function registerAnimeWorkflowWorkerRoutes(app: FastifyInstance): Promise<void> {
+  app.post('/v1/anime/internal/worker/session', async (request: any) => {
+    const claims = verifyWorkerJobToken(bearerToken(request), 'gpu_session');
+    const body = request.body as any;
+    if (!body || typeof body !== 'object') invalid('Session body is required.');
+    const sessionName = String(body.session_name || '').trim();
+    if (!GPU_SESSION_NAMES.has(sessionName)) invalid('Session name is not allowed.');
+    const endpoint = validateTunnelEndpoint(body.api_endpoint);
+    const { error } = await animeSupabase.from('kaggle_sessions').upsert({
+      user_id: claims.user_id,
+      tenant_id: claims.tenant_id ?? null,
+      session_name: sessionName,
+      status: 'active',
+      api_endpoint: endpoint,
+      gpu_id: typeof body.gpu_id === 'string' ? body.gpu_id.slice(0, 40) : null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,session_name' });
+    if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Session registration failed.', cause: error });
+    return { data: { ok: true, session_name: sessionName } };
+  });
+
+
   app.post('/v1/anime/internal/workflow/worker', async (request: any, reply: any) => {
     const body = request.body as any;
     if (!body || typeof body !== 'object') invalid('Worker request body is required.');

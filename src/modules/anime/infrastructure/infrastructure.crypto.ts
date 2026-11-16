@@ -66,16 +66,22 @@ export function getCipherVersion(ciphertext: string): number {
   return ciphertext.startsWith(V2_PREFIX) ? 2 : 1;
 }
 
+function maskValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(maskValue);
+  if (value && typeof value === 'object') return maskConfig(value as Record<string, unknown>);
+  return value;
+}
+
 export function maskConfig(cfg: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  const sensitive = /(token|key|secret|password|api_key|refresh)/i;
+  const sensitive = /(token|key|secret|password|api_key|refresh|credential)/i;
   for (const [k, v] of Object.entries(cfg)) {
     if (sensitive.test(k) && typeof v === 'string' && v.length > 8) {
       out[k] = v.slice(0, 4) + '****' + v.slice(-4);
     } else if (sensitive.test(k) && typeof v === 'string') {
       out[k] = '****';
     } else {
-      out[k] = v;
+      out[k] = maskValue(v);
     }
   }
   return out;

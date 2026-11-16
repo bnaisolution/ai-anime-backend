@@ -18,13 +18,11 @@ import { startBrainWorker } from './intelligence/brain.worker';
 import { startIncidentWorker } from './intelligence/incident.worker';
 import { registerAnimeMediaRoutes } from './media/media.routes';
 import { animeRequestIdHook } from './middleware/request-id';
-import { outboxDispatcher } from './outbox/outbox.dispatcher';
 import { registerAnimeAnalyticsRoutes } from './reads/analytics.routes';
 import { registerAnimeCreativeRoutes } from './reads/creative.routes';
 import { registerAnimeLoreRoutes } from './reads/lore.routes';
 import { registerAnimeReadsRoutes } from './reads/reads.routes';
 import { registerAnimeHealthRoutes } from './routes/health.routes';
-import { supervisorWorker } from './supervisor/supervisor.worker';
 import { registerAnimeDevicesRoutes } from './system/devices.routes';
 import { registerAnimeWorkflowGatewayRoutes } from './internal/workflowGateway.routes';
 import { registerAnimeWorkflowCallbackRoutes } from './internal/workflowCallback.routes';
@@ -32,6 +30,7 @@ import { registerAnimeWorkflowWorkerRoutes } from './internal/workflowWorker.rou
 import { registerAnimeObservabilityRoutes } from './observability/observability.routes';
 import { registerAnimeStorageRoutes } from './storage/storage.routes';
 import { registerAnimeAdminWorkflowRoutes } from './admin/workflows.routes';
+import { startRole } from './process-role';
 
 export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
   // === BATCH6_GLOBAL_PREVALIDATION_HOOK (SIDE-EFFECT-FREE STUDIO CONTEXT & DUPLICATE GUARD) ===
@@ -140,8 +139,7 @@ export async function registerAnimeModule(app: FastifyInstance): Promise<void> {
   app.addHook('onRequest', animeRequestIdHook);
   app.setErrorHandler(animeErrorHandler);
   await registerAnimeRoutes(app);
-  outboxDispatcher.start(2000);
-  supervisorWorker.start(3000, 60000);
+  startRole();
   startBrainWorker();
   startIncidentWorker();
 }

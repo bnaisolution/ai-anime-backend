@@ -36,6 +36,13 @@ test('database gateway keeps global catalogs read-only', () => {
   assert.throws(() => buildScopedDbRequest({ path: '/rest/v1/voice_catalog', method: 'POST', body: {}, project_id: PROJECT_ID, user_id: USER_ID }), /read-only/);
 });
 
+test('database gateway scopes Kaggle sessions to the command user', () => {
+  const scoped = buildScopedDbRequest({ path: '/rest/v1/kaggle_sessions?select=*', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID });
+  assert.match(scoped.path, /user_id=eq\.user-1/);
+  assert.throws(() => buildScopedDbRequest({ path: '/rest/v1/kaggle_sessions?user_id=eq.other', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID }), /does not match/);
+  assert.throws(() => buildScopedDbRequest({ path: '/rest/v1/kaggle_sessions?or=(user_id.eq.other,session_name.eq.x)', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID }), /Compound/);
+});
+
 test('database gateway injects project and audit user into writes', () => {
   const scoped = buildScopedDbRequest({ path: '/rest/v1/audit_log', method: 'POST', body: { action: 'X' }, project_id: PROJECT_ID, user_id: USER_ID });
   assert.equal(scoped.body.project_id, PROJECT_ID);
@@ -62,6 +69,11 @@ test('provider gateway injects backend keys and rejects unsafe paths', () => {
   assert.match(gemini.url, /key=gem-key/);
   assert.throws(() => buildProviderRequest({ provider: 'groq', path: '/openai/v1/../../secrets', body: {}, env: { GROQ_API_KEY: 'g' } }), /not allowed/);
   assert.throws(() => buildProviderRequest({ provider: 'unknown', path: '/v1/x', body: {}, env: {} }), /Unsupported/);
+});
+
+test('provider gateway prefers a user BYOK key over the platform env key', () => {
+  const request = buildProviderRequest({ provider: 'groq', path: '/openai/v1/chat/completions', body: { model: 'x' }, env: { GROQ_API_KEY: 'platform-key' }, apiKey: 'user-key' });
+  assert.equal(request.headers.Authorization, 'Bearer user-key');
 });
 
 test('provider gateway fails closed without a configured key', () => {

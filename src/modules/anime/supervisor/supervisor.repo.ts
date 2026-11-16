@@ -1,11 +1,11 @@
 import { animeSupabase } from '../db/anime.supabase';
 export async function readCommandState(projectId: string, commandId: string): Promise<any> {
-  const { data: cmd } = await animeSupabase.from('api_commands').select('*').eq('project_id', projectId).eq('id', commandId).maybeSingle();
+  const { data: cmd } = await animeSupabase.from('api_commands').select('status,created_at,user_id,payload').eq('project_id', projectId).eq('id', commandId).maybeSingle();
   if (!cmd) return { command: null, episode_state: null, pending_actions: [] };
   const ep = cmd.payload?.episode_no || cmd.payload?.episode_number;
   const season = cmd.payload?.season_no || cmd.payload?.season_number || 1;
-  const [st, pa] = await Promise.all([ ep ? animeSupabase.from('episode_states').select('*').eq('project_id', projectId).eq('season_no', season).eq('episode_no', ep).maybeSingle() : Promise.resolve({ data: null }), animeSupabase.from('pending_actions').select('*').eq('project_id', projectId).in('status', ['PENDING', 'RUNNING', 'RETRY_SCHEDULED', 'pending', 'running', 'retry_scheduled']) ]);
-  return { command: cmd, episode_state: st.data, pending_actions: (pa.data ?? []).filter((p: any) => p.job_id === commandId) };
+  const [st, pa] = await Promise.all([ ep ? animeSupabase.from('episode_states').select('current_state,episode_no').eq('project_id', projectId).eq('season_no', season).eq('episode_no', ep).maybeSingle() : Promise.resolve({ data: null }), animeSupabase.from('pending_actions').select('job_id').eq('project_id', projectId).eq('job_id', commandId).in('status', ['PENDING', 'RUNNING', 'RETRY_SCHEDULED', 'pending', 'running', 'retry_scheduled']) ]);
+  return { command: cmd, episode_state: st.data, pending_actions: pa.data ?? [] };
 }
 export async function findDriftedCommands(staleMinutes = 10, limit = 25): Promise<any[]> {
   const cutoff = new Date(Date.now() - staleMinutes * 60000).toISOString();

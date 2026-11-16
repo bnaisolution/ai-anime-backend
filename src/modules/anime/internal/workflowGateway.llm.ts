@@ -12,7 +12,7 @@ export interface ProviderRequest {
   headers: Record<string, string>;
 }
 
-export function buildProviderRequest(input: { provider: string; path: string; body: unknown; env?: NodeJS.ProcessEnv }): ProviderRequest {
+export function buildProviderRequest(input: { provider: string; path: string; body: unknown; env?: NodeJS.ProcessEnv; apiKey?: string | null }): ProviderRequest {
   const provider = String(input.provider || '').toLowerCase() as ProviderName;
   const config = PROVIDERS[provider];
   if (!config) throw new AnimeError({ code: AnimeErrorCode.AUTH_INVALID, message: 'Unsupported LLM provider.' });
@@ -24,7 +24,7 @@ export function buildProviderRequest(input: { provider: string; path: string; bo
     throw new AnimeError({ code: AnimeErrorCode.AUTH_INVALID, message: 'LLM request body must be an object.' });
   }
   const env = input.env ?? process.env;
-  const apiKey = String(env[config.keyEnv] || '').trim();
+  const apiKey = String(input.apiKey || env[config.keyEnv] || '').trim();
   if (!apiKey) throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: `Provider ${provider} is not configured.`, retryable: false });
   const url = new URL(`${config.base}${path}`);
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };

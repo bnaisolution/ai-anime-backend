@@ -2,7 +2,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { animeEnv } from '../config/anime.env';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 
-export type WorkerJobScope = 'tts' | 'ffmpeg' | 'media' | 'health';
+export type WorkerJobScope = 'tts' | 'ffmpeg' | 'media' | 'health' | 'gpu_session';
 
 export interface WorkerJobTokenInput {
   job_id: string;
@@ -31,6 +31,7 @@ const ISSUER = 'anime-backend';
 const AUDIENCE = 'anime-cpu-worker';
 const DEFAULT_TTL_SECONDS = 300;
 const MAX_TTL_SECONDS = 900;
+const MAX_GPU_SESSION_TTL_SECONDS = 21600;
 const CLOCK_SKEW_SECONDS = 60;
 
 function tokenSecret(): string {
@@ -48,7 +49,8 @@ function sign(payload: string): string {
 }
 
 export function mintWorkerJobToken(input: WorkerJobTokenInput, nowSeconds = Math.floor(Date.now() / 1000)): string {
-  const ttl = Math.min(Math.max(input.ttl_seconds ?? DEFAULT_TTL_SECONDS, 1), MAX_TTL_SECONDS);
+  const maxTtl = input.scope.includes('gpu_session') ? MAX_GPU_SESSION_TTL_SECONDS : MAX_TTL_SECONDS;
+  const ttl = Math.min(Math.max(input.ttl_seconds ?? DEFAULT_TTL_SECONDS, 1), maxTtl);
   const claims: WorkerJobTokenClaims = {
     iss: ISSUER,
     aud: AUDIENCE,

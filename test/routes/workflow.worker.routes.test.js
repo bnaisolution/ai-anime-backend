@@ -38,6 +38,10 @@ function handler(call) {
   if (call.table === 'user_infrastructure') {
     return { data: global.__workerInfraRows ?? [infraRow()], error: null };
   }
+  if (call.table === 'kaggle_sessions' && call.action === 'upsert') {
+    global.__lastSessionUpsert = call;
+    return { data: null, error: null };
+  }
   return { data: null, error: null };
 }
 
@@ -167,4 +171,74 @@ test('worker gateway rejects insecure or link-local worker URLs', async () => {
     await app.close();
   }
   global.__workerInfraRows = undefined;
+});
+
+test('gpu worker session registration is scoped to the worker token user', async () => {
+  const app = await buildWorkerApp();
+  const { mintWorkerJobToken } = H.dist('modules/anime/workers/workerToken.js');
+  global.__lastSessionUpsert = null;
+  const token = mintWorkerJobToken({
+    job_id: 'gpu-session:kaggle_story_engine:user-1',
+    project_id: 'gpu-session',
+    tenant_id: 'tenant-1',
+    user_id: 'user-1',
+    scope: ['gpu_session'],
+    ttl_seconds: 21600,
+  });
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/anime/internal/worker/session',
+    headers: { Authorization: `Bearer ${token}` },
+    payload: { session_name: 'kaggle_story_engine', api_endpoint: 'https://abc.trycloudflare.com/', gpu_id: 'T4x2' },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), { data: { ok: true, session_name: 'kaggle_story_engine' } });
+  assert.equal(global.__lastSessionUpsert.payload.user_id, 'user-1');
+  assert.equal(global.__lastSessionUpsert.payload.tenant_id, 'tenant-1');
+  assert.equal(global.__lastSessionUpsert.payload.api_endpoint, 'https://abc.trycloudflare.com');
+  assert.equal(global.__lastSessionUpsert.upsertOptions.onConflict, 'user_id,session_name');
+  await app.close();
+});
+
+test('gpu worker session registration rejects command tokens and unsafe endpoints', async () => {
+  const app = await buildWorkerApp();
+  const { mintWorkerJobToken } = H.dist('modules/anime/workers/workerToken.js');
+  const commandToken = mintWorkerJobToken({
+    job_id: COMMAND_ID,
+    project_id: PROJECT_ID,
+    user_id: 'user-1',
+    scope: ['tts'],
+  });
+  const wrongScope = await app.inject({
+    method: 'POST',
+    url: '/v1/anime/internal/worker/session',
+    headers: { Authorization: `Bearer ${commandToken}` },
+    payload: { session_name: 'kaggle_story_engine', api_endpoint: 'https://abc.trycloudflare.com' },
+  });
+  assert.equal(wrongScope.statusCode, 401);
+  const sessionToken = mintWorkerJobToken({
+    job_id: 'gpu-session', project_id: 'gpu-session', user_id: 'user-1', scope: ['gpu_session'],
+  });
+  const insecure = await app.inject({
+    method: 'POST',
+    url: '/v1/anime/internal/worker/session',
+    headers: { Authorization: `Bearer ${sessionToken}` },
+    payload: { session_name: 'kaggle_story_engine', api_endpoint: 'http://abc.trycloudflare.com' },
+  });
+  assert.equal(insecure.statusCode, 401);
+  const untrusted = await app.inject({
+    method: 'POST',
+    url: '/v1/anime/internal/worker/session',
+    headers: { Authorization: `Bearer ${sessionToken}` },
+    payload: { session_name: 'kaggle_story_engine', api_endpoint: 'https://evil.example.com' },
+  });
+  assert.equal(untrusted.statusCode, 401);
+  const badName = await app.inject({
+    method: 'POST',
+    url: '/v1/anime/internal/worker/session',
+    headers: { Authorization: `Bearer ${sessionToken}` },
+    payload: { session_name: 'attacker-controlled', api_endpoint: 'https://abc.trycloudflare.com' },
+  });
+  assert.equal(badName.statusCode, 401);
+  await app.close();
 });
