@@ -121,6 +121,79 @@ async function resolveEpisodePromptOverride(
   return prompt;
 }
 
+interface SeasonPlanContext {
+  readonly season_no: number;
+  readonly title: string;
+  readonly status: string;
+  readonly arc: string;
+  readonly goals: string;
+  readonly blueprint: string;
+  readonly episode_start: number;
+  readonly episode_end: number;
+  readonly genres: string[];
+  readonly locked: boolean;
+  readonly prompt_overrides: Record<string, string>;
+  readonly source: 'STORY_BIBLE';
+}
+
+function seasonPlanFromBible(
+  bible: Record<string, unknown> | null | undefined,
+  seasonNo: number
+): SeasonPlanContext | null {
+  if (!bible || typeof bible !== 'object') return null;
+  const rawSeasons = (bible as Record<string, unknown>).seasons;
+  if (!Array.isArray(rawSeasons)) return null;
+  const season = rawSeasons.find((entry: any) => Number(entry?.season_no) === seasonNo);
+  if (!season || typeof season !== 'object') return null;
+  const rawGenres = Array.isArray((season as any).genres) ? (season as any).genres : [];
+  const rawOverrides = (season as any).prompt_overrides;
+  const overrides: Record<string, string> = {};
+  if (rawOverrides && typeof rawOverrides === 'object') {
+    for (const [key, value] of Object.entries(rawOverrides)) {
+      if (typeof value === 'string' && value.trim()) overrides[key] = value.trim();
+    }
+  }
+  const episodeStart = Number((season as any).episode_start);
+  const episodeEnd = Number((season as any).episode_end);
+  return {
+    season_no: seasonNo,
+    title: String((season as any).title ?? ''),
+    status: String((season as any).status ?? 'PLANNED'),
+    arc: String((season as any).arc ?? ''),
+    goals: String((season as any).goals ?? ''),
+    blueprint: String((season as any).blueprint ?? ''),
+    episode_start: Number.isFinite(episodeStart) && episodeStart > 0 ? Math.round(episodeStart) : 1,
+    episode_end: Number.isFinite(episodeEnd) && episodeEnd > 0 ? Math.round(episodeEnd) : 1,
+    genres: rawGenres
+      .map((genre: unknown) => String(genre ?? '').trim())
+      .filter((genre: string) => genre.length > 0),
+    locked: (season as any).locked === true || String((season as any).locked ?? '').toLowerCase() === 'true',
+    prompt_overrides: overrides,
+    source: 'STORY_BIBLE',
+  };
+}
+
+async function resolveOwnedPromptById(
+  userId: string,
+  projectId: string,
+  promptId: string,
+  expectedCategory?: string
+): Promise<{ id: string; title: string; prompt_text: string; prompt_category?: string; version?: number } | null> {
+  if (!promptId) return null;
+  const { data } = await animeSupabase
+    .from('user_system_prompts')
+    .select('id, title, prompt_text, prompt_category, version')
+    .eq('id', promptId)
+    .eq('user_id', userId)
+    .eq('is_archived', false)
+    .or(`project_id.eq.${projectId},project_id.is.null`)
+    .limit(1);
+  const prompt = Array.isArray(data) ? data[0] : null;
+  if (!prompt) return null;
+  if (expectedCategory && String(prompt.prompt_category || '').toUpperCase() !== expectedCategory) return null;
+  return prompt;
+}
+
 async function resolveDynamicPromptAndInfra(
   userId: string,
   projectId: string,
@@ -138,6 +211,9 @@ async function resolveDynamicPromptAndInfra(
   let systemPromptCategory: PromptCategory | null = 'BIBLE';
   let systemPromptVersion = 1;
   let episodePromptOverride = false;
+  let seasonContext: SeasonPlanContext | null = null;
+  let seasonPromptOverride = false;
+  let imagePromptSeasonOverride = false;
   let seriesConfig: Record<string, number> = {
     total_seasons: 1,
     episodes_per_season: 12,
@@ -188,13 +264,14 @@ async function resolveDynamicPromptAndInfra(
         target_episode_count: bounded(bible.target_episode_count, totalSeasons * episodesPerSeason, 1, 50000),
       };
 
+      seasonContext = seasonPlanFromBible(projectRow.story_bible, seasonNo);
       const creativeRows = await loadCreativePromptRows(userId, projectId);
       creativeContext = buildProjectCreativeContext({
         id: projectId,
         genre: projectRow.genre,
         visual_medium: projectRow.visual_medium,
         story_bible: projectRow.story_bible,
-      }, creativeRows);
+      }, creativeRows, { extraGenres: seasonContext?.genres ?? [] });
     }
 
     if (projectRow?.active_system_prompt_id) {
@@ -224,6 +301,21 @@ async function resolveDynamicPromptAndInfra(
         systemPromptVersion = Number(episodePrompt.version || 1);
         systemPromptTitle = episodePrompt.title || systemPromptTitle;
         customSystemPrompt = episodePrompt.prompt_text || customSystemPrompt;
+      } else if (seasonContext?.prompt_overrides.episode) {
+        const seasonEpisodePrompt = await resolveOwnedPromptById(
+          userId,
+          projectId,
+          seasonContext.prompt_overrides.episode,
+          'EPISODE'
+        );
+        if (seasonEpisodePrompt) {
+          seasonPromptOverride = true;
+          systemPromptId = seasonEpisodePrompt.id;
+          systemPromptCategory = 'EPISODE';
+          systemPromptVersion = Number(seasonEpisodePrompt.version || 1);
+          systemPromptTitle = seasonEpisodePrompt.title || systemPromptTitle;
+          customSystemPrompt = seasonEpisodePrompt.prompt_text || customSystemPrompt;
+        }
       }
     }
 
@@ -243,6 +335,22 @@ async function resolveDynamicPromptAndInfra(
       imageSystemPromptTitle = imagePrompt.title || imageSystemPromptTitle;
       imageSystemPromptId = imagePrompt.id || null;
       imageSystemPromptVersion = Number(imagePrompt.version || 1);
+    }
+
+    if (seasonContext?.prompt_overrides.image) {
+      const seasonImagePrompt = await resolveOwnedPromptById(
+        userId,
+        projectId,
+        seasonContext.prompt_overrides.image,
+        'IMAGE'
+      );
+      if (seasonImagePrompt) {
+        imagePromptSeasonOverride = true;
+        imageSystemPrompt = seasonImagePrompt.prompt_text || imageSystemPrompt;
+        imageSystemPromptTitle = seasonImagePrompt.title || imageSystemPromptTitle;
+        imageSystemPromptId = seasonImagePrompt.id || null;
+        imageSystemPromptVersion = Number(seasonImagePrompt.version || 1);
+      }
     }
   } catch (_) {}
 
@@ -268,6 +376,9 @@ async function resolveDynamicPromptAndInfra(
     systemPromptCategory,
     systemPromptVersion,
     episodePromptOverride,
+    seasonContext,
+    seasonPromptOverride,
+    imagePromptSeasonOverride,
     seriesConfig,
   };
 }
@@ -360,6 +471,9 @@ export async function submitAnimeCommand(
     visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
     visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
     selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    season_no: seasonNo,
+    season_context: dynamicCtx.seasonContext,
+    season_prompt_override: dynamicCtx.seasonPromptOverride,
     genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
       key: prompt.key,
       title: prompt.title,
@@ -381,6 +495,7 @@ export async function submitAnimeCommand(
     visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
     visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
     visual_medium_prompt: dynamicCtx.mediumPromptContext,
+    season_prompt_override: dynamicCtx.imagePromptSeasonOverride,
     prompt_text: resolvedImageSystemPrompt,
   };
 
@@ -395,6 +510,9 @@ export async function submitAnimeCommand(
     visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
     visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
     selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    season_no: seasonNo,
+    season_context: dynamicCtx.seasonContext,
+    season_prompt_override: dynamicCtx.seasonPromptOverride,
     genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
       key: prompt.key,
       title: prompt.title,
@@ -463,6 +581,8 @@ export async function submitAnimeCommand(
     requested_visual_medium: requestedVisualMedium,
     medium_conflict: mediumConflict,
     selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    season_context: dynamicCtx.seasonContext,
+    season_prompt_override: dynamicCtx.seasonPromptOverride,
     genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
       key: prompt.key,
       title: prompt.title,
@@ -512,6 +632,8 @@ export async function submitAnimeCommand(
     requested_visual_medium: requestedVisualMedium,
     medium_conflict: mediumConflict,
     selected_genres: dynamicCtx.creativeContext.selectedGenres,
+    season_context: dynamicCtx.seasonContext,
+    season_prompt_override: dynamicCtx.seasonPromptOverride,
     genre_prompts: dynamicCtx.creativeContext.genrePrompts.map((prompt) => ({
       key: prompt.key,
       title: prompt.title,

@@ -23,6 +23,10 @@ export interface ProjectCreativeRow {
   readonly story_bible?: Record<string, unknown> | null;
 }
 
+export interface ProjectCreativeOptions {
+  readonly extraGenres?: readonly string[];
+}
+
 export interface ProjectCreativeContext {
   readonly selectedGenres: string[];
   readonly genrePrompts: ResolvedCreativePrompt[];
@@ -36,6 +40,19 @@ export interface ProjectCreativeContext {
 
 function bibleValue(bible: Record<string, unknown> | null | undefined, key: string): unknown {
   return bible && typeof bible === 'object' ? bible[key] : undefined;
+}
+
+function uniqueGenres(genres: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const genre of genres) {
+    const title = canonicalGenreTitle(genre);
+    const key = normalizeKey(title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(title);
+  }
+  return result;
 }
 
 export async function loadCreativePromptRows(
@@ -56,13 +73,18 @@ export async function loadCreativePromptRows(
 
 export function buildProjectCreativeContext(
   project: ProjectCreativeRow,
-  promptRows: readonly Record<string, any>[]
+  promptRows: readonly Record<string, any>[],
+  options: ProjectCreativeOptions = {}
 ): ProjectCreativeContext {
   const bible = (project.story_bible && typeof project.story_bible === 'object')
     ? project.story_bible as Record<string, unknown>
     : {};
   const projectGenres = parseGenreList(project.genre);
-  const selectedGenres = projectGenres.length > 0 ? projectGenres : parseGenreList(bibleValue(bible, 'genre'));
+  const baseGenres = projectGenres.length > 0 ? projectGenres : parseGenreList(bibleValue(bible, 'genre'));
+  const selectedGenres = uniqueGenres([
+    ...baseGenres,
+    ...(options.extraGenres ?? []).flatMap((genre) => parseGenreList(genre)),
+  ]);
   const visualMedium = canonicalMediumKey(project.visual_medium ?? bibleValue(bible, 'visual_medium') ?? 'ANIME');
   const visualMediumTitle = canonicalMediumTitle(project.visual_medium ?? bibleValue(bible, 'visual_medium') ?? visualMedium);
   const genrePrompts = selectedGenres.map((genre) => resolveGenrePrompt(genre, promptRows));

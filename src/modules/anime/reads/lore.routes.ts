@@ -299,6 +299,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         genre,
         premise: body.premise || body.description || '',
         auto_approve: Boolean(body.auto_approve ?? false),
+        project_format: String(body.project_format || 'SERIES').trim().toUpperCase(),
         budget_ceiling: Number(body.budget_ceiling ?? 1000),
         ...(body.cover_image_url ? { cover_image_url: body.cover_image_url } : {}),
         target_episode_count: normalizeGenerationSetting(body.target_episode_count, 12, 1, 500),
@@ -419,6 +420,12 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         ...(body.episodes_per_season !== undefined
           ? { episodes_per_season: requireIntegerSetting(body.episodes_per_season, 'Episodes per season', 1, 500) }
           : {}),
+        ...(() => {
+          const format = body.project_format ?? incomingBible.project_format;
+          return typeof format === 'string' && format.trim()
+            ? { project_format: format.trim().toUpperCase() }
+            : {};
+        })(),
       };
 
       const patchPayload: Record<string, any> = {

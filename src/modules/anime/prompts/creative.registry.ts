@@ -17,7 +17,7 @@ export interface ResolvedCreativePrompt {
 
 export const CREATIVE_REGISTRY_VERSION = '2026-11-15.1';
 
-export const PROMPT_CATEGORIES = ['BIBLE', 'EPISODE', 'IMAGE', 'AI_DIRECTOR', 'GENRE', 'VISUAL_MEDIUM'] as const;
+export const PROMPT_CATEGORIES = ['BIBLE', 'SEASON', 'EPISODE', 'IMAGE', 'AI_DIRECTOR', 'GENRE', 'VISUAL_MEDIUM'] as const;
 export type PromptCategory = (typeof PROMPT_CATEGORIES)[number];
 
 export const GENRE_DEFINITIONS: readonly CreativeDefinition[] = [
@@ -160,6 +160,7 @@ export const MEDIUM_DEFINITIONS: readonly CreativeDefinition[] = [
 
 export const DEFAULT_DOMAIN_PROMPTS: Readonly<Record<string, string>> = {
   BIBLE: 'You are the Story Bible Architect. Build a coherent world, character architecture, power limits, continuity anchors, and a season-level roadmap that obeys the locked project genre and visual medium configuration.',
+  SEASON: 'You are the Season Architect. Build a season arc that inherits the single project Story Bible, adds only season-specific genre emphasis, defines episode-level goals, and preserves all locked canon.',
   EPISODE: 'You are the Episode Screenwriter. Write a production-ready script that obeys locked canon, character voice, project genre instructions, the locked visual medium, target runtime, and scene budget.',
   IMAGE: 'Create a production-ready keyframe prompt that obeys the locked project visual medium, character visual DNA, scene continuity, and cinematic composition rules.',
   AI_DIRECTOR: 'You are the AI Anime Studio Director. Provide actionable production guidance and never mutate project identity or state without explicit user confirmation.',
