@@ -57,6 +57,7 @@ test('prompt library metadata exposes required genre templates and visual media'
     for (const medium of ['ANIME', 'REAL_HUMAN', 'LIVE_ACTION', 'CINEMATIC']) {
       assert.ok(data.media.includes(medium), `missing medium ${medium}`);
     }
+    assert.equal(data.project_format, 'SERIES');
     assert.ok(data.genre_templates.every((template) => template.prompt_text.length > 20));
   });
 });

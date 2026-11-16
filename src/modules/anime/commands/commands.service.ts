@@ -133,6 +133,12 @@ interface SeasonPlanContext {
   readonly genres: string[];
   readonly locked: boolean;
   readonly prompt_overrides: Record<string, string>;
+  readonly season_prompt_id?: string | null;
+  readonly season_prompt_title?: string;
+  readonly season_prompt_text?: string;
+  readonly ai_director_prompt_id?: string | null;
+  readonly ai_director_prompt_title?: string;
+  readonly ai_director_prompt_text?: string;
   readonly source: 'STORY_BIBLE';
 }
 
@@ -265,6 +271,38 @@ async function resolveDynamicPromptAndInfra(
       };
 
       seasonContext = seasonPlanFromBible(projectRow.story_bible, seasonNo);
+      if (seasonContext?.prompt_overrides.season) {
+        const seasonPrompt = await resolveOwnedPromptById(
+          userId,
+          projectId,
+          seasonContext.prompt_overrides.season,
+          'SEASON'
+        );
+        if (seasonPrompt) {
+          seasonContext = {
+            ...seasonContext,
+            season_prompt_id: seasonPrompt.id,
+            season_prompt_title: seasonPrompt.title,
+            season_prompt_text: seasonPrompt.prompt_text,
+          };
+        }
+      }
+      if (seasonContext?.prompt_overrides.ai_director) {
+        const directorPrompt = await resolveOwnedPromptById(
+          userId,
+          projectId,
+          seasonContext.prompt_overrides.ai_director,
+          'AI_DIRECTOR'
+        );
+        if (directorPrompt) {
+          seasonContext = {
+            ...seasonContext,
+            ai_director_prompt_id: directorPrompt.id,
+            ai_director_prompt_title: directorPrompt.title,
+            ai_director_prompt_text: directorPrompt.prompt_text,
+          };
+        }
+      }
       const creativeRows = await loadCreativePromptRows(userId, projectId);
       creativeContext = buildProjectCreativeContext({
         id: projectId,

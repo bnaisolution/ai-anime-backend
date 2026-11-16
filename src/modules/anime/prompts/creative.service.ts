@@ -155,6 +155,7 @@ export interface CreativeMetadata {
   readonly medium_definitions: readonly Record<string, unknown>[];
   readonly project_selected_genres: readonly string[];
   readonly project_visual_medium: string;
+  readonly project_format: string;
   readonly registry_version: string;
 }
 
@@ -177,6 +178,10 @@ export async function buildCreativeMetadata(
     : await loadGlobalCreativePromptRows(userId);
   const projectSelected = project ? genreDisplayListForProject(project) : [];
   const projectMedium = project ? canonicalMediumKey(project.visual_medium ?? 'ANIME') : 'ANIME';
+  const projectBible = project && project.story_bible && typeof project.story_bible === 'object'
+    ? project.story_bible
+    : {};
+  const projectFormat = String(bibleValue(projectBible, 'project_format') ?? 'SERIES').trim().toUpperCase() || 'SERIES';
   const context = buildProjectCreativeContext(
     project ?? { id: projectId || 'global', genre: 'Action Fantasy', visual_medium: 'ANIME', story_bible: {} },
     promptRows
@@ -194,6 +199,7 @@ export async function buildCreativeMetadata(
     medium_definitions: buildMediumDefinitions(promptRows),
     project_selected_genres: projectSelected,
     project_visual_medium: projectMedium,
+    project_format: projectFormat,
     registry_version: CREATIVE_REGISTRY_VERSION,
   };
 }
