@@ -2,8 +2,8 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM); containers `ai-backend` and `n8n` healthy.
-- ai-anime-android: `main` @ `ac14492` (code `d0de7cb`); APK `44033033460` green at `d1c6ee4`. Android Tests `44033033317` failed twice at `02-auth-validation` after the emulator killed the app following `stopApp` + `launchApp clearState`; `ac14492` removes the redundant `stopApp` and fresh CI is pending.
-- ai-anime-backend: `main` @ `fd64916`; Backend Tests `44047559530` green. Live container `ai-backend` runs `anime-backend:fd64916`, health 200, network alias `backend`; rollback tags `anime-backend:rollback-pre-fd64916`, `anime-backend:rollback-pre-ad84103`, and `ec2-user-backend:rollback-pre-71c1e0d`.
+- ai-anime-android: code `d0de7cb`, docs `main` @ `ac14492`; Android Tests `44054066519` green; APK `44054066825` green. The earlier `d1c6ee4` Maestro failure was a `stopApp` + `launchApp clearState` race; `ac14492` removes the redundant `stopApp`.
+- ai-anime-backend: code `fd64916`, docs `main` @ `e33ed06`; Backend Tests `44047559530` green (docs-only `e33ed06` CI `44054111591` green). Live container `ai-backend` runs `anime-backend:fd64916`, health 200, network alias `backend`; rollback tags `anime-backend:rollback-pre-fd64916`, `anime-backend:rollback-pre-ad84103`, and `ec2-user-backend:rollback-pre-71c1e0d`.
 - anime-cpu-worker: `main` @ `ee47fdc`.
 - n8n: 14 canonical StoryWF workflows active; WF-01/02/03/10 node/connection diffs previously verified 0.
 - Anime central DB: `lqdjlcfczjottagobega.supabase.co` (DNS verified; `lqdjlcfczoyttagobega` does not resolve); Auth DB: `icypjilkcqylgbpmkyes.supabase.co`.
