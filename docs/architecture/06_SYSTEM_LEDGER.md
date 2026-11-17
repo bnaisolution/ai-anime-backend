@@ -20,7 +20,7 @@
 - [2026-11-15] Gateway BYOK resolves the command user's decrypted provider key; system token matches between backend and n8n.
 
 ## Active State & Constraints
-- TRUE BYOD DATABASE IS NOT LIVE YET: code is ready, flags are off, migration 011 is unapplied, and no BYOD test DSN exists.
+- TRUE BYOD DATABASE IS NOT LIVE YET: code is ready, flags are off, migration 011 is unapplied, and no BYOD test DSN exists. Tenant provisioning currently creates only `anime_data.projects`; the gateway allows 31 project tables, so BYOD workflows will fail until the full tenant DDL is added.
 - TRUE S3/CUSTOM STORAGE REMAINS PARTIAL: adapters/routes exist, but generation media still relies on Telegram/custom URLs.
 - GitHub worker token is stored but not fully used by worker/workflows.
 - Phase 4 cutover copies only `anime_data.projects`; seasons/scenes/episodes/prompts/memory copy and checksum verification are missing, so cutover stays disabled.
@@ -31,8 +31,9 @@
 
 ## Pending / Next Steps
 1. Apply migration 011 with an approved migration DSN; verify tables, RPCs, RLS, and rollback.
-2. Deploy backend `75faa00` after 011, then verify central behavior is unchanged and `/health` is 200.
-3. Connect a free test BYOD Postgres/Supabase DSN; test connect/health/provision/pause, then validate all 14 workflows on the BYOD plane.
-4. Keep flags off until BYOD, cross-tenant denial, DB-down fail-closed, and key-rotation checks pass.
-5. Extend Phase 4 to copy/checksum all project tables; finish Phase 6 owner filters/retry/actions.
-6. Rotate the exposed production DB password and configure worker/Telegram credentials for a real generation smoke.
+2. Add the missing tenant DDL/migrations for all 31 gateway project tables; only `projects` is provisioned today.
+3. Deploy backend `75faa00` after 011, then verify central behavior is unchanged and `/health` is 200.
+4. Connect a free test BYOD Postgres/Supabase DSN; test connect/health/provision/pause, then validate all 14 workflows on the BYOD plane.
+5. Keep flags off until BYOD, cross-tenant denial, DB-down fail-closed, and key-rotation checks pass.
+6. Extend Phase 4 to copy/checksum all project tables; finish Phase 6 owner filters/retry/actions.
+7. Rotate the exposed production DB password and configure worker/Telegram credentials for a real generation smoke.
