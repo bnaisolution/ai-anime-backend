@@ -151,7 +151,7 @@ export function buildScopedDbRequest(input: {
   let body = input.body;
   if (method !== 'GET') {
     if (body === undefined || body === null) badRequest('Database write body is required.');
-    body = isProject ? injectProjectIntoBody(body, input.project_id, input.user_id, table) : validateWriteBody(body);
+    body = !input.system && isProject ? injectProjectIntoBody(body, input.project_id, input.user_id, table) : validateWriteBody(body);
   } else {
     body = undefined;
   }

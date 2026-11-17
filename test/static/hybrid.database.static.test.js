@@ -11,6 +11,9 @@ const migration = fs.readFileSync(path.join(root, 'supabase/migrations/011_hybri
 const rollback = fs.readFileSync(path.join(root, 'supabase/migrations/011_hybrid_byod_wallet_rollback.sql'), 'utf8');
 const service = fs.readFileSync(path.join(root, 'src/modules/anime/tenant/tenantDatabase.service.ts'), 'utf8');
 const validation = fs.readFileSync(path.join(root, 'src/modules/anime/tenant/tenantDatabase.validation.ts'), 'utf8');
+const gateway = fs.readFileSync(path.join(root, 'src/modules/anime/internal/workflowGateway.routes.ts'), 'utf8');
+const tenantGateway = fs.readFileSync(path.join(root, 'src/modules/anime/internal/workflowGateway.tenantDb.ts'), 'utf8');
+const scopedGateway = fs.readFileSync(path.join(root, 'src/modules/anime/internal/workflowGateway.db.ts'), 'utf8');
 
 test('tenant database registry is additive and disabled by default', () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.anime_tenant_databases/);
@@ -37,4 +40,16 @@ test('project cutover and wallet are explicit and idempotent', () => {
   assert.match(migration, /debit_anime_wallet/);
   assert.match(service, /on conflict \(id\) do update/);
   assert.match(service, /rollbackProjectsToCentral/);
+});
+
+
+test('workflow gateway routes project and system requests through the tenant data plane', () => {
+  assert.match(gateway, /resolveProjectDataPlaneById/);
+  assert.match(gateway, /executeTenantDbRequest/);
+  assert.match(gateway, /executeSystemRequest/);
+  assert.match(gateway, /GLOBAL_READ_TABLES\.has\(scoped\.table\)/);
+  assert.match(tenantGateway, /addValue\(values, operand\)/);
+  assert.match(tenantGateway, /"anime_data"/);
+  assert.doesNotMatch(tenantGateway, /\$\{operand\}/);
+  assert.match(scopedGateway, /!input\.system && isProject/);
 });

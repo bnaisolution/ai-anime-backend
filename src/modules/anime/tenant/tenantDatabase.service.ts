@@ -320,6 +320,31 @@ export async function resolveProjectDataPlane(projectId: string, tenantId: strin
   return resolveTenantDataPlane(tenantId);
 }
 
+export async function resolveProjectDataPlaneById(projectId: string): Promise<TenantDataPlaneResolution> {
+  if (!getHybridFlags().byod_enabled) {
+    return { tenant_id: '', mode: 'central', provider: 'platform', central: true, dsn: null, reason: 'byod_disabled' };
+  }
+  const index = await repo.getProjectIndex(projectId);
+  if (!index || index.data_plane !== 'byod') {
+    return { tenant_id: '', mode: 'central', provider: 'platform', central: true, dsn: null, reason: 'project_central' };
+  }
+  return resolveTenantDataPlane(String(index.tenant_id));
+}
+
+export async function listActiveByodDataPlanes(): Promise<TenantDataPlaneResolution[]> {
+  if (!getHybridFlags().byod_enabled) return [];
+  const records = await repo.listActiveTenantDatabaseRecords();
+  return records
+    .filter((record) => record.mode === 'byod' && record.status === 'active' && Boolean(record.encrypted_dsn))
+    .map((record) => ({
+      tenant_id: record.tenant_id,
+      mode: 'byod' as const,
+      provider: record.provider,
+      central: false,
+      dsn: dsnForRecord(record),
+    }));
+}
+
 export async function provisionTenantSchema(tenantId: string, userId: string): Promise<{ schema_version: number }> {
   assertByodEnabled();
   const record = await repo.getTenantDatabaseRecord(tenantId);

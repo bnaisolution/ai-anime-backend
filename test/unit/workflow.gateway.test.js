@@ -58,6 +58,8 @@ test('database gateway separates system and project scopes', () => {
   assert.equal(projectScoped.table, 'episode_states');
   const systemScoped = buildScopedDbRequest({ path: '/rest/v1/episode_states?current_state=eq.FAILED', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID, system: true });
   assert.equal(systemScoped.table, 'episode_states');
+  const systemWrite = buildScopedDbRequest({ path: '/rest/v1/pending_actions', method: 'POST', body: { project_id: OTHER_PROJECT_ID, status: 'PENDING' }, project_id: PROJECT_ID, user_id: USER_ID, system: true });
+  assert.equal(systemWrite.body.project_id, OTHER_PROJECT_ID);
   assert.throws(() => buildScopedDbRequest({ path: '/rest/v1/projects', method: 'GET', project_id: PROJECT_ID, user_id: USER_ID, system: true }), /System workflows/);
 });
 

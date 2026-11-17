@@ -35,6 +35,18 @@ export async function listTenantDatabaseRecords(): Promise<any[]> {
   return data ?? [];
 }
 
+export async function listActiveTenantDatabaseRecords(): Promise<TenantDatabaseRecord[]> {
+  const { data, error } = await animeSupabase
+    .from('anime_tenant_databases')
+    .select('*')
+    .eq('mode', 'byod')
+    .eq('status', 'active')
+    .order('updated_at', { ascending: false });
+  if (error && missingRelation(error)) return [];
+  if (error) throw dbError('Active tenant database list failed.', error);
+  return (data ?? []) as TenantDatabaseRecord[];
+}
+
 export async function upsertTenantDatabase(input: {
   tenant_id: string;
   mode: TenantDataPlaneMode;
@@ -144,6 +156,7 @@ export async function getProjectIndex(projectId: string): Promise<any | null> {
     .select('*')
     .eq('project_id', projectId)
     .maybeSingle();
+  if (error && missingRelation(error)) return null;
   if (error) throw dbError('Tenant project index lookup failed.', error);
   return data ?? null;
 }
