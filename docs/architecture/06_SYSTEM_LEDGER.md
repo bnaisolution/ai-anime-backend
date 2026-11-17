@@ -2,8 +2,8 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM); containers `ai-backend` and `n8n` healthy.
-- ai-anime-android: `main` @ `d0de7cb`; Android Tests `44010191940` green; APK `44010191939` green.
-- ai-anime-backend: `main` @ `71c1e0d`; Backend Tests `44010169513` green. Live container image `ec2-user-backend` predates the hybrid gateway and is not yet redeployed.
+- ai-anime-android: `main` @ `cf89354` (code `d0de7cb`); Android Tests `44011671586` green; APK `44011671588` green.
+- ai-anime-backend: `main` @ `71c1e0d` (docs `841a98f`); Backend Tests `44010169513` green. Live container `ai-backend` runs `anime-backend:71c1e0d`, health 200, network alias `backend`; rollback tag `ec2-user-backend:rollback-pre-71c1e0d`.
 - anime-cpu-worker: `main` @ `ee47fdc`.
 - n8n: 14 canonical StoryWF workflows active; WF-01/02/03/10 node/connection diffs previously verified 0.
 - Anime central DB: `lqdjlcfczoyttagobega.supabase.co`; Auth DB: `icypjilkcqylgbpmkyes.supabase.co`.
@@ -11,6 +11,7 @@
 - Feature flags remain `ANIME_BYOD_ENABLED=false`, `ANIME_PLATFORM_DB_ENABLED=false`, `ANIME_PLATFORM_BILLING_ENABLED=false`.
 
 ## Recent Milestones (Rolling Window)
+- [2026-11-17] Backend `71c1e0d` deployed to EC2 as `anime-backend:71c1e0d`; `/health` 200, n8n reaches `http://backend:3000`, test-account login/projects/prompt-meta pass, hybrid routes return 401 unauthenticated. Migration `011` remains unapplied and BYOD flags remain off.
 - [2026-11-17] Backend `71c1e0d` provisions all 30 gateway project tables, copies every project table except transient `pending_actions`, verifies row counts, enforces a 7-day central rollback window, and adds owner schema repair. Local PostgreSQL 18.6 create/upgrade/copy checks passed. Android `d0de7cb` adds the repair action. Full backend suite: 168 unit, 108 route, 136 static, 22 regression; Android Tests and APK green.
 - [2026-11-17] Backend `ec782e2` adds owner tenant-DB filters (`status`/`mode`/`provider`/host), audit preview, health recheck, and read-only environment feature status. Android `ca02e21` adds the filter/audit/recheck UI.
 - [2026-11-17] Backend `75faa00` adds tenant-aware gateway: safe PostgREST-to-SQL translation for `anime_data`, project BYOD routing via `anime_tenant_project_index`, central fallback for global catalogs/`kaggle_sessions`, and system GET/PATCH/POST fan-out across central + active BYOD planes.
@@ -33,8 +34,7 @@
 
 ## Pending / Next Steps
 1. Apply migration 011 with an approved migration DSN; verify tables, RPCs, RLS, and rollback.
-2. Deploy backend `71c1e0d` after 011, then verify central behavior is unchanged and `/health` is 200.
-3. Connect a free test BYOD Postgres/Supabase DSN; test connect/health/provision/copy/pause, then validate all 14 workflows on the BYOD plane.
-4. Keep flags off until BYOD, live cross-tenant denial, DB-down fail-closed, and key-rotation checks pass.
-5. Finish Phase 6 per-project migration retry and runtime toggles; run pause/rotation/restore drills.
-6. Rotate the exposed production DB password and configure worker/Telegram credentials for a real generation smoke.
+2. Connect a free test BYOD Postgres/Supabase DSN; test connect/health/provision/copy/pause, then validate all 14 workflows on the BYOD plane.
+3. Keep flags off until BYOD, live cross-tenant denial, DB-down fail-closed, and key-rotation checks pass.
+4. Finish Phase 6 per-project migration retry and runtime toggles; run pause/rotation/restore drills.
+5. Rotate the exposed production DB password and configure worker/Telegram credentials for a real generation smoke.
