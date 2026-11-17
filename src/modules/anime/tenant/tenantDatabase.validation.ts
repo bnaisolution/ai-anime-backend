@@ -107,3 +107,15 @@ export function sslOptionsForMode(mode: string): false | { rejectUnauthorized: b
   if (mode === 'disable') return false;
   return { rejectUnauthorized: mode === 'verify-ca' || mode === 'verify-full' };
 }
+
+export function tenantClientConnection(validated: ValidatedTenantDsn): {
+  connectionString: string;
+  ssl: ReturnType<typeof sslOptionsForMode>;
+} {
+  const url = new URL(validated.dsn);
+  url.searchParams.delete('sslmode');
+  return {
+    connectionString: url.toString(),
+    ssl: sslOptionsForMode(validated.sslmode),
+  };
+}

@@ -8,6 +8,7 @@ const {
   validateTenantDsn,
   tenantDsnFingerprint,
   sslOptionsForMode,
+  tenantClientConnection,
 } = H.dist('modules/anime/tenant/tenantDatabase.validation.js');
 
 test('accepts a Supabase pooler DSN and defaults SSL to require', () => {
@@ -32,6 +33,16 @@ test('accepts direct Postgres DSN and preserves verified SSL modes', () => {
   assert.deepEqual(sslOptionsForMode(validated.sslmode), { rejectUnauthorized: true });
   assert.deepEqual(sslOptionsForMode('require'), { rejectUnauthorized: false });
   assert.equal(sslOptionsForMode('disable'), false);
+});
+
+test('strips sslmode from the client DSN so explicit TLS options win', () => {
+  const validated = validateTenantDsn(
+    'postgresql://postgres.abcdefgh:secret@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require'
+  );
+  const connection = tenantClientConnection(validated);
+  assert.doesNotMatch(connection.connectionString, /sslmode=/);
+  assert.deepEqual(connection.ssl, { rejectUnauthorized: false });
+  assert.match(connection.connectionString, /pooler\.supabase\.com/);
 });
 
 test('rejects non-Postgres, unauthenticated, and malformed DSNs', () => {

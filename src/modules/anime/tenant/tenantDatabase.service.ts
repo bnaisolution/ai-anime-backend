@@ -10,7 +10,7 @@ import type {
   TenantDataPlaneResolution,
   ValidatedTenantDsn,
 } from './tenantDatabase.types';
-import { sslOptionsForMode, tenantDsnFingerprint, tenantDsnKey, validateTenantDsn } from './tenantDatabase.validation';
+import { tenantClientConnection, tenantDsnFingerprint, tenantDsnKey, validateTenantDsn } from './tenantDatabase.validation';
 
 
 function boolEnv(name: string): boolean {
@@ -81,8 +81,7 @@ export async function testTenantDsn(rawDsn: unknown): Promise<{
 
   const started = Date.now();
   const client = new Client({
-    connectionString: validated.dsn,
-    ssl: sslOptionsForMode(validated.sslmode),
+    ...tenantClientConnection(validated),
     connectionTimeoutMillis: 8_000,
     query_timeout: 8_000,
     statement_timeout: 8_000,
@@ -197,8 +196,7 @@ export async function checkTenantDatabaseHealth(input: {
   const validated = validateTenantDsn(dsn);
   const started = Date.now();
   const client = new Client({
-    connectionString: dsn,
-    ssl: sslOptionsForMode(validated.sslmode),
+    ...tenantClientConnection(validated),
     connectionTimeoutMillis: 8_000,
     query_timeout: 8_000,
     statement_timeout: 8_000,
@@ -326,8 +324,7 @@ export async function provisionTenantSchema(tenantId: string, userId: string): P
   const dsn = dsnForRecord(record);
   const validated = validateTenantDsn(dsn);
   const client = new Client({
-    connectionString: dsn,
-    ssl: sslOptionsForMode(validated.sslmode),
+    ...tenantClientConnection(validated),
     connectionTimeoutMillis: 10_000,
     query_timeout: 60_000,
     statement_timeout: 60_000,
@@ -529,8 +526,7 @@ export async function migrateProjectsToTenant(input: {
   const dsn = dsnForRecord(record);
   const validated = validateTenantDsn(dsn);
   const client = new Client({
-    connectionString: dsn,
-    ssl: sslOptionsForMode(validated.sslmode),
+    ...tenantClientConnection(validated),
     connectionTimeoutMillis: 10_000,
     query_timeout: 60_000,
     statement_timeout: 60_000,
