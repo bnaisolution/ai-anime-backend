@@ -26,11 +26,30 @@ export async function getTenantDatabaseRecord(tenantId: string): Promise<TenantD
   return data ?? null;
 }
 
-export async function listTenantDatabaseRecords(): Promise<any[]> {
-  const { data, error } = await animeSupabase
+export interface TenantDatabaseListFilters {
+  status?: string;
+  mode?: string;
+  provider?: string;
+  q?: string;
+}
+
+function safeSearchTerm(value: string): string {
+  return value.replace(/[^A-Za-z0-9._:@-]/g, '').slice(0, 120);
+}
+
+export async function listTenantDatabaseRecords(filters: TenantDatabaseListFilters = {}): Promise<any[]> {
+  let query = animeSupabase
     .from('anime_tenant_databases')
-    .select('id, tenant_id, mode, provider, status, schema_version, dsn_host, database_name, last_checked_at, last_error, created_at, updated_at, anime_tenants(name, slug)')
-    .order('updated_at', { ascending: false });
+    .select('id, tenant_id, mode, provider, status, schema_version, dsn_host, database_name, last_checked_at, last_error, created_at, updated_at, anime_tenants(name, slug)');
+  if (filters.status) query = query.eq('status', filters.status);
+  if (filters.mode) query = query.eq('mode', filters.mode);
+  if (filters.provider) query = query.eq('provider', filters.provider);
+  const term = safeSearchTerm(filters.q ?? '');
+  if (term) {
+    query = query.or(`dsn_host.ilike.%${term}%,database_name.ilike.%${term}%`);
+  }
+  const { data, error } = await query.order('updated_at', { ascending: false });
+  if (error && missingRelation(error)) return [];
   if (error) throw dbError('Tenant database list failed.', error);
   return data ?? [];
 }
@@ -128,6 +147,7 @@ export async function listTenantDatabaseAudit(tenantId: string, limit = 50): Pro
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
     .limit(Math.min(200, Math.max(1, limit)));
+  if (error && missingRelation(error)) return [];
   if (error) throw dbError('Tenant database audit lookup failed.', error);
   return (data ?? []) as TenantDatabaseAuditRecord[];
 }

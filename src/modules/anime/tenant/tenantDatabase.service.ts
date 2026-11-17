@@ -534,12 +534,27 @@ export async function rollbackProjectsToCentral(input: {
   return { rolled_back: projectIds.length, project_ids: projectIds };
 }
 
-export async function listOwnerTenantDatabases(): Promise<any[]> {
-  return repo.listTenantDatabaseRecords();
+export async function listOwnerTenantDatabases(filters: repo.TenantDatabaseListFilters = {}): Promise<any[]> {
+  return repo.listTenantDatabaseRecords(filters);
 }
 
 export async function listOwnerTenantDatabaseAudit(tenantId: string, limit?: number): Promise<any[]> {
   return repo.listTenantDatabaseAudit(tenantId, limit);
+}
+
+export async function recheckOwnerTenantDatabase(tenantId: string, ownerId: string): Promise<{
+  mode: string;
+  status: string;
+  reachable: boolean;
+  latency_ms: number;
+  schema_version: number;
+  error: string | null;
+}> {
+  const record = await repo.getTenantDatabaseRecord(tenantId);
+  if (!record || record.mode !== 'byod') {
+    throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'A user-owned database is not connected for this tenant.' });
+  }
+  return checkTenantDatabaseHealth({ tenantId, userId: ownerId });
 }
 
 export { tenantDsnKey };
