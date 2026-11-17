@@ -1,6 +1,6 @@
 import { Client } from 'pg';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
-import { sslOptionsForMode, validateTenantDsn } from '../tenant/tenantDatabase.validation';
+import { tenantClientConnection, validateTenantDsn } from '../tenant/tenantDatabase.validation';
 import type { ScopedDbRequest } from './workflowGateway.db';
 
 const IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/;
@@ -308,9 +308,10 @@ function mapDatabaseError(error: unknown): AnimeError {
 
 function defaultClientFactory(dsn: string): TenantDbClientLike {
   const validated = validateTenantDsn(dsn);
+  const connection = tenantClientConnection(validated);
   return new Client({
-    connectionString: validated.dsn,
-    ssl: sslOptionsForMode(validated.sslmode),
+    connectionString: connection.connectionString,
+    ssl: connection.ssl,
     connectionTimeoutMillis: 5_000,
     query_timeout: 15_000,
     statement_timeout: 15_000,

@@ -54,6 +54,7 @@ test('workflow gateway routes project and system requests through the tenant dat
   assert.match(gateway, /GLOBAL_READ_TABLES\.has\(scoped\.table\)/);
   assert.match(tenantGateway, /addValue\(values, operand\)/);
   assert.match(tenantGateway, /"anime_data"/);
+  assert.match(tenantGateway, /tenantClientConnection\(validated\)/);
   assert.doesNotMatch(tenantGateway, /\$\{operand\}/);
   assert.match(scopedGateway, /!input\.system && isProject/);
 });
