@@ -10,6 +10,7 @@ const root = H.backendRoot;
 const migration = fs.readFileSync(path.join(root, 'supabase/migrations/011_hybrid_byod_wallet.sql'), 'utf8');
 const rollback = fs.readFileSync(path.join(root, 'supabase/migrations/011_hybrid_byod_wallet_rollback.sql'), 'utf8');
 const service = fs.readFileSync(path.join(root, 'src/modules/anime/tenant/tenantDatabase.service.ts'), 'utf8');
+const schema = fs.readFileSync(path.join(root, 'src/modules/anime/tenant/tenantSchema.ts'), 'utf8');
 const validation = fs.readFileSync(path.join(root, 'src/modules/anime/tenant/tenantDatabase.validation.ts'), 'utf8');
 const gateway = fs.readFileSync(path.join(root, 'src/modules/anime/internal/workflowGateway.routes.ts'), 'utf8');
 const tenantGateway = fs.readFileSync(path.join(root, 'src/modules/anime/internal/workflowGateway.tenantDb.ts'), 'utf8');
@@ -38,8 +39,11 @@ test('project cutover and wallet are explicit and idempotent', () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.anime_platform_wallets/);
   assert.match(migration, /credit_anime_wallet/);
   assert.match(migration, /debit_anime_wallet/);
-  assert.match(service, /on conflict \(id\) do update/);
+  assert.match(service, /on conflict \("id"\) \$\{conflict\}/);
+  assert.match(service, /TENANT_DATA_TABLES/);
   assert.match(service, /rollbackProjectsToCentral/);
+  assert.match(schema, /TENANT_SCHEMA_VERSION = 2/);
+  assert.match(schema, /episodes_project_season_ep_uidx/);
 });
 
 

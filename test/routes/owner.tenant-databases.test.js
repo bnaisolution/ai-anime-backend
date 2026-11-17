@@ -92,3 +92,26 @@ test('normal users cannot list tenant databases or feature flags', async () => {
     await app.close();
   }
 });
+
+test('owner schema repair is disabled while BYOD is off and forbidden for normal users', async () => {
+  const { app } = await buildApp({ includeLore: false });
+  const tenantId = '44444444-4444-4444-8444-444444444444';
+  try {
+    const owner = await app.inject({
+      method: 'POST',
+      url: `/v1/anime/owner/tenant-databases/${tenantId}/provision`,
+      headers: ownerHeaders(app),
+    });
+    assert.equal(owner.statusCode, 503);
+    assert.equal(owner.json().error.code, 'PROVIDER_UNAVAILABLE');
+
+    const user = await app.inject({
+      method: 'POST',
+      url: `/v1/anime/owner/tenant-databases/${tenantId}/provision`,
+      headers: userHeaders(app),
+    });
+    assert.equal(user.statusCode, 403);
+  } finally {
+    await app.close();
+  }
+});

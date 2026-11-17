@@ -25,6 +25,7 @@ test('Android BYOD endpoints match backend hybrid routes', () => {
     'v1/anime/owner/tenant-databases',
     'v1/anime/owner/tenant-databases/{tenantId}/audit',
     'v1/anime/owner/tenant-databases/{tenantId}/health-check',
+    'v1/anime/owner/tenant-databases/{tenantId}/provision',
     'v1/anime/owner/features',
   ]) {
     assert.match(api, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `missing ${route}`);
@@ -46,6 +47,7 @@ test('Owner console reads the tenant database registry and wallet', () => {
   assert.match(repository, /fetchOwnerTenantDatabases/);
   assert.match(repository, /fetchOwnerTenantDatabaseAudit/);
   assert.match(repository, /recheckOwnerTenantDatabase/);
+  assert.match(repository, /provisionOwnerTenantDatabase/);
   assert.match(repository, /fetchOwnerFeatureFlags/);
   assert.match(repository, /fetchOwnerTenantWallet/);
   assert.match(owner, /TestTags\.Owner\.TENANT_DATABASES/);
@@ -53,11 +55,12 @@ test('Owner console reads the tenant database registry and wallet', () => {
 });
 
 test('Owner console exposes database filters, audit, recheck, and feature flags', () => {
-  for (const tag of ['DB_FILTER_ALL', 'DB_FILTER_ACTIVE', 'DB_FILTER_ERROR', 'DB_RECHECK', 'DB_AUDIT', 'FEATURE_FLAGS']) {
+  for (const tag of ['DB_FILTER_ALL', 'DB_FILTER_ACTIVE', 'DB_FILTER_ERROR', 'DB_RECHECK', 'DB_PROVISION', 'DB_AUDIT', 'FEATURE_FLAGS']) {
     assert.match(tags, new RegExp(`const val ${tag}`), `missing TestTags.Owner.${tag}`);
     assert.match(owner, new RegExp(`TestTags\\.Owner\\.${tag}`), `owner does not use ${tag}`);
   }
   assert.match(owner, /fetchOwnerTenantDatabaseAudit/);
   assert.match(owner, /recheckOwnerTenantDatabase/);
+  assert.match(owner, /provisionOwnerTenantDatabase/);
   assert.match(owner, /fetchOwnerFeatureFlags/);
 });

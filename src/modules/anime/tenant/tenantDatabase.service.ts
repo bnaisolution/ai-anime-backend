@@ -3,6 +3,7 @@ import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { decryptWithKeyVersion, encryptWithCurrentKey } from '../infrastructure/keyRegistry';
 import * as repo from './tenantDatabase.repo';
+import { TENANT_DATA_TABLES, TENANT_PROJECT_TABLES, TENANT_SCHEMA_SQL, TENANT_SCHEMA_VERSION } from './tenantSchema';
 import type {
   TenantDatabasePublicDto,
   TenantDatabaseRecord,
@@ -11,35 +12,6 @@ import type {
 } from './tenantDatabase.types';
 import { sslOptionsForMode, tenantDsnFingerprint, tenantDsnKey, validateTenantDsn } from './tenantDatabase.validation';
 
-const TENANT_SCHEMA_SQL = `
-CREATE SCHEMA IF NOT EXISTS anime_data;
-
-CREATE TABLE IF NOT EXISTS anime_data.schema_migrations (
-  version integer PRIMARY KEY,
-  applied_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS anime_data.projects (
-  id uuid PRIMARY KEY,
-  user_id text NOT NULL,
-  name text NOT NULL,
-  genre text,
-  visual_medium text,
-  description text,
-  story_bible jsonb NOT NULL DEFAULT '{}'::jsonb,
-  current_season integer NOT NULL DEFAULT 1,
-  current_episode integer NOT NULL DEFAULT 1,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_anime_data_projects_user
-  ON anime_data.projects (user_id, created_at DESC);
-
-INSERT INTO anime_data.schema_migrations (version) VALUES (1)
-ON CONFLICT (version) DO NOTHING;
-`;
 
 function boolEnv(name: string): boolean {
   return process.env[name] === 'true';
@@ -357,14 +329,14 @@ export async function provisionTenantSchema(tenantId: string, userId: string): P
     connectionString: dsn,
     ssl: sslOptionsForMode(validated.sslmode),
     connectionTimeoutMillis: 10_000,
-    query_timeout: 20_000,
-    statement_timeout: 20_000,
+    query_timeout: 60_000,
+    statement_timeout: 60_000,
   });
   try {
     await client.connect();
     await client.query(TENANT_SCHEMA_SQL);
     const version = await client.query('select max(version)::int as version from anime_data.schema_migrations');
-    const schemaVersion = Number(version.rows[0]?.version ?? 1);
+    const schemaVersion = Number(version.rows[0]?.version ?? TENANT_SCHEMA_VERSION);
     await repo.updateTenantDatabaseHealth({
       tenant_id: tenantId,
       status: 'active',
@@ -394,11 +366,142 @@ export async function provisionTenantSchema(tenantId: string, userId: string): P
   }
 }
 
+type CentralRow = Record<string, unknown>;
+
+const COPY_PAGE_SIZE = 500;
+const COPY_INSERT_BATCH = 100;
+const TRANSIENT_TABLES = new Set(['pending_actions']);
+const CENTRAL_ROLLBACK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function fetchCentralProjectTable(
+  table: string,
+  scopeColumn: 'id' | 'project_id',
+  scopeValues: string[],
+): Promise<CentralRow[]> {
+  const rows: CentralRow[] = [];
+  for (let from = 0; ; from += COPY_PAGE_SIZE) {
+    const { data, error } = await animeSupabase
+      .from(table)
+      .select('*')
+      .in(scopeColumn, scopeValues)
+      .order('id', { ascending: true })
+      .range(from, from + COPY_PAGE_SIZE - 1);
+    if (error) {
+      throw new AnimeError({
+        code: AnimeErrorCode.INTERNAL,
+        message: `Central ${table} lookup failed.`,
+        cause: error,
+      });
+    }
+    const page = (data ?? []) as CentralRow[];
+    rows.push(...page);
+    if (page.length < COPY_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+async function readTenantColumns(
+  client: Client,
+  tables: readonly string[],
+): Promise<Map<string, Map<string, string>>> {
+  const result = await client.query(
+    `select table_name, column_name, data_type
+       from information_schema.columns
+      where table_schema = 'anime_data'
+        and table_name = any($1::text[])`,
+    [tables],
+  );
+  const columns = new Map<string, Map<string, string>>();
+  for (const row of result.rows) {
+    const table = String(row.table_name);
+    if (!columns.has(table)) columns.set(table, new Map());
+    columns.get(table)!.set(String(row.column_name), String(row.data_type));
+  }
+  return columns;
+}
+
+function normalizeProjectRow(row: CentralRow, userId: string): CentralRow {
+  const now = new Date().toISOString();
+  return {
+    ...row,
+    user_id: row.user_id ?? userId,
+    name: row.name ?? 'Untitled',
+    story_bible: row.story_bible ?? {},
+    current_season: row.current_season ?? 1,
+    current_episode: row.current_episode ?? 0,
+    is_active: row.is_active ?? false,
+    created_at: row.created_at ?? now,
+    updated_at: row.updated_at ?? now,
+  };
+}
+
+function prepareCopyValue(value: unknown, dataType: string | undefined): unknown {
+  if (value === undefined || value === null) return null;
+  if (dataType === 'jsonb' || dataType === 'json') {
+    return typeof value === 'string' ? value : JSON.stringify(value);
+  }
+  return value;
+}
+
+async function upsertTenantRows(
+  client: Client,
+  table: string,
+  rows: CentralRow[],
+  columnTypes: Map<string, string>,
+): Promise<void> {
+  if (rows.length === 0) return;
+  const columns = Object.keys(rows[0]).filter((column) => columnTypes.has(column));
+  if (!columns.includes('id')) {
+    throw new Error(`Tenant ${table} schema is missing the id column.`);
+  }
+  for (let offset = 0; offset < rows.length; offset += COPY_INSERT_BATCH) {
+    const batch = rows.slice(offset, offset + COPY_INSERT_BATCH);
+    const values: unknown[] = [];
+    const tuples: string[] = [];
+    for (const row of batch) {
+      const placeholders = columns.map((column) => {
+        values.push(prepareCopyValue(row[column], columnTypes.get(column)));
+        return `$${values.length}`;
+      });
+      tuples.push(`(${placeholders.join(', ')})`);
+    }
+    const updates = columns
+      .filter((column) => column !== 'id')
+      .map((column) => `"${column}" = excluded."${column}"`)
+      .join(', ');
+    const conflict = updates ? `do update set ${updates}` : 'do nothing';
+    await client.query(
+      `insert into anime_data."${table}" (${columns.map((column) => `"${column}"`).join(', ')})
+       values ${tuples.join(', ')}
+       on conflict ("id") ${conflict}`,
+      values,
+    );
+  }
+}
+
+async function verifyTenantProjectCopy(
+  client: Client,
+  table: string,
+  scopeColumn: 'id' | 'project_id',
+  projectIds: string[],
+  expected: number,
+): Promise<void> {
+  if (expected === 0) return;
+  const result = await client.query(
+    `select count(*)::int as count from anime_data."${table}" where "${scopeColumn}" = any($1::uuid[])`,
+    [projectIds],
+  );
+  const actual = Number(result.rows[0]?.count ?? 0);
+  if (actual < expected) {
+    throw new Error(`Tenant ${table} copy is incomplete: expected at least ${expected} rows, found ${actual}.`);
+  }
+}
+
 export async function migrateProjectsToTenant(input: {
   tenantId: string;
   userId: string;
   projectIds: string[];
-}): Promise<{ migrated: number; project_ids: string[] }> {
+}): Promise<{ migrated: number; project_ids: string[]; rows_copied: number; tables_copied: number }> {
   assertByodEnabled();
   const projectIds = [...new Set(input.projectIds.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))];
   if (projectIds.length === 0) {
@@ -429,43 +532,28 @@ export async function migrateProjectsToTenant(input: {
     connectionString: dsn,
     ssl: sslOptionsForMode(validated.sslmode),
     connectionTimeoutMillis: 10_000,
-    query_timeout: 30_000,
-    statement_timeout: 30_000,
+    query_timeout: 60_000,
+    statement_timeout: 60_000,
   });
 
+  const copied: Record<string, number> = {};
   try {
     await client.connect();
     await client.query('begin');
-    for (const project of projects ?? []) {
-      await client.query(
-        `insert into anime_data.projects
-          (id, user_id, name, genre, visual_medium, description, story_bible, current_season, current_episode, is_active, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12)
-         on conflict (id) do update set
-           name = excluded.name,
-           genre = excluded.genre,
-           visual_medium = excluded.visual_medium,
-           description = excluded.description,
-           story_bible = excluded.story_bible,
-           current_season = excluded.current_season,
-           current_episode = excluded.current_episode,
-           is_active = excluded.is_active,
-           updated_at = excluded.updated_at`,
-        [
-          project.id,
-          String(project.user_id ?? input.userId),
-          String(project.name ?? 'Untitled'),
-          project.genre ?? null,
-          project.visual_medium ?? null,
-          project.description ?? null,
-          JSON.stringify(project.story_bible ?? {}),
-          Number(project.current_season ?? 1),
-          Number(project.current_episode ?? 1),
-          Boolean(project.is_active ?? true),
-          project.created_at ?? new Date().toISOString(),
-          project.updated_at ?? new Date().toISOString(),
-        ],
-      );
+    const columns = await readTenantColumns(client, TENANT_DATA_TABLES);
+    const tables = ['projects', ...TENANT_DATA_TABLES.filter((table) => table !== 'projects' && !TRANSIENT_TABLES.has(table))];
+    for (const table of tables) {
+      const scopeColumn = table === 'projects' ? 'id' : 'project_id';
+      const rows = await fetchCentralProjectTable(table, scopeColumn, projectIds);
+      if (rows.length === 0) continue;
+      const normalized = table === 'projects'
+        ? rows.map((row) => normalizeProjectRow(row, input.userId))
+        : rows;
+      const columnTypes = columns.get(table);
+      if (!columnTypes) throw new Error(`Tenant ${table} table is missing.`);
+      await upsertTenantRows(client, table, normalized, columnTypes);
+      await verifyTenantProjectCopy(client, table, scopeColumn, projectIds, rows.length);
+      copied[table] = rows.length;
     }
     await client.query('commit');
   } catch (error) {
@@ -475,7 +563,7 @@ export async function migrateProjectsToTenant(input: {
       actor_user_id: input.userId,
       action: 'migrate',
       status: 'failed',
-      detail: { project_ids: projectIds, error: sanitizeError(error) },
+      detail: { project_ids: projectIds, tables: copied, error: sanitizeError(error) },
     });
     throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: `Project migration failed: ${sanitizeError(error)}` });
   } finally {
@@ -491,14 +579,20 @@ export async function migrateProjectsToTenant(input: {
       migrated_at: new Date().toISOString(),
     });
   }
+  const rowsCopied = Object.values(copied).reduce((sum, count) => sum + count, 0);
   await repo.writeTenantDatabaseAudit({
     tenant_id: input.tenantId,
     actor_user_id: input.userId,
     action: 'migrate',
     status: 'success',
-    detail: { project_ids: projectIds, migrated: projectIds.length },
+    detail: { project_ids: projectIds, migrated: projectIds.length, rows_copied: rowsCopied, tables: copied },
   });
-  return { migrated: projectIds.length, project_ids: projectIds };
+  return {
+    migrated: projectIds.length,
+    project_ids: projectIds,
+    rows_copied: rowsCopied,
+    tables_copied: Object.keys(copied).length,
+  };
 }
 
 export async function rollbackProjectsToCentral(input: {
@@ -515,6 +609,13 @@ export async function rollbackProjectsToCentral(input: {
     const existing = await repo.getProjectIndex(projectId);
     if (!existing || existing.tenant_id !== input.tenantId) {
       throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Project is not cut over to this tenant.' });
+    }
+    const migratedAt = existing.migrated_at ? Date.parse(existing.migrated_at) : Number.NaN;
+    if (!Number.isFinite(migratedAt) || Date.now() - migratedAt > CENTRAL_ROLLBACK_WINDOW_MS) {
+      throw new AnimeError({
+        code: AnimeErrorCode.OUTPUT_INVALID,
+        message: 'The 7-day central rollback window has expired. Export the user-database project before switching data planes.',
+      });
     }
     await repo.upsertProjectIndex({
       project_id: projectId,

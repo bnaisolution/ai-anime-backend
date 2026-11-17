@@ -24,6 +24,7 @@ test('tenant database and wallet routes are registered once', async () => {
     ['GET', '/v1/anime/tenants/me/wallet/ledger'],
     ['GET', '/v1/anime/owner/tenant-databases'],
     ['POST', '/v1/anime/owner/tenant-databases/:tenantId/health-check'],
+    ['POST', '/v1/anime/owner/tenant-databases/:tenantId/provision'],
     ['GET', '/v1/anime/owner/tenant-databases/:tenantId/audit'],
     ['GET', '/v1/anime/owner/features'],
     ['GET', '/v1/anime/owner/tenants/:tenantId/wallet'],

@@ -5,7 +5,7 @@ import { assertPlatformActionAllowed, getPlatformManagedStatus } from '../platfo
 import { getQuotaStatus } from '../quota/quota.service';
 import { getReplicationAdapter } from '../replication/replication.service';
 import { listTenants, resolveRequestedTenantId } from '../tenant/tenant.service';
-import { getHybridFlags, listOwnerTenantDatabaseAudit, listOwnerTenantDatabases, recheckOwnerTenantDatabase } from '../tenant/tenantDatabase.service';
+import { getHybridFlags, listOwnerTenantDatabaseAudit, listOwnerTenantDatabases, provisionTenantSchema, recheckOwnerTenantDatabase } from '../tenant/tenantDatabase.service';
 import { creditWallet, getWalletSummary, listWalletLedger } from '../platform/wallet.service';
 
 const FailoverBody = Type.Object({
@@ -99,6 +99,12 @@ export async function registerAnimeOwnerBatch4Routes(app: FastifyInstance): Prom
   app.post('/v1/anime/owner/tenant-databases/:tenantId/health-check', { schema: { params: TenantParams }, preHandler: [app.authenticate] }, async (request: any) => {
     const ownerId = requireOwner(request);
     const data = await recheckOwnerTenantDatabase(request.params.tenantId, ownerId);
+    return { data, meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.post('/v1/anime/owner/tenant-databases/:tenantId/provision', { schema: { params: TenantParams }, preHandler: [app.authenticate] }, async (request: any) => {
+    const ownerId = requireOwner(request);
+    const data = await provisionTenantSchema(request.params.tenantId, ownerId);
     return { data, meta: { request_id: request.anime?.request_id } };
   });
 
