@@ -266,20 +266,20 @@ export function requiredResourcesForIntent(intent: string): ResourceKey[] {
   return getDirectorCapability(intent)?.required_resources ?? [];
 }
 
+const ROLE_ORDER: DirectorRole[] = ['viewer', 'editor', 'reviewer', 'admin', 'owner'];
+
 export function rolesForIntent(intent: string): DirectorRole[] {
   const capability = getDirectorCapability(intent);
   if (!capability) return [];
-  const order: DirectorRole[] = ['viewer', 'reviewer', 'editor', 'admin', 'owner'];
-  const minimum = order.indexOf(capability.required_role);
-  return order.slice(minimum < 0 ? 0 : minimum);
+  const minimum = ROLE_ORDER.indexOf(capability.required_role);
+  return ROLE_ORDER.slice(minimum < 0 ? 0 : minimum);
 }
 
 export function roleSatisfiesIntent(intent: string, role: string): boolean {
   const capability = getDirectorCapability(intent);
   if (!capability) return false;
-  const order: DirectorRole[] = ['viewer', 'reviewer', 'editor', 'admin', 'owner'];
-  const minimum = order.indexOf(capability.required_role);
-  const actual = order.indexOf(String(role || '').toLowerCase() as DirectorRole);
+  const minimum = ROLE_ORDER.indexOf(capability.required_role);
+  const actual = ROLE_ORDER.indexOf(String(role || '').toLowerCase() as DirectorRole);
   if (minimum < 0) return true;
   return actual >= minimum;
 }
