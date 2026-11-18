@@ -287,6 +287,23 @@ export async function executeDirectorAction(
     }
   }
   incrementCounter('ai_director_action_executions_total', { intent: action.intent });
+  if (action.intent === 'PUBLISH_NOW' && flags.publishOauthV2) {
+    const rawPlatforms = (action.payload as Record<string, unknown>).publish_platforms;
+    const requestedPlatforms = Array.isArray(rawPlatforms)
+      ? rawPlatforms.map((platform) => String(platform || '').toLowerCase()).filter(Boolean)
+      : ['youtube'];
+    const readiness = await buildDirectorReadiness(fastify, auth, input.projectId);
+    const known: Record<string, string> = { youtube: 'youtube', instagram: 'instagram' };
+    const missingChannels = requestedPlatforms
+      .filter((platform) => known[platform])
+      .filter((platform) => readiness.resources[known[platform] as 'youtube' | 'instagram'].status === 'missing');
+    if (missingChannels.length > 0) {
+      throw Object.assign(
+        new Error(`Connect these publishing channels first: ${missingChannels.join(', ')}.`),
+        { code: 'SETUP_REQUIRED', missing: missingChannels }
+      );
+    }
+  }
   const result = await submitAnimeCommand({
     idempotencyKey,
     userId: auth.userId,

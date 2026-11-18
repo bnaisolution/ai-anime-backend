@@ -5,6 +5,9 @@ import { registerAnimeAdminLedgerRoutes } from './admin/ledger.routes';
 import { registerAnimeAdminSystemRoutes } from './admin/system.routes';
 import { registerAnimeAdminWorkersRoutes } from './admin/workers.routes';
 import { registerAnimeInfrastructureLifecycleRoutes } from './infrastructure/infrastructure.lifecycle.routes';
+import { registerAnimeCpuDispatchRoutes } from './infrastructure/infrastructure.cpu.routes';
+import { registerAnimePublishRoutes } from './publish/publish.routes';
+import { registerAnimeSaasRoutes } from './saas/saas.routes';
 import { registerAnimeOwnerBatch4Routes } from './owner/owner.batch4.routes';
 import { registerAnimePlatformRoutes } from './platform/platform.routes';
 import { registerAnimeTenantRoutes } from './tenant/tenant.routes';
@@ -171,6 +174,9 @@ export async function registerAnimeRoutes(app: FastifyInstance): Promise<void> {
   await app.register(registerAnimePlatformRoutes);
   await app.register(registerAnimeOwnerBatch4Routes);
   await app.register(registerAnimeInfrastructureLifecycleRoutes);
+  await app.register(registerAnimeCpuDispatchRoutes);
+  await app.register(registerAnimePublishRoutes);
+  await app.register(registerAnimeSaasRoutes);
   try {
     const infraRoutesMod: any = await import('./infrastructure/infrastructure.routes');
     const regFn = infraRoutesMod.registerAnimeInfrastructureRoutes || infraRoutesMod.registerInfrastructureRoutes || infraRoutesMod.default;

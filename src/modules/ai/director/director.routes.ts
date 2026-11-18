@@ -4,6 +4,8 @@ import { clearDirectorConversation } from './director.conversation';
 import { executeDirectorAction, runDirectorChat, type DirectorChatInput } from './director.service';
 import { CAPABILITY_VERSION, listDirectorCapabilities, rolesForIntent } from './director.capabilities';
 import { buildDirectorReadiness } from './director.readiness';
+import { buildDirectorTimeline } from './director.timeline';
+import { buildDirectorPlan } from './director.plan';
 
 function errorReply(reply: FastifyReply, error: unknown) {
   const code = String((error as { code?: unknown })?.code || 'INTERNAL');
@@ -72,6 +74,56 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
       data: readiness,
       meta: { request_id: (request as any).anime?.request_id || null },
     });
+  });
+
+  fastify.get('/director/timeline', {
+    preHandler: [
+      fastify.authenticate,
+      requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'], { bodyProjectId: true }),
+    ],
+  }, async (request, reply) => {
+    const query = (request.query as Record<string, unknown>) || {};
+    const projectId = typeof query.project_id === 'string' ? query.project_id.trim() : '';
+    if (!projectId) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
+    }
+    const timeline = await buildDirectorTimeline(fastify, request.authContext, {
+      projectId,
+      commandId: typeof query.command_id === 'string' ? query.command_id : null,
+      seasonNo: query.season_no != null ? Number(query.season_no) : null,
+      episodeNo: query.episode_no != null ? Number(query.episode_no) : null,
+    });
+    return reply.send({ data: timeline });
+  });
+
+  fastify.post('/director/plan', {
+    preHandler: [
+      fastify.authenticate,
+      requireProjectRole(['owner', 'admin', 'editor', 'reviewer'], { bodyProjectId: true }),
+    ],
+  }, async (request, reply) => {
+    const body = (request.body as Record<string, unknown>) || {};
+    const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
+    if (!projectId) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
+    }
+    const rawSteps = Array.isArray(body.steps) ? body.steps : null;
+    const steps = rawSteps
+      ? rawSteps
+        .filter((step): step is Record<string, unknown> => Boolean(step) && typeof step === 'object')
+        .map((step) => ({
+          intent: String(step.intent || ''),
+          season_no: step.season_no != null ? Number(step.season_no) : null,
+          episode_no: step.episode_no != null ? Number(step.episode_no) : null,
+          payload: (step.payload && typeof step.payload === 'object') ? step.payload as Record<string, unknown> : {},
+        }))
+      : null;
+    const plan = await buildDirectorPlan(fastify, request.authContext, projectRole(request), {
+      projectId,
+      goal: typeof body.goal === 'string' ? body.goal : null,
+      steps,
+    });
+    return reply.send({ data: plan });
   });
 
   fastify.post('/director/chat', {
