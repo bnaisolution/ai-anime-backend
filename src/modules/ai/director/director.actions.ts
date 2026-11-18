@@ -1,13 +1,21 @@
 import crypto from 'crypto';
 import { env } from '../../../config/env';
+import { flags } from '../../../config/flags';
 import { redactSecrets } from '../../../security/permissionEngine';
 import { CommandIntent } from '../../anime/commands/commands.types';
+import {
+  CAPABILITY_VERSION,
+  directorActionRisk,
+  getDirectorCapability,
+  isDirectorExecutableIntent,
+  type DirectorActionRisk,
+} from './director.capabilities';
 
 const ACTION_TTL_SEC = 10 * 60;
 const MAX_ACTION_PAYLOAD_CHARS = 12_000;
 const TOKEN_PREFIX = 'act';
 
-export type DirectorActionRisk = 'read_only' | 'low_risk_write' | 'external_side_effect' | 'destructive';
+export type { DirectorActionRisk };
 
 export interface RequestedDirectorAction {
   intent: string;
@@ -47,49 +55,15 @@ export interface DirectorActionTokenPayload extends DirectorActionPreview {
   iat: number;
   exp: number;
   nonce: string;
+  cv?: string;
 }
 
-const MUTATING_INTENTS = new Set<CommandIntent>([
-  CommandIntent.SAVE_BIBLE,
-  CommandIntent.GENERATE_EPISODE,
-  CommandIntent.REGENERATE_EPISODE,
-  CommandIntent.CONTINUE_EPISODE,
-  CommandIntent.QUICK_GENERATE_REEL,
-  CommandIntent.QUICK_GENERATE_IMAGE,
-  CommandIntent.QUICK_GENERATE_VIDEO,
-  CommandIntent.SAVE_TO_PROJECT,
-  CommandIntent.VISION_ANALYSIS,
-  CommandIntent.CHANGE_CHARACTER_VOICE,
-  CommandIntent.PREVIEW_VOICE,
-  CommandIntent.RUN_QC,
-  CommandIntent.PUBLISH_NOW,
-  CommandIntent.CHECK_CONTINUITY,
-  CommandIntent.CHECK_CANON,
-  CommandIntent.RETRY_FAILED,
-]);
-
-const DESTRUCTIVE_INTENTS = new Set<CommandIntent>([
-  CommandIntent.PUBLISH_NOW,
-  CommandIntent.REGENERATE_EPISODE,
-]);
-
-const RISK_BY_INTENT: Partial<Record<CommandIntent, DirectorActionRisk>> = {
-  [CommandIntent.SAVE_BIBLE]: 'low_risk_write',
-  [CommandIntent.GENERATE_EPISODE]: 'external_side_effect',
-  [CommandIntent.CONTINUE_EPISODE]: 'external_side_effect',
-  [CommandIntent.REGENERATE_EPISODE]: 'destructive',
-  [CommandIntent.QUICK_GENERATE_REEL]: 'external_side_effect',
-  [CommandIntent.QUICK_GENERATE_IMAGE]: 'external_side_effect',
-  [CommandIntent.QUICK_GENERATE_VIDEO]: 'external_side_effect',
-  [CommandIntent.RUN_QC]: 'low_risk_write',
-  [CommandIntent.PUBLISH_NOW]: 'external_side_effect',
-  [CommandIntent.CHECK_CONTINUITY]: 'read_only',
-  [CommandIntent.CHECK_CANON]: 'read_only',
-  [CommandIntent.RETRY_FAILED]: 'low_risk_write',
-};
-
 function actionSecret(): string {
-  return String(process.env.DIRECTOR_ACTION_SECRET || env.JWT_SECRET);
+  const dedicated = String(process.env.DIRECTOR_ACTION_SECRET || '').trim();
+  if (dedicated) return dedicated;
+  // Safe fallback: never break Director actions because a new secret is not deployed yet.
+  // Phase 0 records this as a hardening item; switch to fail-closed once the secret exists.
+  return String(env.JWT_SECRET);
 }
 
 function base64url(input: Buffer | string): string {
@@ -106,11 +80,11 @@ function normalizeIntent(raw: string): CommandIntent | null {
 }
 
 export function isMutatingDirectorIntent(intent: CommandIntent): boolean {
-  return MUTATING_INTENTS.has(intent);
+  return isDirectorExecutableIntent(intent);
 }
 
 export function actionRisk(intent: CommandIntent): DirectorActionRisk {
-  return RISK_BY_INTENT[intent] || (DESTRUCTIVE_INTENTS.has(intent) ? 'destructive' : 'low_risk_write');
+  return directorActionRisk(intent);
 }
 
 export function buildActionProposal(input: {
@@ -123,7 +97,8 @@ export function buildActionProposal(input: {
 }): DirectorActionProposal {
   const intent = normalizeIntent(input.requested.intent);
   if (!intent) throw new Error('UNSUPPORTED_ACTION_INTENT');
-  if (!MUTATING_INTENTS.has(intent)) throw new Error('ACTION_NOT_ALLOWED');
+  const capability = getDirectorCapability(intent);
+  if (!capability) throw new Error('ACTION_NOT_ALLOWED');
   const payload = redactSecrets(input.requested.payload || {}) as Record<string, unknown>;
   const payloadText = JSON.stringify(payload);
   if (payloadText.length > MAX_ACTION_PAYLOAD_CHARS) throw new Error('ACTION_PAYLOAD_TOO_LARGE');
@@ -143,17 +118,18 @@ export function buildActionProposal(input: {
     iat: Math.floor(now / 1000),
     exp: Math.floor(now / 1000) + ACTION_TTL_SEC,
     nonce: crypto.randomUUID(),
+    cv: CAPABILITY_VERSION,
   };
   const encoded = base64url(JSON.stringify(tokenPayload));
   const actionId = `${TOKEN_PREFIX}.${encoded}.${sign(`${TOKEN_PREFIX}.${encoded}`)}`;
-  const risk = actionRisk(intent);
+  const risk = directorActionRisk(intent);
   return {
     action_id: actionId,
     intent,
-    label: intent.replaceAll('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()),
-    description: `${intent} for Season ${tokenPayload.season_no}, Episode ${tokenPayload.episode_no}, target ${Math.round(tokenPayload.target_duration_sec / 60)} minutes.`,
+    label: capability.label,
+    description: capability.description || `${intent} for Season ${tokenPayload.season_no}, Episode ${tokenPayload.episode_no}, target ${Math.round(tokenPayload.target_duration_sec / 60)} minutes.`,
     risk,
-    requires_confirmation: risk !== 'read_only',
+    requires_confirmation: capability.requires_confirmation,
     preview: {
       project_id: tokenPayload.project_id,
       intent,
@@ -210,6 +186,6 @@ export function verifyDirectorActionToken(actionId: string, now = Date.now()): D
   }
   if (parsed.v !== 1 || !parsed.sub || !parsed.project_id || !parsed.intent) throw new Error('ACTION_INVALID');
   if (parsed.exp * 1000 <= now) throw new Error('ACTION_EXPIRED');
-  if (!MUTATING_INTENTS.has(parsed.intent)) throw new Error('ACTION_NOT_ALLOWED');
+  if (!isDirectorExecutableIntent(parsed.intent)) throw new Error('ACTION_NOT_ALLOWED');
   return parsed;
 }

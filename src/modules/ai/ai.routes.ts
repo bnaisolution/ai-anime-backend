@@ -7,10 +7,12 @@ import { buildSmartContext } from '../../core/ai-brain/contextBuilder';
 import { resolveByodProviderCandidates } from '../../core/ai-brain/providerResolver';
 import crypto from 'crypto';
 import directorRoutes from './director/director.routes';
+import modelsRoutes from './models/models.routes';
 import { dispatchToWf00 } from '../anime/adapters/n8n.adapter';
 
 export default async function aiRoutes(fastify: FastifyInstance) {
   await fastify.register(directorRoutes);
+  await fastify.register(modelsRoutes);
 
   fastify.post('/chat', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const startTs = Date.now();

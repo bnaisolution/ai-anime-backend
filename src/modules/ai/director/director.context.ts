@@ -5,6 +5,8 @@ import { animeSupabase } from '../../anime/db/anime.supabase';
 import { list as listInfrastructure } from '../../anime/infrastructure/infrastructure.service';
 import { retrieveContext } from '../../anime/intelligence/memory.service';
 import { getQuotaStatus } from '../../../security/executionGuard';
+import { flags } from '../../../config/flags';
+import { buildDirectorReadiness, compactReadiness } from './director.readiness';
 import {
   actualRuntimeSec,
   classifyDuration,
@@ -258,6 +260,26 @@ export async function buildDirectorContext(
     .filter((type) => ['groq', 'gemini', 'custom'].includes(type)))];
   const quota = await getQuotaStatus(fastify, auth.userId);
 
+  const readiness = flags.directorReadiness
+    ? await buildDirectorReadiness(fastify, auth, input.projectId)
+    : null;
+  const readinessSummary = readiness ? compactReadiness(readiness) : null;
+  const gpuReady = readiness ? readiness.resources.gpu.status !== 'missing' : activeInfra.some(
+    (item) => ['own_gpu', 'kaggle'].includes(item.provider_type)
+  );
+  const resourceSummary: DirectorContext['resources'] = {
+    byod_provider_count: activeInfra.length,
+    active_provider_types: providerTypes,
+    gpu_worker_configured: gpuReady,
+    cpu_worker_configured: readiness ? readiness.resources.cpu.status !== 'missing' : false,
+    telegram_configured: readiness ? readiness.resources.telegram.status !== 'missing' : false,
+    storage_ready: readiness ? readiness.resources.storage.status !== 'missing' : false,
+    youtube_connected: readiness ? readiness.resources.youtube.status !== 'missing' : false,
+    instagram_connected: readiness ? readiness.resources.instagram.status !== 'missing' : false,
+    github_dispatch_configured: readiness ? readiness.resources.github.status !== 'missing' : false,
+    readiness: readinessSummary,
+  };
+
   const context: DirectorContext = {
     context_version: buildContextVersion({
       project,
@@ -319,11 +341,7 @@ export async function buildDirectorContext(
     },
     pending_actions: approvalsRes.count || 0,
     failed_jobs: failedRes.count || 0,
-    resources: {
-      byod_provider_count: activeInfra.length,
-      active_provider_types: providerTypes,
-      gpu_worker_configured: activeInfra.some((item) => ['own_gpu', 'kaggle', 'github_actions', 'custom'].includes(item.provider_type)),
-    },
+    resources: resourceSummary,
     quota: {
       rpm_used: quota.used.rpm,
       rpm_limit: quota.limits.RPM,

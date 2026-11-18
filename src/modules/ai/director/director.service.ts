@@ -8,6 +8,9 @@ import { resolveByodProviderCandidates } from '../../../core/ai-brain/providerRe
 import { submitAnimeCommand } from '../../anime/commands/commands.service';
 import { buildActionProposal, extractStructuredDirectorAction, isMutatingDirectorIntent, verifyDirectorActionToken, type RequestedDirectorAction } from './director.actions';
 import { buildDirectorContext, compactDirectorContext } from './director.context';
+import { buildDirectorReadiness, missingResourcesFor } from './director.readiness';
+import { directorActionPromptCatalog, roleSatisfiesIntent } from './director.capabilities';
+import { flags } from '../../../config/flags';
 import { incrementCounter, observeHistogram } from '../../anime/observability/metrics';
 import {
   appendDirectorMessage,
@@ -40,7 +43,8 @@ function directorSystemPrompt(context: Awaited<ReturnType<typeof buildDirectorCo
     'When the user asks to perform production work, describe the exact action and ask them to confirm the Action Card. Do not simulate success.',
     'If and only if a concrete production action is required, append exactly one structured block and nothing after it:',
     '<director_actions>{"intent":"CONTINUE_EPISODE","season_no":1,"episode_no":2,"target_duration_sec":1440,"payload":{},"mode":"SAVE"}</director_actions>',
-    'Allowed structured intents: SAVE_BIBLE, GENERATE_EPISODE, REGENERATE_EPISODE, CONTINUE_EPISODE, QUICK_GENERATE_REEL, QUICK_GENERATE_IMAGE, QUICK_GENERATE_VIDEO, SAVE_TO_PROJECT, VISION_ANALYSIS, CHANGE_CHARACTER_VOICE, PREVIEW_VOICE, RUN_QC, PUBLISH_NOW, CHECK_CONTINUITY, CHECK_CANON, RETRY_FAILED.',
+    'Allowed structured intents (the only values the server accepts):',
+    directorActionPromptCatalog(),
     'Never put secrets or workflow IDs in the structured block. Never claim the action already ran.',
     '',
     'PROJECT CONTEXT JSON:',
@@ -184,9 +188,10 @@ export async function runDirectorChat(
   let actionError: string | null = null;
   const requestedAction = input.requestedAction || structuredAction.requested;
   if (requestedAction) {
-    if (!['owner', 'admin', 'editor'].includes(projectRole)) {
+    const requestedIntent = String(requestedAction.intent || '').toUpperCase();
+    if (!roleSatisfiesIntent(requestedIntent, projectRole)) {
       actionError = 'Your project role is read-only. Ask a project editor or owner to execute this action.';
-    } else if (!isMutatingDirectorIntent(String(requestedAction.intent || '').toUpperCase() as any)) {
+    } else if (!isMutatingDirectorIntent(requestedIntent as any)) {
       actionError = 'The requested action is not available to AI Director.';
     } else {
       try {
@@ -271,6 +276,16 @@ export async function executeDirectorAction(
   }
 
   const idempotencyKey = String(input.idempotencyKey || '').trim() || `director:${action.nonce}`;
+  if (flags.byodFailClosed) {
+    const readiness = await buildDirectorReadiness(fastify, auth, input.projectId);
+    const missing = missingResourcesFor(readiness, action.intent);
+    if (missing.length > 0) {
+      throw Object.assign(
+        new Error(`Setup required before this action: ${missing.join(', ')}.`),
+        { code: 'SETUP_REQUIRED', missing }
+      );
+    }
+  }
   incrementCounter('ai_director_action_executions_total', { intent: action.intent });
   const result = await submitAnimeCommand({
     idempotencyKey,

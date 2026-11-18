@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { requireProjectRole } from '../../anime/auth/project-guard';
 import { clearDirectorConversation } from './director.conversation';
 import { executeDirectorAction, runDirectorChat, type DirectorChatInput } from './director.service';
+import { CAPABILITY_VERSION, listDirectorCapabilities, rolesForIntent } from './director.capabilities';
+import { buildDirectorReadiness } from './director.readiness';
 
 function errorReply(reply: FastifyReply, error: unknown) {
   const code = String((error as { code?: unknown })?.code || 'INTERNAL');
@@ -17,14 +19,20 @@ function errorReply(reply: FastifyReply, error: unknown) {
     ACTION_EXPIRED: 410,
     TARGET_CONFLICT: 409,
     CONTEXT_STALE: 409,
+    SETUP_REQUIRED: 422,
     BYOD_REQUIRED: 422,
     BYOD_FAILED: 502,
     QUOTA_EXCEEDED: 429,
   };
   const statusCode = status[code] || 500;
+  const missing = (error as { missing?: unknown })?.missing;
   return reply.code(statusCode).send({
     status: 'failed',
-    errors: [{ category: code, message: statusCode === 500 ? 'AI Director request failed' : message }],
+    errors: [{
+      category: code,
+      message: statusCode === 500 ? 'AI Director request failed' : message,
+      ...(Array.isArray(missing) ? { missing } : {}),
+    }],
   });
 }
 
@@ -33,6 +41,39 @@ function projectRole(request: unknown): string {
 }
 
 export default async function directorRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.get('/director/capabilities', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    return reply.send({
+      data: {
+        version: CAPABILITY_VERSION,
+        capabilities: listDirectorCapabilities().map((capability) => ({
+          ...capability,
+          roles: rolesForIntent(capability.key),
+        })),
+      },
+      meta: { request_id: (request as any).anime?.request_id || null },
+    });
+  });
+
+  fastify.get('/director/readiness', {
+    preHandler: [
+      fastify.authenticate,
+      requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'], { bodyProjectId: true }),
+    ],
+  }, async (request, reply) => {
+    const query = (request.query as Record<string, unknown>) || {};
+    const projectId = typeof query.project_id === 'string' ? query.project_id.trim() : '';
+    if (!projectId) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
+    }
+    const readiness = await buildDirectorReadiness(fastify, request.authContext, projectId);
+    return reply.send({
+      data: readiness,
+      meta: { request_id: (request as any).anime?.request_id || null },
+    });
+  });
+
   fastify.post('/director/chat', {
     preHandler: [fastify.authenticate, requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'], { bodyProjectId: true })],
   }, async (request, reply) => {

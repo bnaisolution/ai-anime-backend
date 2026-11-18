@@ -50,6 +50,17 @@ export interface DirectorContext {
     byod_provider_count: number;
     active_provider_types: string[];
     gpu_worker_configured: boolean;
+    cpu_worker_configured: boolean;
+    telegram_configured: boolean;
+    storage_ready: boolean;
+    youtube_connected: boolean;
+    instagram_connected: boolean;
+    github_dispatch_configured: boolean;
+    readiness: {
+      overall: string;
+      resources: Record<string, string>;
+      setup_needed: string[];
+    } | null;
   };
   quota: {
     rpm_used: number;
@@ -69,7 +80,7 @@ export interface DirectorChatResult {
   message: string;
   provider: string;
   model: string;
-  key_source: 'byod';
+  key_source: string;
   context: DirectorContext;
   actions: DirectorActionProposal[];
   verification: { status: 'verified' | 'not_verified'; evidence: string[] };
