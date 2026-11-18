@@ -197,7 +197,8 @@ from typing import Dict, Any, Optional
 import torch
 import requests
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
 from safetensors.torch import load_file
@@ -229,8 +230,13 @@ GPU_1_LOCK = threading.Lock()
 MODEL_CACHE: Dict[str, Any] = {}
 JOBS_STORE: Dict[str, Dict[str, Any]] = {}
 PUBLIC_TUNNEL_URL: Optional[str] = None
+PREWARM_ERROR: Optional[str] = None
 BG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 app = FastAPI(title="AI Cinematic Anime Engine - Kaggle Worker")
+
+def require_session_token(authorization: str = Header(default="")) -> None:
+    if not SESSION_TOKEN or authorization != f"Bearer {SESSION_TOKEN}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 class TelegramUploadConfig(BaseModel):
     enabled: bool = True
@@ -264,6 +270,8 @@ class VideoAssemblyRequest(BaseModel):
     fallback_gpu_url: Optional[str] = None
     image_url: Optional[str] = None
     audio_url: Optional[str] = None
+    image_telegram_file_id: Optional[str] = None
+    audio_telegram_file_id: Optional[str] = None
     duration_sec: int = 5
     emotion: str = "neutral"
     gpu_priority: str = "P2"
@@ -293,6 +301,23 @@ def upload_media_to_telegram(file_path: str, caption: str, tg_cfg: Optional[Tele
         except Exception: time.sleep(2)
     return {"file_id": None, "telegram_url": None}
 
+def download_telegram_media(file_id: str, dest_path: str, tg_cfg: Optional[TelegramUploadConfig]) -> bool:
+    bot_token = (tg_cfg.bot_token if tg_cfg and tg_cfg.bot_token else DEFAULT_TG_BOT_TOKEN).strip()
+    if not bot_token or not file_id: return False
+    try:
+        meta = requests.get(f"https://api.telegram.org/bot{bot_token}/getFile", params={"file_id": file_id}, timeout=30)
+        if not meta.ok: return False
+        tg_path = (meta.json().get("result") or {}).get("file_path")
+        if not tg_path: return False
+        with requests.get(f"https://api.telegram.org/file/bot{bot_token}/{tg_path}", stream=True, timeout=120) as resp:
+            if not resp.ok: return False
+            with open(dest_path, "wb") as f:
+                for chunk in resp.iter_content(65536):
+                    if chunk: f.write(chunk)
+        return os.path.exists(dest_path) and os.path.getsize(dest_path) > 0
+    except Exception:
+        return False
+
 def notify_n8n_webhook(callback_url: Optional[str], result_payload: Dict[str, Any]):
     if not callback_url: return
     try: requests.post(callback_url, json=result_payload, headers={"Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true"}, timeout=30)
@@ -309,7 +334,9 @@ def get_sdxl_lightning_pipeline() -> StableDiffusionXLPipeline:
     if not unet_ckpt or not os.path.exists(unet_ckpt):
         matches = glob.glob("/kaggle/input/**/sdxl_lightning_4step_unet.safetensors", recursive=True)
         if matches: unet_ckpt = matches[0]
-        else: raise RuntimeError("SDXL-Lightning UNet checkpoint not found!")
+        else:
+            from huggingface_hub import hf_hub_download
+            unet_ckpt = hf_hub_download(repo_id="ByteDance/SDXL-Lightning", filename="sdxl_lightning_4step_unet.safetensors")
     base_model_id = "stabilityai/stable-diffusion-xl-base-1.0"
     unet = UNet2DConditionModel.from_config(base_model_id, subfolder="unet").to(DEVICE_0, torch.float16)
     unet.load_state_dict(load_file(unet_ckpt, device=DEVICE_0))
@@ -324,6 +351,12 @@ def get_animatediff_pipeline() -> AnimateDiffPipeline:
     if not adapter_ckpt:
         matches = glob.glob("/kaggle/input/**/animatediff_lightning_4step_diffusers.safetensors", recursive=True)
         adapter_ckpt = matches[0] if matches else None
+        if not adapter_ckpt:
+            try:
+                from huggingface_hub import hf_hub_download
+                adapter_ckpt = hf_hub_download(repo_id="ByteDance/AnimateDiff-Lightning", filename="animatediff_lightning_4step_diffusers.safetensors")
+            except Exception:
+                adapter_ckpt = None
     adapter = MotionAdapter().to(DEVICE_0, torch.float16)
     if adapter_ckpt and os.path.exists(adapter_ckpt):
         adapter.load_state_dict(load_file(adapter_ckpt, device=DEVICE_0))
@@ -333,9 +366,12 @@ def get_animatediff_pipeline() -> AnimateDiffPipeline:
     return pipe
 
 def prewarm_models_background():
+    global PREWARM_ERROR
     try:
         with GPU_0_LOCK: get_sdxl_lightning_pipeline()
-    except Exception: pass
+        PREWARM_ERROR = None
+    except Exception as exc:
+        PREWARM_ERROR = str(exc)[:500]
 
 def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict[str, Any]:
     JOBS_STORE[job_id] = {"status": "processing"}
@@ -378,7 +414,10 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             current_media = os.path.join(tmpdir, "input_source.png")
-            if req.image_url:
+            if req.image_telegram_file_id:
+                if not download_telegram_media(req.image_telegram_file_id, current_media, req.telegram_upload):
+                    raise RuntimeError("Telegram image download failed")
+            elif req.image_url:
                 with requests.get(req.image_url, headers={"Bypass-Tunnel-Reminder": "true"}, stream=True, timeout=60) as r:
                     r.raise_for_status()
                     with open(current_media, "wb") as f:
@@ -386,7 +425,11 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
                             if chunk: f.write(chunk)
             else: Image.new("RGB", (1280, 720), color=(15, 15, 25)).save(current_media)
             local_audio = None
-            if req.audio_url:
+            if req.audio_telegram_file_id:
+                local_audio = os.path.join(tmpdir, "scene_voice.wav")
+                if not download_telegram_media(req.audio_telegram_file_id, local_audio, req.telegram_upload):
+                    local_audio = None
+            elif req.audio_url:
                 local_audio = os.path.join(tmpdir, "scene_voice.wav")
                 try:
                     with requests.get(req.audio_url, headers={"Bypass-Tunnel-Reminder": "true"}, stream=True, timeout=60) as r:
@@ -419,7 +462,6 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
             caption = f"GPU CLIP Project: {req.project_id} | S{req.season_no} Ep: {req.episode_no} | Scene: {req.scene_order}"
             tg_res = upload_media_to_telegram(final_mp4, caption, req.telegram_upload)
             result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
-            if tg_res["telegram_url"]:
             JOBS_STORE[job_id] = result_payload
             notify_n8n_webhook(req.callback_url, result_payload)
             return result_payload
@@ -430,7 +472,7 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
         raise exc
 
 @app.post("/v1/generate-image")
-async def generate_image_endpoint(req: GenerateImageRequest):
+async def generate_image_endpoint(req: GenerateImageRequest, _: None = Depends(require_session_token)):
     job_id = f"img_{req.project_id[:6]}_{uuid.uuid4().hex[:6]}"
     JOBS_STORE[job_id] = {"status": "queued"}
     if req.async_mode or req.callback_url:
@@ -439,7 +481,7 @@ async def generate_image_endpoint(req: GenerateImageRequest):
     return await asyncio.to_thread(execute_image_generation_job, job_id, req)
 
 @app.post("/v1/gpu/video-assembly-line")
-async def video_assembly_endpoint(req: VideoAssemblyRequest):
+async def video_assembly_endpoint(req: VideoAssemblyRequest, _: None = Depends(require_session_token)):
     job_id = f"vid_{req.project_id[:6]}_{uuid.uuid4().hex[:6]}"
     JOBS_STORE[job_id] = {"status": "queued"}
     if req.async_mode or req.callback_url:
@@ -448,13 +490,17 @@ async def video_assembly_endpoint(req: VideoAssemblyRequest):
     return await asyncio.to_thread(execute_video_assembly_job, job_id, req)
 
 @app.get("/v1/jobs/{job_id}")
-async def get_job_status(job_id: str):
+async def get_job_status(job_id: str, _: None = Depends(require_session_token)):
     if job_id not in JOBS_STORE: raise HTTPException(status_code=404, detail="Job not found")
     return JOBS_STORE[job_id]
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0}
+    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "prewarm_error": PREWARM_ERROR, "model_paths": MODEL_PATHS, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0}
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc):
+    return JSONResponse(status_code=500, content={"detail": str(exc)[:1000]})
 
 def register_tunnel_in_supabase(tunnel_url: str):
     global PUBLIC_TUNNEL_URL
@@ -493,6 +539,27 @@ if __name__ == "__main__":
 `;
 }
 
+function isKaggleApiToken(value: string): boolean {
+  return /^KGAT_/i.test(value.trim());
+}
+
+async function resolveKaggleUsername(apiKey: string, providedUsername: string): Promise<string> {
+  const provided = providedUsername.trim();
+  if (provided) return provided;
+  if (!isKaggleApiToken(apiKey)) return '';
+  try {
+    const res = await fetch('https://www.kaggle.com/api/v1/kernels/list?group=profile&pageSize=1', {
+      headers: { Authorization: `Bearer ${apiKey.trim()}`, 'User-Agent': 'anime-backend/1.0' },
+    });
+    if (!res.ok) return '';
+    const data = await res.json().catch(() => []);
+    const ref = Array.isArray(data) && data[0] ? String(data[0].ref || '') : '';
+    return ref.split('/')[0]?.trim() || '';
+  } catch {
+    return '';
+  }
+}
+
 async function pushKaggleKernel(
   username: string,
   apiKey: string,
@@ -511,8 +578,12 @@ async function pushKaggleKernel(
     scope: ['gpu_session'],
     ttl_seconds: 21600,
   });
+  const resolvedUsername = await resolveKaggleUsername(apiKey, username);
+  if (!resolvedUsername) {
+    return { ok: false, status: 400, data: { message: 'Kaggle username could not be resolved.' }, worker_token: null };
+  }
   const cleanSlug = rawNotebookSlug.replace(/^.*\/+/, '').trim() || 'anime-gpu-worker';
-  const fullSlug = `${username.trim()}/${cleanSlug}`;
+  const fullSlug = `${resolvedUsername}/${cleanSlug}`;
   const payload = {
     slug: fullSlug,
     newTitle: cleanSlug,
@@ -525,17 +596,20 @@ async function pushKaggleKernel(
     datasetDataSources: [datasetSlug],
   };
 
-  const basicAuth = Buffer.from(`${username.trim()}:${apiKey.trim()}`).toString('base64');
+  const authorization = isKaggleApiToken(apiKey)
+    ? `Bearer ${apiKey.trim()}`
+    : `Basic ${Buffer.from(`${resolvedUsername}:${apiKey.trim()}`).toString('base64')}`;
   const res = await fetch('https://www.kaggle.com/api/v1/kernels/push', {
     method: 'POST',
     headers: {
-      Authorization: `Basic ${basicAuth}`,
+      Authorization: authorization,
       'Content-Type': 'application/json',
+      'User-Agent': 'anime-backend/1.0',
     },
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, data };
+  return { ok: res.ok, status: res.status, data, worker_token: sessionToken };
 }
 
 function asRecord(value: unknown): Record<string, any> {
@@ -665,7 +739,7 @@ export async function ensureKaggleWorkerForUser(userId: string, tenantId?: strin
   const primary = asRecord(routing.kaggle_primary);
   const username = String(primary.username || '').trim();
   const apiKey = String(primary.api_key || '').trim();
-  if (!username || !apiKey) {
+  if (!apiKey || (!username && !isKaggleApiToken(apiKey))) {
     throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: 'Kaggle credentials are not configured.' });
   }
 
@@ -710,6 +784,7 @@ export async function ensureKaggleWorkerForUser(userId: string, tenantId?: strin
     status: 'starting',
     api_endpoint: null,
     gpu_id: 'T4x2',
+    worker_token: deploy.worker_token,
     updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id,session_name' });
   if (sessionError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Kaggle session could not be recorded.', cause: sessionError });
@@ -906,7 +981,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     }
 
     const kaggleDeployResult: Record<string, unknown> = {};
-    if (body.auto_deploy_kaggle && nextPrimary.username && nextPrimary.api_key) {
+    if (body.auto_deploy_kaggle && nextPrimary.api_key && (nextPrimary.username || isKaggleApiToken(String(nextPrimary.api_key)))) {
       kaggleDeployResult.primary = await pushKaggleKernel(
         String(nextPrimary.username),
         String(nextPrimary.api_key),
@@ -917,7 +992,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
         tenantId
       );
     }
-    if (body.auto_deploy_kaggle && nextSecondary.username && nextSecondary.api_key) {
+    if (body.auto_deploy_kaggle && nextSecondary.api_key && (nextSecondary.username || isKaggleApiToken(String(nextSecondary.api_key)))) {
       kaggleDeployResult.secondary = await pushKaggleKernel(
         String(nextSecondary.username),
         String(nextSecondary.api_key),

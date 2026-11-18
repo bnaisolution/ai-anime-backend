@@ -111,6 +111,7 @@ export async function registerAnimeWorkflowWorkerRoutes(app: FastifyInstance): P
       status: 'active',
       api_endpoint: endpoint,
       gpu_id: typeof body.gpu_id === 'string' ? body.gpu_id.slice(0, 40) : null,
+      worker_token: bearerToken(request),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,session_name' });
     if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Session registration failed.', cause: error });

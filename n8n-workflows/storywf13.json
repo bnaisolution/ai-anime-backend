@@ -298,7 +298,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `✨ **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `🩺 **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `• **Total Jobs Evaluated:** ${processed.length}`,\n  `• **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `• **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `• **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
+        "jsCode": "const processed = $('Return Item to Batch Loop').isExecuted ? $('Return Item to Batch Loop').all().map(i => i.json) : [];\nconst deadLetterCount = processed.filter(p => p.next_status === 'DEAD_LETTER').length;\nconst scheduledCount = processed.filter(p => p.next_status === 'RETRY_SCHEDULED').length;\nconst dispatchedCount = processed.filter(p => p.dispatch_now === true).length;\n\nconst msg = processed.length === 0 ? `\u2728 **WF-13: Retry Manager Sweep Clean!** Koi bhi failed ya due retry job nahi mila.` : [\n  `\ud83e\ude7a **WF-13: Retry Manager (The Healer) Sweep Complete!**`,\n  `\u2022 **Total Jobs Evaluated:** ${processed.length}`,\n  `\u2022 **Dispatched Immediately to WF-00:** ${dispatchedCount}`,\n  `\u2022 **Scheduled with Exponential Backoff:** ${scheduledCount}`,\n  `\u2022 **Moved to DEAD_LETTER (Retries >= 3):** ${deadLetterCount}`\n].join('\\n');\n\nreturn [{ json: { ok: true, status: 'RETRY_SWEEP_COMPLETE', workflow_name: 'WF-13', execution_id: $execution.id, total_evaluated: processed.length, dispatched_count: dispatchedCount, scheduled_count: scheduledCount, dead_letter_count: deadLetterCount, processed_jobs: processed, output: msg, text: msg } }];"
       },
       "id": "263f696b-6638-48b9-a9ee-9a8e5f86f859",
       "name": "Final Healer Response Formatter",
@@ -344,7 +344,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || null), command_id: ($json.command_id || null), wf_key: \"WF-13\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + 'SUCCESS', result: $json }) }}",
+        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($json.command_id || $('When Executed by Another Workflow').first().json.command_id || null), wf_key: \"WF-13\", status: \"COMPLETED\", execution_id: $execution.id, callback_id: $execution.id + ':completed:' + 'SUCCESS', result: $json }) }}",
         "options": {
           "timeout": 10000
         }
@@ -389,7 +389,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || null), command_id: ($json.command_id || null), wf_key: \"WF-13\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + 'FAILED', error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
+        "jsonBody": "={{ JSON.stringify({ system_scope: true, project_id: ($json.project_id || $('When Executed by Another Workflow').first().json.project_id || null), command_id: ($json.command_id || $('When Executed by Another Workflow').first().json.command_id || null), wf_key: \"WF-13\", status: \"FAILED\", execution_id: $execution.id, callback_id: $execution.id + ':failed:' + 'FAILED', error: (($json.error && $json.error.message) || $json.error || 'Workflow execution failed'), result: null }) }}",
         "options": {
           "timeout": 10000
         }

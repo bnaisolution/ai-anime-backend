@@ -1,4 +1,4 @@
-import { Client } from 'pg';
+import { Client, Pool } from 'pg';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { tenantClientConnection, validateTenantDsn } from '../tenant/tenantDatabase.validation';
 import type { ScopedDbRequest } from './workflowGateway.db';
@@ -144,7 +144,7 @@ function compileCondition(raw: string, values: unknown[]): string {
   if (!FILTER_OPS.has(op)) queryInvalid(`Unsupported filter operator ${op}.`);
   const placeholder = addValue(values, operand);
   if (op === 'like' || op === 'ilike') return `${column} ${op} ${placeholder}`;
-  const sqlOp = op === 'eq' ? '=' : op === 'neq' ? '<>' : op === 'gte' ? '>=' : op === 'lte' ? '<=' : op;
+  const sqlOp = op === 'eq' ? '=' : op === 'neq' ? '<>' : op === 'gt' ? '>' : op === 'gte' ? '>=' : op === 'lt' ? '<' : op === 'lte' ? '<=' : op;
   return `${column} ${sqlOp} ${placeholder}`;
 }
 
@@ -312,13 +312,54 @@ function defaultClientFactory(dsn: string): TenantDbClientLike {
   return new Client({
     connectionString: connection.connectionString,
     ssl: connection.ssl,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 10_000,
     query_timeout: 15_000,
     statement_timeout: 15_000,
   });
 }
 
+const tenantPools = new Map<string, Pool>();
+
+function defaultPool(dsn: string): Pool {
+  const existing = tenantPools.get(dsn);
+  if (existing) return existing;
+  const validated = validateTenantDsn(dsn);
+  const connection = tenantClientConnection(validated);
+  const pool = new Pool({
+    connectionString: connection.connectionString,
+    ssl: connection.ssl,
+    max: 4,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    query_timeout: 15_000,
+    statement_timeout: 15_000,
+    allowExitOnIdle: true,
+  });
+  pool.on('error', () => undefined);
+  tenantPools.set(dsn, pool);
+  return pool;
+}
+
 let clientFactory: TenantDbClientFactory = defaultClientFactory;
+
+const MAX_TENANT_DB_CONCURRENCY = 4;
+let activeTenantDbRequests = 0;
+const tenantDbWaiters: Array<() => void> = [];
+
+async function acquireTenantDbSlot(): Promise<void> {
+  if (activeTenantDbRequests < MAX_TENANT_DB_CONCURRENCY) {
+    activeTenantDbRequests += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => tenantDbWaiters.push(resolve));
+  activeTenantDbRequests += 1;
+}
+
+function releaseTenantDbSlot(): void {
+  activeTenantDbRequests -= 1;
+  const next = tenantDbWaiters.shift();
+  if (next) next();
+}
 
 export function setTenantDbClientFactoryForTests(factory: TenantDbClientFactory | null): void {
   clientFactory = factory ?? defaultClientFactory;
@@ -326,15 +367,31 @@ export function setTenantDbClientFactoryForTests(factory: TenantDbClientFactory 
 
 export async function executeTenantDbRequest(scoped: ScopedDbRequest, dsn: string): Promise<TenantDbResult> {
   const statement = buildTenantDbStatement(scoped);
-  const client = clientFactory(dsn);
+  await acquireTenantDbSlot();
   try {
-    await client.connect();
-    const result = await client.query(statement.text, statement.values);
-    return resultForStatement(scoped, result.rows ?? []);
-  } catch (error) {
-    throw mapDatabaseError(error);
+    if (clientFactory === defaultClientFactory) {
+      const client = await defaultPool(dsn).connect();
+      try {
+        const result = await client.query(statement.text, statement.values);
+        return resultForStatement(scoped, result.rows ?? []);
+      } catch (error) {
+        throw mapDatabaseError(error);
+      } finally {
+        client.release();
+      }
+    }
+    const client = clientFactory(dsn);
+    try {
+      await client.connect();
+      const result = await client.query(statement.text, statement.values);
+      return resultForStatement(scoped, result.rows ?? []);
+    } catch (error) {
+      throw mapDatabaseError(error);
+    } finally {
+      await client.end().catch(() => undefined);
+    }
   } finally {
-    await client.end().catch(() => undefined);
+    releaseTenantDbSlot();
   }
 }
 

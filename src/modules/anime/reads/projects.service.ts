@@ -1,6 +1,65 @@
 import { randomUUID } from 'crypto';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { buildScopedDbRequest } from '../internal/workflowGateway.db';
+import { executeTenantDbRequest } from '../internal/workflowGateway.tenantDb';
+import { isByodFirstEnabled, resolveTenantDataPlane } from '../tenant/tenantDatabase.service';
+import { upsertProjectIndex } from '../tenant/tenantDatabase.repo';
+
+export async function createProjectRecord(input: {
+  userId: string;
+  project: Record<string, any>;
+  tenantId?: string | null;
+}): Promise<any> {
+  const projectId = randomUUID();
+  const payload = {
+    ...input.project,
+    id: projectId,
+    user_id: input.userId,
+  };
+  let wroteTenant = false;
+
+  if (input.tenantId && isByodFirstEnabled()) {
+    const plane = await resolveTenantDataPlane(input.tenantId);
+    if (!plane.central && plane.dsn) {
+      const scoped = buildScopedDbRequest({
+        path: '/rest/v1/projects',
+        method: 'POST',
+        body: payload,
+        prefer: 'return=representation',
+        project_id: projectId,
+        user_id: input.userId,
+      });
+      const result = await executeTenantDbRequest(scoped, plane.dsn);
+      if (result.status < 200 || result.status >= 300) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to create project in the user database.' });
+      }
+      wroteTenant = true;
+    }
+  }
+
+  const { data: created, error } = await animeSupabase
+    .from('projects')
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error || !created) {
+    throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to create project', cause: error });
+  }
+
+  if (wroteTenant && input.tenantId) {
+    await upsertProjectIndex({
+      project_id: projectId,
+      tenant_id: input.tenantId,
+      data_plane: 'byod',
+      cutover_status: 'byod',
+      migrated_at: new Date().toISOString(),
+    });
+  }
+
+  return created;
+}
 
 export async function listProjects(userId: string) {
   if (!userId) return [];

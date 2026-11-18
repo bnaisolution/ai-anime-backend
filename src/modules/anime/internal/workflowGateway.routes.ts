@@ -150,7 +150,7 @@ async function executeSystemRequest(scoped: ReturnType<typeof buildScopedDbReque
 }
 
 export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): Promise<void> {
-  app.post('/v1/anime/internal/workflow/db', async (request: any, reply: any) => {
+  app.post('/v1/anime/internal/workflow/db', { config: { rateLimit: false } }, async (request: any, reply: any) => {
     const body = request.body as any;
     if (!body || typeof body !== 'object') authInvalid('Request body is required.');
     const system = body.system_scope === true;
@@ -179,7 +179,7 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
     sendGatewayResult(reply, result);
   });
 
-  app.post('/v1/anime/internal/workflow/llm', async (request: any, reply: any) => {
+  app.post('/v1/anime/internal/workflow/llm', { config: { rateLimit: false } }, async (request: any, reply: any) => {
     const body = request.body as any;
     if (!body || typeof body !== 'object') authInvalid('Request body is required.');
     verifyWorkflowGatewayRequest(request, false);

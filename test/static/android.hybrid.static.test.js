@@ -64,3 +64,27 @@ test('Owner console exposes database filters, audit, recheck, and feature flags'
   assert.match(owner, /provisionOwnerTenantDatabase/);
   assert.match(owner, /fetchOwnerFeatureFlags/);
 });
+
+test('Owner console reads the live queue contract and guards owner routes', () => {
+  const queues = fs.readFileSync(path.join(mainJava, 'ui/owner/AdminQueuesScreen.kt'), 'utf8');
+  const nav = fs.readFileSync(path.join(mainJava, 'ui/navigation/AppNavGraph.kt'), 'utf8');
+  assert.match(queues, /\["outbox"\]/);
+  assert.match(queues, /\["commands"\]/);
+  assert.match(queues, /dead_letter/);
+  assert.match(owner, /\["outbox"\]/);
+  assert.match(nav, /isOwner\(\)/);
+  assert.match(nav, /OwnerAccessDenied/);
+});
+
+test('Release workflow is manual, signed, and checksummed', () => {
+  const workflow = fs.readFileSync(
+    path.join(androidRoot, '.github/workflows/android-release.yml'),
+    'utf8'
+  );
+  assert.match(workflow, /workflow_dispatch/);
+  assert.match(workflow, /ANDROID_KEYSTORE_BASE64/);
+  assert.match(workflow, /assembleRelease/);
+  assert.match(workflow, /bundleRelease/);
+  assert.match(workflow, /sha256sum/);
+  assert.doesNotMatch(workflow, /uses: actions\/upload-artifact@v4[\s\S]*if-no-files-found: warn/);
+});

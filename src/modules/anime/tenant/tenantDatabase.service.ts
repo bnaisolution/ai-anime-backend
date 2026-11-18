@@ -24,6 +24,10 @@ export function getHybridFlags(): { byod_enabled: boolean; platform_db_enabled: 
   };
 }
 
+export function isByodFirstEnabled(): boolean {
+  return boolEnv('ANIME_BYOD_FIRST_ENABLED');
+}
+
 export function assertByodEnabled(): void {
   if (!getHybridFlags().byod_enabled) {
     throw new AnimeError({

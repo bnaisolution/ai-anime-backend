@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { resolveTelegramFileAccess, userOwnsAnyProject } from './telegram.media.repo';
+import { verifyMediaPlaybackToken } from './telegram.playback';
 import {
   buildTelegramDownloadUrl,
   buildTelegramGetFileUrl,
@@ -45,8 +46,10 @@ export default async function telegramProxyRoutes(app: FastifyInstance): Promise
         const fileId = validateTelegramFileId((request.params as { file_id?: string }).file_id);
         const auth = request.authContext;
         const access = await resolveTelegramFileAccess(fileId, Boolean(auth));
+        const playbackClaims = verifyMediaPlaybackToken(query.token);
+        const tokenAuthorized = Boolean(playbackClaims && playbackClaims.fileId === fileId);
 
-        if (!access.published) {
+        if (!access.published && !tokenAuthorized) {
           if (!auth) {
             return reply.status(401).send({ ok: false, error: 'Authentication required' });
           }

@@ -10,3 +10,7 @@ all_git_code.txt
 backups/
 *.bak_*
 *.bak
+
+# Python bytecode
+__pycache__/
+*.pyc

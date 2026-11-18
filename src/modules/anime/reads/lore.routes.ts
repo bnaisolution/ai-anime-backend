@@ -4,6 +4,12 @@ import { requireProjectRole } from '../auth/project-guard';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { canonicalMediumKey, parseGenreList } from '../prompts/creative.registry';
+import { mintMediaPlaybackToken } from '../media/telegram.playback';
+import { createProjectRecord } from './projects.service';
+import { isByodFirstEnabled, resolveProjectDataPlaneById } from '../tenant/tenantDatabase.service';
+import { buildScopedDbRequest } from '../internal/workflowGateway.db';
+import { executeTenantDbRequest } from '../internal/workflowGateway.tenantDb';
+import { resolveRequestTenant } from '../tenant/tenant.service';
 
 const READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
 const WRITE_ROLES = ['owner', 'admin', 'editor'];
@@ -313,23 +319,27 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
           : normalizeGenerationSetting(body.story_bible?.episodes_per_season, 12, 1, 500),
       };
 
-      const { data: created, error: createErr } = await animeSupabase
-        .from('projects')
-        .insert({
+      let tenantId: string | null = null;
+      if (isByodFirstEnabled()) {
+        try {
+          tenantId = (await resolveRequestTenant(request)).tenant.id;
+        } catch (error) {
+          if ((error as any)?.code === 'TENANT_REQUIRED') throw error;
+        }
+      }
+
+      const created = await createProjectRecord({
+        userId,
+        tenantId,
+        project: {
           name,
-          user_id: userId,
           is_active: true,
           genre,
           visual_medium: visualMedium,
           description: body.description || body.premise || null,
           story_bible: initialBible,
-        })
-        .select('*')
-        .single();
-
-      if (createErr || !created) {
-        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to create project', cause: createErr });
-      }
+        },
+      });
 
       const promptIds = Array.isArray(body.prompt_ids)
         ? body.prompt_ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
@@ -829,25 +839,66 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     { schema: { params: ProjParamsSchema }, preHandler: [app.authenticate, requireProjectRole(READ_ROLES)] },
     async (request: any) => {
       const projectId = request.params.id;
-      const [scenesRes, clipsRes, charsRes] = await Promise.all([
-        animeSupabase.from('scenes').select('*').eq('project_id', projectId).order('scene_order', { ascending: true }),
-        animeSupabase.from('clips').select('*').eq('project_id', projectId),
-        animeSupabase.from('characters').select('id, character_code, name, image_url, reference_version').eq('project_id', projectId),
-      ]);
+      const plane = await resolveProjectDataPlaneById(projectId);
+      let scenesData: any[] = [];
+      let clipsData: any[] = [];
+      let charsData: any[] = [];
 
-      if (scenesRes.error || clipsRes.error || charsRes.error) {
-        throw new AnimeError({
-          code: AnimeErrorCode.INTERNAL,
-          message: 'Failed to load project media assets',
-          cause: scenesRes.error || clipsRes.error || charsRes.error,
-        });
+      if (!plane.central && plane.dsn) {
+        const userId = request.authContext?.userId || request.anime?.user_id || '';
+        const read = (path: string) => {
+          const scoped = buildScopedDbRequest({ path, method: 'GET', project_id: projectId, user_id: String(userId) });
+          return executeTenantDbRequest(scoped, plane.dsn as string);
+        };
+        const [scenesResult, clipsResult, charsResult] = await Promise.all([
+          read('/rest/v1/scenes?select=*&order=scene_order.asc'),
+          read('/rest/v1/clips?select=*'),
+          read('/rest/v1/characters?select=id,character_code,name,image_url,reference_version'),
+        ]);
+        scenesData = Array.isArray(scenesResult.body) ? scenesResult.body : [];
+        clipsData = Array.isArray(clipsResult.body) ? clipsResult.body : [];
+        charsData = Array.isArray(charsResult.body) ? charsResult.body : [];
+      } else {
+        const [scenesRes, clipsRes, charsRes] = await Promise.all([
+          animeSupabase.from('scenes').select('*').eq('project_id', projectId).order('scene_order', { ascending: true }),
+          animeSupabase.from('clips').select('*').eq('project_id', projectId),
+          animeSupabase.from('characters').select('id, character_code, name, image_url, reference_version').eq('project_id', projectId),
+        ]);
+
+        if (scenesRes.error || clipsRes.error || charsRes.error) {
+          throw new AnimeError({
+            code: AnimeErrorCode.INTERNAL,
+            message: 'Failed to load project media assets',
+            cause: scenesRes.error || clipsRes.error || charsRes.error,
+          });
+        }
+        scenesData = scenesRes.data ?? [];
+        clipsData = clipsRes.data ?? [];
+        charsData = charsRes.data ?? [];
       }
+
+      const playbackBase = String(process.env.ANIME_PUBLIC_BASE_URL || 'https://api.bnai.dpdns.org').replace(/\/+$/, '');
+      const userId = request.authContext?.userId || request.anime?.user_id || '';
+      const clips = clipsData.map((clip: any) => {
+        const fileId = [clip.tg_video_file_id, clip.output_file_id, clip.tg_image_file_id, clip.tg_audio_file_id, clip.image_file_id]
+          .find((value) => typeof value === 'string' && value.trim());
+        if (!fileId) return clip;
+        try {
+          const token = mintMediaPlaybackToken({ fileId: String(fileId), projectId, userId: String(userId) });
+          return {
+            ...clip,
+            playback_url: `${playbackBase}/v1/media/telegram/${encodeURIComponent(String(fileId))}?token=${encodeURIComponent(token)}`,
+          };
+        } catch (_error) {
+          return clip;
+        }
+      });
 
       return {
         data: {
-          scenes: scenesRes.data ?? [],
-          clips: clipsRes.data ?? [],
-          character_refs: (charsRes.data ?? []).filter((c: any) => Boolean(c.image_url)),
+          scenes: scenesData,
+          clips,
+          character_refs: charsData.filter((c: any) => Boolean(c.image_url)),
         },
       };
     }

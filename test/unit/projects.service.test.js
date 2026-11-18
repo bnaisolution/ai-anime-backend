@@ -137,3 +137,27 @@ test('listProjects never falls back to projects owned by other users', async () 
   assert.deepEqual(projects, []);
   assert.equal(state.calls.filter((call) => call.table === 'projects' && call.action === 'select').length, 1);
 });
+
+test('createProjectRecord writes the generated id and owner through the routed creator', async () => {
+  let insertPayload;
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.action === 'insert' && call.table === 'projects') {
+      insertPayload = call.payload;
+      return { data: { ...call.payload }, error: null };
+    }
+    return { data: null, error: null };
+  });
+
+  delete process.env.ANIME_BYOD_FIRST_ENABLED;
+  const { createProjectRecord } = H.dist('modules/anime/reads/projects.service.js');
+  const created = await createProjectRecord({
+    userId: '11111111-1111-4111-8111-111111111111',
+    tenantId: '22222222-2222-4222-8222-222222222222',
+    project: { name: 'Routed Project', is_active: true, genre: 'Sci-Fi', visual_medium: 'ANIME', story_bible: {} },
+  });
+
+  assert.ok(insertPayload);
+  assert.equal(insertPayload.id, created.id);
+  assert.equal(insertPayload.user_id, '11111111-1111-4111-8111-111111111111');
+  assert.equal(state.calls.some((c) => c.table === 'anime_tenant_project_index'), false);
+});
