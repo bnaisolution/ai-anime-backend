@@ -1,5 +1,13 @@
 # SYSTEM STATE LEDGER (Single Source of Truth)
 
+## 2026-11-18 Gap Closure Wave 1 (DEPLOYED)
+- Backend `main` @ `9ee99e5` (Backend Tests green): `director.capabilities.ts` registry drives prompt/risk/roles/resources; new `GET /api/v1/ai/director/capabilities` + `GET /api/v1/ai/director/readiness`; Director context carries the full readiness matrix; `SETUP_REQUIRED` gate behind `BYOD_FAIL_CLOSED`; `ai_model_catalog` + `user_model_preferences` + `render_profiles`; migrations 015/016/017 with rollback scripts + RLS.
+- Android `main` @ `8cb4e2c` (Build Anime APK `44378365016` green, artifact `anime-debug-apk` 20.8 MB): capabilities/readiness DTOs + repository methods, ViewModel loads readiness/capabilities per project, `DirectorReadinessStrip` rendered in `AIBrainScreen`.
+- Live container `anime-backend:director-gap1-20261118` (rollback tag `anime-backend:rollback-pre-gap1`), network alias `backend`, health 200; `/director/capabilities`, `/director/readiness`, `/ai/models/catalog` return 401 unauthenticated (routes registered).
+- Migrations 015–017 NOT applied: `.env` has no DB DSN. Code paths are guarded, so this is safe; apply through the pooler before enabling `MODEL_CATALOG`.
+- Flag defaults: `DIRECTOR_CAPABILITIES_V2=true`, `DIRECTOR_READINESS=true`, `BYOD_FAIL_CLOSED=false`, `MODEL_CATALOG=false`, `PUBLISH_OAUTH_V2=false`, `SAAS_BILLING=false`.
+- NEXT: apply 015–017, then Phase 4 Director UX (timeline/deep links), Phase 5 publish OAuth, Phase 7 14-workflow BYOD validation.
+
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM); containers `ai-backend` and `n8n` healthy.
 - ai-anime-android: code `d0de7cb`, docs `main` @ `ac14492`; Android Tests `44054066519` green; APK `44054066825` green. The earlier `d1c6ee4` Maestro failure was a `stopApp` + `launchApp clearState` race; `ac14492` removes the redundant `stopApp`.
