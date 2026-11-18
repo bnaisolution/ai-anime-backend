@@ -1,13 +1,17 @@
 import { animeSupabase } from '../anime/db/anime.supabase';
 import { FastifyInstance } from 'fastify';
-import { env } from '../../config/env';
 import { checkAndRecordQuota, runExecutionGuard } from '../../security/executionGuard';
 import { redactSecrets } from '../../security/permissionEngine';
-import { callDynamicModel } from '../../core/ai-brain/modelRouter';
+import { callDynamicModel, callByodModel, byodFailureMessage } from '../../core/ai-brain/modelRouter';
 import { buildSmartContext } from '../../core/ai-brain/contextBuilder';
+import { resolveByodProviderCandidates } from '../../core/ai-brain/providerResolver';
 import crypto from 'crypto';
+import directorRoutes from './director/director.routes';
+import { dispatchToWf00 } from '../anime/adapters/n8n.adapter';
 
 export default async function aiRoutes(fastify: FastifyInstance) {
+  await fastify.register(directorRoutes);
+
   fastify.post('/chat', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const startTs = Date.now();
     const auth = request.authContext;
@@ -17,6 +21,11 @@ export default async function aiRoutes(fastify: FastifyInstance) {
     const skillKey = body.skill_key || 'ai_admin';
 
     if (!userMessage) return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'message is required' }] });
+
+    const byodResolution = await resolveByodProviderCandidates(auth.userId, { capability: 'text' });
+    if (byodResolution.candidates.length === 0) {
+      return reply.code(422).send({ status: 'failed', errors: [{ category: 'BYOD_REQUIRED', message: byodFailureMessage(byodResolution) }] });
+    }
 
     const quota = await checkAndRecordQuota(fastify, auth.userId, Math.ceil(userMessage.length / 3) + 300);
     if (!quota.allowed) return reply.code(429).send({ status: 'failed', errors: [{ category: 'PROVIDER_RATE_LIMIT', message: quota.reason }] });
@@ -53,12 +62,14 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       dynamicContext
     ].filter(Boolean).join('\n\n');
 
-    const aiRes = await callDynamicModel(fastify, [
+    const aiRes = await callByodModel(fastify, auth.userId, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: String(redactSecrets(finalUserMessage)).slice(0, 8000) }
-    ]);
+    ], 0.3, auth.workspaceId || undefined);
 
-    if (!aiRes.ok) return reply.code(502).send({ status: 'failed', errors: [{ category: 'MODEL_ERROR', message: 'All AI providers failed' }] });
+    if (!aiRes.ok) {
+      return reply.code(502).send({ status: 'failed', errors: [{ category: aiRes.reason === 'BYOD_REQUIRED' ? 'BYOD_REQUIRED' : 'MODEL_ERROR', message: byodFailureMessage(aiRes.resolution, aiRes.reason) }] });
+    }
 
     // Log execution
     try {
@@ -66,7 +77,7 @@ export default async function aiRoutes(fastify: FastifyInstance) {
         execution_type: 'fast_chat_rag',
         provider: aiRes.provider,
         model: aiRes.model,
-        input: { request_id: body.request_id, skill_key: skillKey },
+        input: { user_id: auth.userId, request_id: body.request_id, skill_key: skillKey, key_source: 'byod' },
         output: { reply_length: aiRes.reply.length },
         success: true,
         duration_ms: Date.now() - startTs,
@@ -81,7 +92,8 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       message: aiRes.reply,
       provider: aiRes.provider,
       model: aiRes.model,
-      verification: { status: 'verified', evidence: [`Dynamic path via ${aiRes.provider}`] }
+      key_source: 'byod',
+      verification: { status: 'verified', evidence: [`BYOD path via ${aiRes.provider}`] }
     });
   });
 
@@ -118,6 +130,19 @@ export default async function aiRoutes(fastify: FastifyInstance) {
       warnings: [], verification: { status: 'not_verified', evidence: ['Rejected by Guard'] }
     });
 
+    try {
+      await fastify.supabase.from('execution_records').insert({
+        execution_type: 'ai_gateway_execute',
+        provider: 'n8n',
+        model: 'wf00',
+        input: { user_id: auth.userId, request_id: requestId, intent, project_id: projectId, source_mode: sourceMode },
+        output: { phase: 'started' },
+        success: false,
+        duration_ms: 0,
+        tokens_used: 0,
+      });
+    } catch (_e) {}
+
     const wf00Body = {
       request_id: requestId, user_id: auth.userId, workspace_id: auth.workspaceId,
       project_id: projectId, conversation_id: conversationId, intent, source_mode: sourceMode,
@@ -125,25 +150,31 @@ export default async function aiRoutes(fastify: FastifyInstance) {
     };
 
     try {
-      const wf00Url = `${env.N8N_BASE_URL}/webhook/wf00-gateway`;
-      const n8nResp = await fetch(wf00Url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'x-service-token': env.N8N_WEBHOOK_SECRET },
-        body: JSON.stringify(wf00Body)
+      const dispatch = await dispatchToWf00({
+        ...wf00Body,
+        command_id: requestId,
+        idempotency_key: requestId,
+        mode: (payload.mode as string) || 'QUICK',
+        episode_no: payload.episode_no ?? payload.episode_number ?? 1,
+        season_no: payload.season_no ?? payload.season_number ?? 1,
+        userPrompt: payload.userPrompt ?? payload.user_prompt ?? payload.prompt ?? '',
+        project_style: payload.project_style,
+        user_infrastructure: payload.user_infrastructure,
       });
-      const rawText = await n8nResp.text();
-      let parsed: any = null; try { parsed = JSON.parse(rawText); } catch (_e) {}
-
-      if (parsed && parsed.request_id) return reply.code(n8nResp.status).send(parsed);
-
-      return reply.code(n8nResp.ok ? 200 : 502).send({
-        request_id: requestId, task_id: null, status: n8nResp.ok ? 'completed' : 'failed',
-        result: parsed || { raw: rawText.slice(0, 1000) },
-        errors: n8nResp.ok ? [] : [{ category: 'INTEGRATION_UNAVAILABLE', message: `WF-00 HTTP ${n8nResp.status}` }],
-        warnings: [], verification: { status: n8nResp.ok ? 'verified' : 'not_verified', evidence: [`Dispatched to WF-00`] }
+      const parsed = dispatch.raw ?? {};
+      if (parsed && parsed.request_id) return reply.send(parsed);
+      const acknowledged = dispatch.ok && ['ACKNOWLEDGED', 'QUEUED', 'RUNNING', 'SUCCEEDED', 'COMPLETED'].includes(String(dispatch.status).toUpperCase());
+      return reply.code(dispatch.ok ? 200 : 502).send({
+        request_id: requestId,
+        task_id: dispatch.execution_id,
+        status: acknowledged ? String(dispatch.status).toUpperCase() : 'failed',
+        result: parsed,
+        errors: dispatch.ok ? [] : [{ category: 'INTEGRATION_UNAVAILABLE', message: `WF-00 ${dispatch.status}` }],
+        warnings: [],
+        verification: { status: dispatch.ok ? 'accepted' : 'not_verified', evidence: [`Dispatched through hardened WF-00 adapter`] }
       });
     } catch (err: any) {
-      return reply.code(503).send({ request_id: requestId, status: 'failed', result: null, errors: [{ category: 'INTEGRATION_UNAVAILABLE', message: err.message }], warnings: [], verification: { status: 'not_verified', evidence: [] } });
+      return reply.code(err?.httpStatus || 503).send({ request_id: requestId, status: 'failed', result: null, errors: [{ category: err?.code || 'INTEGRATION_UNAVAILABLE', message: err.message }], warnings: [], verification: { status: 'not_verified', evidence: [] } });
     }
   });
 }

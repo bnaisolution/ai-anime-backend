@@ -77,6 +77,10 @@ const GpuSetupBody = Type.Object({
   telegram_bot_token: Type.Optional(Type.String()),
 });
 
+const StopGpuBody = Type.Object({
+  force: Type.Optional(Type.Boolean()),
+});
+
 const EnsureGpuBody = Type.Object({
   tenant_id: Type.Optional(Type.String({ format: 'uuid' })),
 });
@@ -179,6 +183,8 @@ function buildKaggleLocalTunnelScript(
   sessionToken: string,
   sessionSlot: string
 ): string {
+  const idleShutdownSeconds = Math.max(60, Number(process.env.KAGGLE_IDLE_SHUTDOWN_SECONDS || 900));
+  const maxLifetimeSeconds = Math.max(600, Number(process.env.KAGGLE_MAX_LIFETIME_SECONDS || 21600));
   return `import os
 import re
 import gc
@@ -220,6 +226,8 @@ MODEL_PATHS = discover_model_paths()
 BACKEND_BASE = "${backendBaseUrl}".rstrip("/")
 SESSION_TOKEN = "${sessionToken}"
 SESSION_SLOT = "${sessionSlot}"
+WORKER_IDLE_SHUTDOWN_SECONDS = ${idleShutdownSeconds}
+WORKER_MAX_LIFETIME_SECONDS = ${maxLifetimeSeconds}
 DEFAULT_TG_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 DEFAULT_TG_CHAT_ID = os.getenv("TELEGRAM_STORAGE_CHAT_ID", "")
 DEFAULT_STREAM_BRIDGE = os.getenv("TELEGRAM_STREAM_BRIDGE_URL", "https://api.bnai.dpdns.org/v1/media/telegram").rstrip("/")
@@ -231,12 +239,90 @@ MODEL_CACHE: Dict[str, Any] = {}
 JOBS_STORE: Dict[str, Dict[str, Any]] = {}
 PUBLIC_TUNNEL_URL: Optional[str] = None
 PREWARM_ERROR: Optional[str] = None
+STARTED_AT = time.time()
+LAST_ACTIVITY_TS = time.time()
+ACTIVE_JOBS = 0
+SHUTTING_DOWN = False
+STATE_LOCK = threading.Lock()
 BG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
 app = FastAPI(title="AI Cinematic Anime Engine - Kaggle Worker")
 
 def require_session_token(authorization: str = Header(default="")) -> None:
     if not SESSION_TOKEN or authorization != f"Bearer {SESSION_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+def mark_activity() -> None:
+    global LAST_ACTIVITY_TS
+    with STATE_LOCK:
+        LAST_ACTIVITY_TS = time.time()
+
+def begin_job() -> None:
+    global ACTIVE_JOBS
+    with STATE_LOCK:
+        ACTIVE_JOBS += 1
+        LAST_ACTIVITY_TS = time.time()
+
+def end_job() -> None:
+    global ACTIVE_JOBS
+    with STATE_LOCK:
+        ACTIVE_JOBS = max(0, ACTIVE_JOBS - 1)
+        LAST_ACTIVITY_TS = time.time()
+
+def notify_backend_session_closed(reason: str) -> None:
+    if not BACKEND_BASE or not SESSION_TOKEN:
+        return
+    try:
+        requests.post(
+            f"{BACKEND_BASE}/v1/anime/internal/worker/session/closed",
+            json={"session_name": SESSION_SLOT, "reason": reason},
+            headers={"Authorization": f"Bearer {SESSION_TOKEN}", "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true"},
+            timeout=5,
+        )
+    except Exception:
+        pass
+
+def shutdown_worker(reason: str) -> None:
+    global SHUTTING_DOWN
+    with STATE_LOCK:
+        if SHUTTING_DOWN:
+            return
+        SHUTTING_DOWN = True
+    notify_backend_session_closed(reason)
+    time.sleep(0.5)
+    os._exit(0)
+
+def idle_shutdown_watchdog() -> None:
+    while True:
+        time.sleep(15)
+        with STATE_LOCK:
+            idle_for = time.time() - LAST_ACTIVITY_TS
+            active = ACTIVE_JOBS
+        if active == 0 and idle_for >= WORKER_IDLE_SHUTDOWN_SECONDS:
+            shutdown_worker("idle_timeout")
+
+def max_lifetime_watchdog() -> None:
+    while True:
+        time.sleep(30)
+        if (time.time() - STARTED_AT) >= WORKER_MAX_LIFETIME_SECONDS:
+            shutdown_worker("max_lifetime")
+
+def start_lifecycle_watchdogs() -> None:
+    threading.Thread(target=idle_shutdown_watchdog, daemon=True).start()
+    threading.Thread(target=max_lifetime_watchdog, daemon=True).start()
+
+def run_image_job(job_id: str, req: Any) -> Dict[str, Any]:
+    begin_job()
+    try:
+        return execute_image_generation_job(job_id, req)
+    finally:
+        end_job()
+
+def run_video_job(job_id: str, req: Any) -> Dict[str, Any]:
+    begin_job()
+    try:
+        return execute_video_assembly_job(job_id, req)
+    finally:
+        end_job()
 
 class TelegramUploadConfig(BaseModel):
     enabled: bool = True
@@ -476,18 +562,23 @@ async def generate_image_endpoint(req: GenerateImageRequest, _: None = Depends(r
     job_id = f"img_{req.project_id[:6]}_{uuid.uuid4().hex[:6]}"
     JOBS_STORE[job_id] = {"status": "queued"}
     if req.async_mode or req.callback_url:
-        BG_EXECUTOR.submit(execute_image_generation_job, job_id, req)
+        BG_EXECUTOR.submit(run_image_job, job_id, req)
         return {"ok": True, "status": "queued", "job_id": job_id}
-    return await asyncio.to_thread(execute_image_generation_job, job_id, req)
+    return await asyncio.to_thread(run_image_job, job_id, req)
 
 @app.post("/v1/gpu/video-assembly-line")
 async def video_assembly_endpoint(req: VideoAssemblyRequest, _: None = Depends(require_session_token)):
     job_id = f"vid_{req.project_id[:6]}_{uuid.uuid4().hex[:6]}"
     JOBS_STORE[job_id] = {"status": "queued"}
     if req.async_mode or req.callback_url:
-        BG_EXECUTOR.submit(execute_video_assembly_job, job_id, req)
+        BG_EXECUTOR.submit(run_video_job, job_id, req)
         return {"ok": True, "status": "queued", "job_id": job_id}
-    return await asyncio.to_thread(execute_video_assembly_job, job_id, req)
+    return await asyncio.to_thread(run_video_job, job_id, req)
+
+@app.post("/v1/gpu/shutdown")
+async def shutdown_endpoint(_: None = Depends(require_session_token)):
+    threading.Thread(target=shutdown_worker, args=("api_stop",), daemon=True).start()
+    return {"ok": True, "status": "stopping", "slot": SESSION_SLOT}
 
 @app.get("/v1/jobs/{job_id}")
 async def get_job_status(job_id: str, _: None = Depends(require_session_token)):
@@ -496,7 +587,11 @@ async def get_job_status(job_id: str, _: None = Depends(require_session_token)):
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "prewarm_error": PREWARM_ERROR, "model_paths": MODEL_PATHS, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0}
+    with STATE_LOCK:
+        active_jobs = ACTIVE_JOBS
+        idle_seconds = int(time.time() - LAST_ACTIVITY_TS)
+        uptime_seconds = int(time.time() - STARTED_AT)
+    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "prewarm_error": PREWARM_ERROR, "model_paths": MODEL_PATHS, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0, "active_jobs": active_jobs, "idle_seconds": idle_seconds, "uptime_seconds": uptime_seconds, "idle_shutdown_seconds": WORKER_IDLE_SHUTDOWN_SECONDS, "max_lifetime_seconds": WORKER_MAX_LIFETIME_SECONDS}
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request, exc):
@@ -535,9 +630,13 @@ if __name__ == "__main__":
         subprocess.run(["chmod", "+x", "/tmp/cloudflared"], check=False)
     threading.Thread(target=start_tunnel_daemon, daemon=True).start()
     threading.Thread(target=prewarm_models_background, daemon=True).start()
+    mark_activity()
+    start_lifecycle_watchdogs()
     uvicorn.run(app, host="0.0.0.0", port=8000, timeout_keep_alive=120)
 `;
 }
+
+const KAGGLE_SESSION_MAX_AGE_MS = Math.max(60 * 60 * 1000, Number(process.env.KAGGLE_SESSION_MAX_AGE_MS || 12 * 60 * 60 * 1000));
 
 function isKaggleApiToken(value: string): boolean {
   return /^KGAT_/i.test(value.trim());
@@ -728,6 +827,93 @@ async function workerIsHealthy(endpoint: string): Promise<boolean> {
   }
 }
 
+export interface KaggleStopResult {
+  session_name: string;
+  stopped: boolean;
+  forced: boolean;
+  reason: string;
+  endpoint: string | null;
+}
+
+async function requestWorkerShutdown(session: any): Promise<boolean> {
+  const endpoint = typeof session?.api_endpoint === 'string' ? session.api_endpoint.trim() : '';
+  const token = typeof session?.worker_token === 'string' ? session.worker_token.trim() : '';
+  if (!endpoint || !token || !isAllowedWorkerEndpoint(endpoint)) return false;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const response = await fetch(`${endpoint.replace(/\/+$/, '')}/v1/gpu/shutdown`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Bypass-Tunnel-Reminder': 'true' },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function stopKaggleWorkerSession(
+  userId: string,
+  sessionName: string,
+  reason: string,
+  options?: { force?: boolean }
+): Promise<KaggleStopResult> {
+  const { data: session, error } = await animeSupabase
+    .from('kaggle_sessions')
+    .select('session_name,status,api_endpoint,worker_token,updated_at')
+    .eq('user_id', userId)
+    .eq('session_name', sessionName)
+    .maybeSingle();
+  if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Kaggle session lookup failed.', cause: error });
+  if (!session) return { session_name: sessionName, stopped: false, forced: false, reason: 'session_not_found', endpoint: null };
+
+  const endpoint = typeof session.api_endpoint === 'string' ? session.api_endpoint : null;
+  if (String(session.status || '').toLowerCase() === 'stopped' && !options?.force) {
+    return { session_name: sessionName, stopped: true, forced: false, reason: 'already_stopped', endpoint };
+  }
+
+  const workerAccepted = await requestWorkerShutdown(session);
+  const forced = !workerAccepted && Boolean(options?.force);
+  if (workerAccepted || forced) {
+    const { error: updateError } = await animeSupabase
+      .from('kaggle_sessions')
+      .update({ status: 'stopped', api_endpoint: null, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('session_name', sessionName);
+    if (updateError) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Kaggle session stop could not be recorded.', cause: updateError });
+  }
+
+  return {
+    session_name: sessionName,
+    stopped: workerAccepted || forced,
+    forced,
+    reason: workerAccepted ? reason : (forced ? `${reason}_forced` : 'worker_unreachable'),
+    endpoint,
+  };
+}
+
+export async function stopAllKaggleWorkersForUser(
+  userId: string,
+  tenantId?: string | null,
+  options?: { force?: boolean }
+): Promise<KaggleStopResult[]> {
+  let query = animeSupabase
+    .from('kaggle_sessions')
+    .select('session_name,status,api_endpoint,worker_token,updated_at,tenant_id')
+    .eq('user_id', userId)
+    .in('status', ['active', 'starting', 'stop_requested']);
+  if (tenantId) query = query.eq('tenant_id', tenantId);
+  const { data, error } = await query;
+  if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Kaggle session list failed.', cause: error });
+  const results: KaggleStopResult[] = [];
+  for (const session of data ?? []) {
+    results.push(await stopKaggleWorkerSession(userId, String(session.session_name), 'manual_stop', options));
+  }
+  return results;
+}
+
 export async function ensureKaggleWorkerForUser(userId: string, tenantId?: string | null): Promise<KaggleEnsureResult> {
   const hydrated = await svc.getHydratedInfrastructureForUser(userId, tenantId ?? undefined);
   const routing = asRecord(hydrated.gpu_routing);
@@ -760,6 +946,23 @@ export async function ensureKaggleWorkerForUser(userId: string, tenantId?: strin
   const updatedAt = session?.updated_at ? new Date(session.updated_at).getTime() : 0;
   if (session?.status === 'starting' && Number.isFinite(updatedAt) && Date.now() - updatedAt < 10 * 60 * 1000) {
     return { status: 'starting', endpoint: null, deployed: false, reason: 'Kaggle worker is already starting.' };
+  }
+
+  const activeStatus = String(session?.status || '').toLowerCase();
+  if (session && ['active', 'starting', 'stop_requested'].includes(activeStatus)) {
+    const stop = await stopKaggleWorkerSession(userId, sessionName, 'before_repush');
+    if (!stop.stopped) {
+      const ageMs = Number.isFinite(updatedAt) && updatedAt > 0 ? Date.now() - updatedAt : Number.POSITIVE_INFINITY;
+      if (ageMs < KAGGLE_SESSION_MAX_AGE_MS) {
+        return {
+          status: 'starting',
+          endpoint: null,
+          deployed: false,
+          reason: 'Existing Kaggle session is unreachable; duplicate launch suppressed to protect GPU quota. Stop it manually or wait for the session to expire.',
+        };
+      }
+      await stopKaggleWorkerSession(userId, sessionName, 'stale_session_reaped', { force: true });
+    }
   }
 
   const datasetSlug = String(asRecord(hydrated.kaggle ?? hydrated.own_gpu).models_dataset_slug || 'bnaisolution/anime-engine-models-v1');
@@ -1024,6 +1227,18 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
       : null;
     const data = await ensureKaggleWorkerForUser(userId, tenantId);
     return { data, meta: { request_id: request.anime?.request_id } };
+  });
+
+  app.post('/v1/anime/infrastructure/gpu/stop', { schema: { body: StopGpuBody }, preHandler: [app.authenticate] }, async (request: any) => {
+    const userId = authCheck(request);
+    const sessions = await stopAllKaggleWorkersForUser(userId, null, { force: Boolean(request.body?.force) });
+    return {
+      data: {
+        ok: sessions.every((session) => session.stopped),
+        sessions,
+      },
+      meta: { request_id: request.anime?.request_id },
+    };
   });
 
   app.get('/v1/anime/prompts/library/meta', { preHandler: [app.authenticate] }, async (request: any) => {

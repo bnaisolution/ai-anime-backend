@@ -1,5 +1,5 @@
 import { animeSupabase } from '../db/anime.supabase';
-import { getEmbedding } from '../../../core/ai-brain/modelRouter';
+import { getByodEmbedding, getEmbedding } from '../../../core/ai-brain/modelRouter';
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (match) => `\\${match}`);
@@ -26,8 +26,10 @@ export async function writeMemory(projectId: string, type: string, content: stri
   return data;
 }
 
-export async function retrieveContext(projectId: string, queryString: string): Promise<any[]> {
-  const embedding = await getEmbedding(queryString);
+export async function retrieveContext(projectId: string, queryString: string, userId?: string): Promise<any[]> {
+  const embedding = userId
+    ? await getByodEmbedding(userId, queryString)
+    : await getEmbedding(queryString);
   if (embedding) {
     const { data: rpc } = await animeSupabase.rpc('match_memory_knowledge', {
       p_project_id: projectId,

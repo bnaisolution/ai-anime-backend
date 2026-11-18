@@ -1,6 +1,6 @@
 import { animeSupabase } from '../db/anime.supabase';
 export async function readCommandState(projectId: string, commandId: string): Promise<any> {
-  const { data: cmd } = await animeSupabase.from('api_commands').select('status,created_at,user_id,payload').eq('project_id', projectId).eq('id', commandId).maybeSingle();
+  const { data: cmd } = await animeSupabase.from('api_commands').select('status,intent,created_at,user_id,payload').eq('project_id', projectId).eq('id', commandId).maybeSingle();
   if (!cmd) return { command: null, episode_state: null, pending_actions: [] };
   const ep = cmd.payload?.episode_no || cmd.payload?.episode_number;
   const season = cmd.payload?.season_no || cmd.payload?.season_number || 1;

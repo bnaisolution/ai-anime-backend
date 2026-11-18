@@ -137,6 +137,41 @@ export async function getDecryptedMapForUser(userId: string, tenantId?: string):
   return out;
 }
 
+export interface DecryptedInfrastructure {
+  id: string;
+  name: string;
+  provider_type: ProviderType;
+  is_default: boolean;
+  capabilities: Record<string, unknown>;
+  config: Record<string, unknown>;
+  key_version: number;
+}
+
+export async function getActiveDecryptedInfrastructureForUser(
+  userId: string,
+  tenantId?: string
+): Promise<DecryptedInfrastructure[]> {
+  const records = await repo.getActiveByUser(userId);
+  const out: DecryptedInfrastructure[] = [];
+  for (const r of records) {
+    if (!isInfrastructureVisibleToTenant(r, tenantId)) continue;
+    try {
+      out.push({
+        id: r.id,
+        name: r.name,
+        provider_type: r.provider_type,
+        is_default: Boolean(r.is_default),
+        capabilities: r.capabilities ?? {},
+        config: decryptRecord(r),
+        key_version: r.key_version ?? 1,
+      });
+    } catch {
+      /* skip corrupted credentials rather than disabling the whole resolver */
+    }
+  }
+  return out;
+}
+
 export async function getHydratedInfrastructureForUser(userId: string, tenantId?: string): Promise<Record<string, unknown>> {
   const providerConfigs = await getDecryptedMapForUser(userId, tenantId);
   const hydratedInfra: Record<string, unknown> = { ...providerConfigs };

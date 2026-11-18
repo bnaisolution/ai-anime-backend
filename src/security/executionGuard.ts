@@ -30,42 +30,77 @@ export const WORKFLOW_REGISTRY: Record<string, WorkflowRegistryEntry> = {
 
 export const QUOTA_LIMITS = { RPM: 30, TPM: 60000, RPD: 1000 };
 
+interface UserQuotaWindow {
+  minuteStart: number;
+  minuteRequests: number;
+  minuteTokens: number;
+  dayStart: number;
+  dayRequests: number;
+}
+
+const userQuotaWindows = new Map<string, UserQuotaWindow>();
+
+function utcDayStart(now: number): number {
+  const date = new Date(now);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function currentQuotaWindow(userId: string, now: number): UserQuotaWindow {
+  const dayStart = utcDayStart(now);
+  const existing = userQuotaWindows.get(userId);
+  if (!existing || dayStart !== existing.dayStart) {
+    const fresh = { minuteStart: now, minuteRequests: 0, minuteTokens: 0, dayStart, dayRequests: 0 };
+    userQuotaWindows.set(userId, fresh);
+    return fresh;
+  }
+  if (now - existing.minuteStart >= 60_000) {
+    existing.minuteStart = now;
+    existing.minuteRequests = 0;
+    existing.minuteTokens = 0;
+  }
+  return existing;
+}
+
+export function resetQuotaStateForTests(): void {
+  userQuotaWindows.clear();
+}
+
 export async function checkAndRecordQuota(fastify: FastifyInstance, userId: string, estimatedTokens = 500): Promise<{ allowed: boolean; reason?: string }> {
   const now = Date.now();
-  const minuteAgo = new Date(now - 60_000).toISOString();
-  const dayAgo = new Date(now - 86_400_000).toISOString();
+  const tokens = Math.max(1, Math.ceil(estimatedTokens));
+  const window = currentQuotaWindow(userId, now);
 
-  // GAP 4 FIX: Get recent usage from DB (execution_records)
-  const { data: rpmData } = await fastify.supabase
-    .from('execution_records')
-    .select('id', { count: 'exact' })
-    .eq('input->>user_id', userId) // We need to store user_id in execution_records
-    .gte('created_at', minuteAgo);
+  if (window.minuteRequests + 1 > QUOTA_LIMITS.RPM) {
+    return { allowed: false, reason: `RPM quota exceeded (${QUOTA_LIMITS.RPM}/min)` };
+  }
+  if (window.minuteTokens + tokens > QUOTA_LIMITS.TPM) {
+    return { allowed: false, reason: `TPM quota exceeded (${QUOTA_LIMITS.TPM}/min)` };
+  }
+  if (window.dayRequests + 1 > QUOTA_LIMITS.RPD) {
+    return { allowed: false, reason: `RPD daily quota exceeded (${QUOTA_LIMITS.RPD}/day)` };
+  }
 
-  const { data: rpdData } = await fastify.supabase
-    .from('execution_records')
-    .select('id', { count: 'exact' })
-    .eq('input->>user_id', userId)
-    .gte('created_at', dayAgo);
+  window.minuteRequests += 1;
+  window.minuteTokens += tokens;
+  window.dayRequests += 1;
 
-  const rpmCount = rpmData?.length || 0;
-  const rpdCount = rpdData?.length || 0;
-
-  if (rpmCount + 1 > QUOTA_LIMITS.RPM) return { allowed: false, reason: `RPM quota exceeded (${QUOTA_LIMITS.RPM}/min)` };
-  if (rpdCount + 1 > QUOTA_LIMITS.RPD) return { allowed: false, reason: `RPD daily quota exceeded (${QUOTA_LIMITS.RPD}/day)` };
-
+  // The in-process reservation prevents concurrent bypass. The caller records
+  // the actual usage in execution_records after the provider call.
+  void fastify;
   return { allowed: true };
 }
 
 export async function getQuotaStatus(fastify: FastifyInstance, userId: string) {
   const now = Date.now();
-  const minuteAgo = new Date(now - 60_000).toISOString();
-  const dayAgo = new Date(now - 86_400_000).toISOString();
-
-  const { data: rpmData } = await fastify.supabase.from('execution_records').select('id').eq('input->>user_id', userId).gte('created_at', minuteAgo);
-  const { data: rpdData } = await fastify.supabase.from('execution_records').select('id').eq('input->>user_id', userId).gte('created_at', dayAgo);
-
-  return { limits: QUOTA_LIMITS, used: { rpm: rpmData?.length || 0, tpm: 0, rpd: rpdData?.length || 0 } };
+  const window = currentQuotaWindow(userId, now);
+  return {
+    limits: QUOTA_LIMITS,
+    used: {
+      rpm: window.minuteRequests,
+      tpm: window.minuteTokens,
+      rpd: window.dayRequests,
+    },
+  };
 }
 
 export async function runExecutionGuard(fastify: FastifyInstance, auth: AuthContext, intent: string, projectId: string | null | undefined, payload: Record<string, unknown>): Promise<any> {

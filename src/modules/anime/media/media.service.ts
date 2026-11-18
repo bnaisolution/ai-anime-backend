@@ -5,5 +5,26 @@ import { CommandIntent } from '../commands/commands.types';
 import { animeEnv } from '../config/anime.env';
 import { animeSupabase } from '../db/anime.supabase';
 export async function quickGenerate(mode: 'IMAGE' | 'VIDEO', prompt: string, ctx: any): Promise<any> { const intent = mode === 'IMAGE' ? CommandIntent.QUICK_GENERATE_IMAGE : CommandIntent.QUICK_GENERATE_VIDEO; const sub = await submitAnimeCommand({ idempotencyKey: ctx.idempotency_key, userId: ctx.user_id, requestId: ctx.request_id, body: { intent, project_id: ctx.project_id, mode: 'QUICK', payload: { prompt, media_type: mode, style_preset: ctx.style_preset || 'anime_cinematic', aspect_ratio: ctx.aspect_ratio || '16:9', ...(mode === 'VIDEO' ? { duration_sec: ctx.duration_sec || 5 } : {}) } } }); return { command_id: sub.command.id, status: sub.command.status, wf_key: sub.wf_key }; }
-export async function visionAnalyze(mediaUrl: string, ctx: any): Promise<any> { const sub = await submitAnimeCommand({ idempotencyKey: ctx.idempotency_key, userId: ctx.user_id, requestId: ctx.request_id, body: { intent: CommandIntent.VISION_ANALYSIS, project_id: ctx.project_id, mode: 'QUICK', payload: { media_url: mediaUrl, analysis_type: ctx.analysis_type || 'GENERAL', prompt: ctx.prompt || 'Extract visual DNA' } } }); return { command_id: sub.command.id, status: sub.command.status }; }
+export async function visionAnalyze(mediaUrl: string, ctx: any): Promise<any> {
+  const requestedMode = String(ctx.mode || '').toUpperCase();
+  const mode = requestedMode === 'SAVE' || (requestedMode !== 'QUICK' && ctx.save_to_character === true) ? 'SAVE' : 'QUICK';
+  const characterCode = String(ctx.character_code || ctx.character_code_hint || '').trim().slice(0, 64) || null;
+  const payload: Record<string, unknown> = {
+    media_url: mediaUrl,
+    analysis_type: ctx.analysis_type || 'GENERAL',
+    prompt: ctx.prompt || 'Extract visual DNA',
+    save_to_character: mode === 'SAVE',
+  };
+  if (characterCode) {
+    payload.character_code_hint = characterCode;
+    payload.character_code = characterCode;
+  }
+  const sub = await submitAnimeCommand({
+    idempotencyKey: ctx.idempotency_key,
+    userId: ctx.user_id,
+    requestId: ctx.request_id,
+    body: { intent: CommandIntent.VISION_ANALYSIS, project_id: ctx.project_id, mode, payload },
+  });
+  return { command_id: sub.command.id, status: sub.command.status, mode, wf_key: sub.wf_key };
+}
 export async function createUploadSession(projectId: string, opts: any): Promise<any> { const id = randomUUID(); const name = (opts.file_name || 'asset.bin').replace(/[^a-zA-Z0-9._-]/g, '_'); const path = `projects/${projectId}/uploads/${id}-${name}`; let url = ''; try { const { data } = await animeSupabase.storage.from(process.env.ANIME_ASSETS_BUCKET || 'assets-library').createSignedUploadUrl(path); if (data) url = data.signedUrl; } catch (e) { url = `${animeEnv.ANIME_SUPABASE_URL}/storage/v1/object/upload/sign/${process.env.ANIME_ASSETS_BUCKET || 'assets-library'}/${path}`; } await writeAudit({ project_id: projectId, user_id: opts.user_id, workflow_name: 'MEDIA_UPLOAD', action: 'CREATE_UPLOAD_SESSION', entity_type: 'UPLOAD', entity_id: id, new_value: { path }, request_id: opts.request_id }); return { session_id: id, upload_url: url, object_path: path }; }

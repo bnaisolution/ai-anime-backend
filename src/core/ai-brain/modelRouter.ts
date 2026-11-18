@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { env } from '../../config/env';
+import { describeByodProviders, joinChatCompletionsUrl, resolveByodProviderCandidates, type ByodProviderCandidate, type ByodResolution } from './providerResolver';
 
 interface LowTpmState {
   windowStart: number;
@@ -129,11 +130,21 @@ async function fetchWithBudgetAndBackoff(
   return null;
 }
 
+export interface ModelCallResult {
+  ok: boolean;
+  reply: string;
+  provider: string;
+  model: string;
+  tokensUsed: number;
+  source?: 'platform' | 'byod' | 'none';
+  reason?: string;
+}
+
 export async function callDynamicModel(
   fastify: FastifyInstance,
   messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
   temperature = 0.3
-): Promise<{ ok: boolean; reply: string; provider: string; model: string; tokensUsed: number }> {
+): Promise<ModelCallResult> {
   const { data: providers } = await fastify.supabase
     .from('provider_configs')
     .select('provider_name, model_default, priority')
@@ -203,7 +214,145 @@ export async function callDynamicModel(
       fastify.log.warn({ provider: p.provider_name, err: _e }, 'Provider call failed, falling back...');
     }
   }
-  return { ok: false, reply: '', provider: 'none', model: 'none', tokensUsed: 0 };
+  return { ok: false, reply: '', provider: 'none', model: 'none', tokensUsed: 0, source: 'none', reason: 'ALL_PROVIDERS_FAILED' };
+}
+
+async function callByodCandidate(
+  fastify: FastifyInstance,
+  userId: string,
+  candidate: ByodProviderCandidate,
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  temperature: number
+): Promise<ModelCallResult | null> {
+  const cooldownKey = `byod:${userId}:${candidate.provider}:${candidate.model}`;
+  if (isProviderCoolingDown(cooldownKey)) {
+    fastify.log.warn({ provider: candidate.provider, model: candidate.model }, 'BYOD provider skipped during cooldown');
+    return null;
+  }
+
+  try {
+    if (candidate.provider === 'groq' || candidate.provider === 'custom') {
+      const url = candidate.provider === 'groq'
+        ? 'https://api.groq.com/openai/v1/chat/completions'
+        : joinChatCompletionsUrl(candidate.baseUrl || '', candidate.chatPath);
+      if (!url) return null;
+      const response = await fetchWithBudgetAndBackoff(cooldownKey, () => fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${candidate.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: candidate.model, messages, temperature, max_tokens: 4096 }),
+        signal: AbortSignal.timeout(env.AI_REQUEST_TIMEOUT_MS)
+      }), fastify);
+      if (!response?.ok) return null;
+      const data = await response.json() as any;
+      const text = data.choices?.[0]?.message?.content?.trim();
+      if (!text) return null;
+      const tokensUsed = Number(data.usage?.total_tokens) || estimateMessageTokens(messages) + estimateTokens(text);
+      recordTokenUsage(tokensUsed);
+      return { ok: true, reply: text, provider: candidate.provider, model: candidate.model, tokensUsed, source: 'byod' };
+    }
+
+    if (candidate.provider === 'gemini') {
+      const sysMsg = messages.find((m) => m.role === 'system')?.content || '';
+      const contents = messages.filter((m) => m.role !== 'system').map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+      const base = (candidate.baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '');
+      const url = `${base}/v1beta/models/${encodeURIComponent(candidate.model)}:generateContent`;
+      const response = await fetchWithBudgetAndBackoff(cooldownKey, () => fetch(url, {
+        method: 'POST',
+        headers: { 'x-goog-api-key': candidate.apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents, systemInstruction: sysMsg ? { parts: [{ text: sysMsg }] } : undefined, generationConfig: { temperature, maxOutputTokens: 4096 } }),
+        signal: AbortSignal.timeout(env.AI_REQUEST_TIMEOUT_MS)
+      }), fastify);
+      if (!response?.ok) return null;
+      const data = await response.json() as any;
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!text) return null;
+      const tokensUsed = Number(data.usageMetadata?.totalTokenCount) || estimateMessageTokens(messages) + estimateTokens(text);
+      recordTokenUsage(tokensUsed);
+      return { ok: true, reply: text, provider: 'gemini', model: candidate.model, tokensUsed, source: 'byod' };
+    }
+  } catch (error) {
+    fastify.log.warn({ provider: candidate.provider, model: candidate.model, err: error }, 'BYOD provider call failed');
+  }
+  return null;
+}
+
+export async function callByodModel(
+  fastify: FastifyInstance,
+  userId: string,
+  messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
+  temperature = 0.3,
+  tenantId?: string
+): Promise<ModelCallResult & { resolution: ByodResolution }> {
+  let resolution: ByodResolution;
+  try {
+    resolution = await resolveByodProviderCandidates(userId, { capability: 'text', tenantId });
+  } catch (error) {
+    fastify.log.warn({ userId, err: error }, 'BYOD provider resolution failed');
+    return {
+      ok: false, reply: '', provider: 'none', model: 'none', tokensUsed: 0,
+      source: 'none', reason: 'BYOD_RESOLUTION_FAILED',
+      resolution: { candidates: [], reason: 'BYOD_NOT_CONFIGURED', availableProviders: [] }
+    };
+  }
+
+  for (const candidate of resolution.candidates) {
+    const result = await callByodCandidate(fastify, userId, candidate, messages, temperature);
+    if (result?.ok) return { ...result, resolution };
+  }
+
+  return {
+    ok: false, reply: '', provider: 'none', model: 'none', tokensUsed: 0,
+    source: 'none',
+    reason: resolution.reason === 'OK' ? 'BYOD_PROVIDERS_FAILED' : resolution.reason,
+    resolution
+  };
+}
+
+export function byodFailureMessage(resolution: ByodResolution, reason?: string): string {
+  if (reason === 'BYOD_PROVIDERS_FAILED') return 'Your configured BYOD AI providers failed to respond. Check keys, billing, and provider status.';
+  return describeByodProviders(resolution.availableProviders);
+}
+
+export async function getByodEmbedding(userId: string, text: string, tenantId?: string): Promise<number[] | null> {
+  try {
+    const resolution = await resolveByodProviderCandidates(userId, { capability: 'embedding', tenantId });
+    for (const candidate of resolution.candidates) {
+      const model = candidate.embeddingModel.trim();
+      if (!model) continue;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      let url: string;
+      let body: Record<string, unknown>;
+      if (candidate.provider === 'gemini') {
+        const base = (candidate.baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '');
+        url = `${base}/v1beta/models/${encodeURIComponent(model)}:embedContent`;
+        headers['x-goog-api-key'] = candidate.apiKey;
+        body = { model: `models/${model}`, content: { parts: [{ text }] } };
+      } else if (candidate.provider === 'custom' && candidate.baseUrl) {
+        const base = candidate.baseUrl.replace(/\/+$/, '');
+        url = `${base}/v1/embeddings`;
+        headers.Authorization = `Bearer ${candidate.apiKey}`;
+        body = { model, input: text };
+      } else {
+        continue;
+      }
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(env.AI_REQUEST_TIMEOUT_MS)
+      });
+      if (!response.ok) continue;
+      const data = await response.json() as any;
+      const values = data.embedding?.values || data.embeddings?.[0]?.embedding || data.embeddings?.[0]?.values || data.data?.[0]?.embedding;
+      if (Array.isArray(values) && values.length > 0 && values.every((value) => Number.isFinite(Number(value)))) {
+        return values.map((value) => Number(value));
+      }
+    }
+  } catch (_e) {}
+  return null;
 }
 
 export async function getEmbedding(text: string): Promise<number[] | null> {

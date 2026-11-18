@@ -22,13 +22,13 @@ function command(overrides = {}) {
   };
 }
 
-function install(commandRow, pendingActions = []) {
+function install(commandRow, pendingActions = [], episodeState = null) {
   return installFakeSupabase(async (call) => {
     if (call.table === 'api_commands' && call.action === 'select') {
       return { data: commandRow, error: null };
     }
     if (call.table === 'episode_states' && call.action === 'select') {
-      return { data: null, error: null };
+      return { data: episodeState, error: null };
     }
     if (call.table === 'pending_actions' && call.action === 'select') {
       return { data: pendingActions, error: null };
@@ -95,4 +95,38 @@ test('reconcileCommand maps pending job actions to MANUAL_REVIEW', async () => {
   const result = await reconcileCommand({ project_id: PROJECT, command_id: COMMAND });
   assert.equal(result.next_status, 'MANUAL_REVIEW');
   assert.equal(state.calls.find((call) => call.table === 'api_commands' && call.action === 'update').payload.status, 'MANUAL_REVIEW');
+});
+
+test('PUBLISH_NOW does not report success without publish evidence', async () => {
+  const { state } = install(command({ intent: 'PUBLISH_NOW' }), [], { current_state: 'QC_PASSED', episode_no: 1 });
+  const result = await reconcileCommand({
+    project_id: PROJECT,
+    command_id: COMMAND,
+    callback_payload: { status: 'COMPLETED' },
+  });
+  assert.equal(result.next_status, 'RECONCILING');
+  const update = state.calls.find((call) => call.table === 'api_commands' && call.action === 'update');
+  assert.equal(update.payload.status, 'RECONCILING');
+});
+
+test('PUBLISH_NOW succeeds only when the episode is published', async () => {
+  const { state } = install(command({ intent: 'PUBLISH_NOW' }), [], { current_state: 'PUBLISHED', episode_no: 1 });
+  const result = await reconcileCommand({
+    project_id: PROJECT,
+    command_id: COMMAND,
+    callback_payload: { status: 'COMPLETED' },
+  });
+  assert.equal(result.next_status, 'SUCCEEDED');
+  assert.equal(state.calls.find((call) => call.table === 'api_commands' && call.action === 'update').payload.status, 'SUCCEEDED');
+});
+
+test('PUBLISH_NOW accepts an explicit published callback before episode state catches up', async () => {
+  const { state } = install(command({ intent: 'PUBLISH_NOW' }), [], { current_state: 'QC_PASSED', episode_no: 1 });
+  const result = await reconcileCommand({
+    project_id: PROJECT,
+    command_id: COMMAND,
+    callback_payload: { status: 'COMPLETED', publish_status: 'PUBLISHED' },
+  });
+  assert.equal(result.next_status, 'SUCCEEDED');
+  assert.equal(state.calls.find((call) => call.table === 'api_commands' && call.action === 'update').payload.status, 'SUCCEEDED');
 });

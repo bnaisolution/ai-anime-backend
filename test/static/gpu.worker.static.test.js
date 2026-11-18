@@ -38,3 +38,24 @@ test('Kaggle sessions are uniquely scoped by user and session name', () => {
   assert.match(migration, /UNIQUE INDEX IF NOT EXISTS idx_kaggle_sessions_user_session/);
   assert.match(migration, /ON public\.kaggle_sessions \(user_id, session_name\)/);
 });
+
+test('Kaggle worker self-terminates when idle or past its max lifetime', () => {
+  assert.match(infraRoutes, /WORKER_IDLE_SHUTDOWN_SECONDS = \$\{idleShutdownSeconds\}/);
+  assert.match(infraRoutes, /WORKER_MAX_LIFETIME_SECONDS = \$\{maxLifetimeSeconds\}/);
+  assert.match(infraRoutes, /def idle_shutdown_watchdog/);
+  assert.match(infraRoutes, /def max_lifetime_watchdog/);
+  assert.match(infraRoutes, /start_lifecycle_watchdogs\(\)/);
+  assert.match(infraRoutes, /@app\.post\("\/v1\/gpu\/shutdown"\)/);
+  assert.match(infraRoutes, /notify_backend_session_closed\(reason\)/);
+  assert.match(infraRoutes, /\/v1\/anime\/internal\/worker\/session\/closed/);
+});
+
+test('Backend can stop Kaggle sessions and refuses duplicate GPU launches', () => {
+  assert.match(infraRoutes, /\/v1\/anime\/infrastructure\/gpu\/stop/);
+  assert.match(infraRoutes, /stopAllKaggleWorkersForUser/);
+  assert.match(infraRoutes, /stopKaggleWorkerSession/);
+  assert.match(infraRoutes, /duplicate launch suppressed/);
+  assert.match(infraRoutes, /KAGGLE_SESSION_MAX_AGE_MS/);
+  assert.match(workerRoutes, /\/v1\/anime\/internal\/worker\/session\/closed/);
+  assert.match(workerRoutes, /status: 'stopped', api_endpoint: null/);
+});

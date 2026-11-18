@@ -118,6 +118,21 @@ export async function registerAnimeWorkflowWorkerRoutes(app: FastifyInstance): P
     return { data: { ok: true, session_name: sessionName } };
   });
 
+  app.post('/v1/anime/internal/worker/session/closed', async (request: any) => {
+    const claims = verifyWorkerJobToken(bearerToken(request), 'gpu_session');
+    const body = request.body as any;
+    if (!body || typeof body !== 'object') invalid('Session body is required.');
+    const sessionName = String(body.session_name || '').trim();
+    if (!GPU_SESSION_NAMES.has(sessionName)) invalid('Session name is not allowed.');
+    const { error } = await animeSupabase
+      .from('kaggle_sessions')
+      .update({ status: 'stopped', api_endpoint: null, updated_at: new Date().toISOString() })
+      .eq('user_id', claims.user_id)
+      .eq('session_name', sessionName);
+    if (error) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Session close failed.', cause: error });
+    return { data: { ok: true, session_name: sessionName, reason: String(body.reason || '').slice(0, 80) } };
+  });
+
 
   app.post('/v1/anime/internal/workflow/worker', async (request: any, reply: any) => {
     const body = request.body as any;

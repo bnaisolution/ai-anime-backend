@@ -537,6 +537,11 @@ export async function submitAnimeCommand(
     prompt_text: resolvedImageSystemPrompt,
   };
 
+  const explicitTargetSec = Number(payloadObj.target_duration_sec ?? payloadObj.targetDurationSec);
+  const canonicalTargetSec = Number.isFinite(explicitTargetSec) && explicitTargetSec > 0
+    ? Math.max(15, Math.min(6 * 60 * 60, Math.round(explicitTargetSec)))
+    : Number(dynamicCtx.seriesConfig.target_duration_sec) || 1440;
+
   const projectStyle = {
     ...(params.body.project_style ?? {}),
     ...((payloadObj.project_style as Record<string, unknown> | undefined) ?? {}),
@@ -575,7 +580,7 @@ export async function submitAnimeCommand(
     episodes_per_season: dynamicCtx.seriesConfig.episodes_per_season,
     episode_duration_min: dynamicCtx.seriesConfig.episode_duration_min,
     script_word_count: dynamicCtx.seriesConfig.script_word_count,
-    target_duration_sec: dynamicCtx.seriesConfig.target_duration_sec,
+    target_duration_sec: canonicalTargetSec,
   };
 
   const configurationSnapshot = creativeConfigurationSnapshot(
@@ -640,7 +645,8 @@ export async function submitAnimeCommand(
     image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
-    series_config: dynamicCtx.seriesConfig,
+    series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec },
+    target_duration_sec: canonicalTargetSec,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},
@@ -691,7 +697,8 @@ export async function submitAnimeCommand(
     image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
-    series_config: dynamicCtx.seriesConfig,
+    series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec },
+    target_duration_sec: canonicalTargetSec,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},

@@ -37,61 +37,82 @@ export async function createCanonApproval(input: { project_id: string, resource_
   if (error !== null) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Create approval failed', cause: error });
   return data as ApprovalRecord;
 }
-export async function decideApproval(input: { project_id: string, approval_id: string, decision: ApprovalStatus.APPROVED | ApprovalStatus.REJECTED, expected_resource_version: number, reason: string, actor_user_id: string, request_id: string }): Promise<ApprovalRecord> {
+function approvalCommandKey(approvalId: string, decision: string, provided?: string): string {
+  return provided && provided.trim().length > 0 ? provided.trim() : `approval:${approvalId}:${decision}`;
+}
+
+async function submitCanonApprovalCommand(existing: ApprovalRecord, actorUserId: string, requestId: string, idempotencyKey: string): Promise<void> {
+  if (existing.type !== ApprovalType.CANON_CHANGE) return;
+  const exactDiff = (existing.exact_diff ?? {}) as {
+    proposed_events?: string[];
+    new_facts_to_add?: unknown[];
+    new_knowledge_to_add?: unknown[];
+    characters_involved?: string[];
+    episode_no?: number;
+    season_no?: number;
+  };
+  const episodeNo = Number(exactDiff.episode_no) || parseInt(existing.resource_id, 10) || 1;
+  const seasonNo = Number(exactDiff.season_no) || 1;
+
+  const commandPayload = {
+    intent: 'APPROVE_CANON_CHANGE',
+    mode: 'SAVE',
+    episode_no: episodeNo,
+    episode_number: episodeNo,
+    season_no: seasonNo,
+    proposed_events: exactDiff.proposed_events ?? [],
+    new_facts_to_add: exactDiff.new_facts_to_add ?? [],
+    new_knowledge_to_add: exactDiff.new_knowledge_to_add ?? [],
+    characters_involved: exactDiff.characters_involved ?? [],
+    project_id: existing.project_id,
+    user_id: actorUserId,
+    request_id: requestId,
+    wf_key: 'WF-09',
+  };
+
+  await insertCommandAtomic({
+    command_id: randomUUID(),
+    project_id: existing.project_id,
+    user_id: actorUserId,
+    intent: 'APPROVE_CANON_CHANGE',
+    payload: commandPayload,
+    status: 'QUEUED',
+    idempotency_key: idempotencyKey,
+    body_hash: '',
+    outbox_type: 'dispatch_n8n',
+    outbox_payload: { ...commandPayload, idempotency_key: idempotencyKey },
+  });
+}
+
+export async function decideApproval(input: { project_id: string, approval_id: string, decision: ApprovalStatus.APPROVED | ApprovalStatus.REJECTED, expected_resource_version: number, reason: string, actor_user_id: string, request_id: string, idempotency_key?: string }): Promise<ApprovalRecord> {
+  const decisionKey = approvalCommandKey(input.approval_id, input.decision, input.idempotency_key);
   const { data: existing, error: fetchError } = await animeSupabase.from('approval_decisions').select('*').eq('project_id', input.project_id).eq('id', input.approval_id).maybeSingle<ApprovalRecord>();
   if (fetchError !== null) throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Fetch failed', cause: fetchError });
   if (existing === null) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Not found.' });
-  if (existing.status !== ApprovalStatus.PENDING) throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Already decided.' });
+
+  if (existing.status !== ApprovalStatus.PENDING) {
+    if (existing.status === input.decision && existing.decision_idempotency_key === decisionKey) {
+      if (input.decision === ApprovalStatus.APPROVED) {
+        await submitCanonApprovalCommand(existing, input.actor_user_id, input.request_id, decisionKey);
+      }
+      return existing;
+    }
+    throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Already decided.' });
+  }
   if (existing.resource_version !== input.expected_resource_version) throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Version mismatch.' });
   if (RESTRICTED_APPROVAL_TYPES.has(existing.type) && existing.requested_by === input.actor_user_id) throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, httpStatus: 403, message: 'Self-approval not allowed.' });
+
   const auditEventId = randomUUID(); const decidedAtIso = new Date().toISOString();
-  const { data: updated, error: updateError } = await animeSupabase.from('approval_decisions').update({ status: input.decision, decision: input.decision, decision_reason: input.reason, decision_by: input.actor_user_id, decided_at: decidedAtIso, audit_event_id: auditEventId, updated_at: decidedAtIso }).eq('project_id', input.project_id).eq('id', input.approval_id).eq('resource_version', input.expected_resource_version).eq('status', ApprovalStatus.PENDING).select('*').maybeSingle<ApprovalRecord>();
-  if (updateError !== null || updated === null) throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Concurrent conflict.' });
+  const { data: updated, error: updateError } = await animeSupabase.from('approval_decisions').update({ status: input.decision, decision: input.decision, decision_reason: input.reason, decision_by: input.actor_user_id, decided_at: decidedAtIso, decision_idempotency_key: decisionKey, audit_event_id: auditEventId, updated_at: decidedAtIso }).eq('project_id', input.project_id).eq('id', input.approval_id).eq('resource_version', input.expected_resource_version).eq('status', ApprovalStatus.PENDING).select('*').maybeSingle<ApprovalRecord>();
+  if (updateError !== null || updated === null) {
+    const { data: raced } = await animeSupabase.from('approval_decisions').select('*').eq('project_id', input.project_id).eq('id', input.approval_id).maybeSingle<ApprovalRecord>();
+    if (raced && raced.status === input.decision && raced.decision_idempotency_key === decisionKey) return raced;
+    throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Concurrent conflict.' });
+  }
   await writeAudit({ project_id: input.project_id, user_id: input.actor_user_id, workflow_name: 'APPROVAL_ENGINE', action: `APPROVAL_${input.decision}`, entity_type: existing.type, entity_id: existing.resource_id, new_value: { approval_id: updated.id, status: updated.status, decision: updated.decision }, reason: input.reason, request_id: input.request_id });
 
-  // After APPROVED, automatically submit the existing anime command with intent=APPROVE_CANON_CHANGE
-  // to trigger the outbox → WF-00 → WF-09 pipeline. Rejected approvals never submit a command.
   if (input.decision === ApprovalStatus.APPROVED) {
-    // Build the command payload from the approval's exact_diff (proposed Canon changes)
-    const exactDiff = existing.exact_diff as { proposed_events?: string[], new_facts_to_add?: any[], new_knowledge_to_add?: any[], characters_involved?: string[] } || {};
-    const episodeNo = parseInt(existing.resource_id) || 1;
-
-    const commandPayload = {
-      intent: 'APPROVE_CANON_CHANGE',
-      mode: 'SAVE',
-      episode_no: episodeNo,
-      episode_number: episodeNo,
-      season_no: 1,
-      proposed_events: exactDiff.proposed_events || [],
-      new_facts_to_add: exactDiff.new_facts_to_add || [],
-      new_knowledge_to_add: exactDiff.new_knowledge_to_add || [],
-      characters_involved: exactDiff.characters_involved || [],
-      project_id: input.project_id,
-      user_id: input.actor_user_id,
-      request_id: input.request_id,
-      wf_key: 'WF-09',
-    };
-
-    const outboxPayload = {
-      ...commandPayload,
-      project_id: input.project_id,
-      user_id: input.actor_user_id,
-      intent: 'APPROVE_CANON_CHANGE',
-      idempotency_key: input.request_id,
-    };
-
-    // Use the existing atomic command insert function, which handles both api_commands and outbox_events
-    await insertCommandAtomic({
-      command_id: randomUUID(),
-      project_id: input.project_id,
-      user_id: input.actor_user_id,
-      intent: 'APPROVE_CANON_CHANGE',
-      payload: commandPayload,
-      status: 'QUEUED',
-      body_hash: '',
-      outbox_type: 'dispatch_n8n',
-      outbox_payload: outboxPayload,
-    });
+    await submitCanonApprovalCommand(existing, input.actor_user_id, input.request_id, decisionKey);
   }
 
   return updated;

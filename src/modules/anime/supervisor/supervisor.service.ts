@@ -6,9 +6,18 @@ export async function reconcileCommand(input: { project_id: string, command_id: 
   const snap = await readCommandState(input.project_id, input.command_id);
   if (snap.command === null) return { command_id: input.command_id, next_status: CommandStatus.FAILED };
   const prev = String(snap.command.status || '').toUpperCase(); const cb = input.callback_payload?.status?.toUpperCase(); const ep = snap.episode_state?.current_state?.toUpperCase();
+  const intent = String(snap.command.intent || '').toUpperCase();
+  const publishConfirmed = ep === 'PUBLISHED'
+    || String(input.callback_payload?.publish_status || '').toUpperCase() === 'PUBLISHED'
+    || input.callback_payload?.published === true
+    || Boolean(input.callback_payload?.published_at);
   if (['SUCCEEDED', 'FAILED'].includes(prev)) return { command_id: input.command_id, next_status: prev };
   let next = CommandStatus.RECONCILING;
-  if (['SUCCEEDED', 'COMPLETED'].includes(cb) || ['COMPLETED', 'PUBLISHED'].includes(ep)) next = CommandStatus.SUCCEEDED;
+  if (intent === 'PUBLISH_NOW') {
+    if (publishConfirmed) next = CommandStatus.SUCCEEDED;
+    else if (['FAILED', 'ERROR', 'CANCELLED'].includes(cb) || ep?.endsWith('_FAILED')) next = CommandStatus.FAILED;
+    else if (cb === 'MANUAL_REVIEW' || snap.pending_actions.length > 0) next = CommandStatus.MANUAL_REVIEW;
+  } else if (['SUCCEEDED', 'COMPLETED'].includes(cb) || ['COMPLETED', 'PUBLISHED'].includes(ep)) next = CommandStatus.SUCCEEDED;
   else if (['FAILED', 'ERROR', 'CANCELLED'].includes(cb) || ep?.endsWith('_FAILED')) next = CommandStatus.FAILED;
   else if (cb === 'MANUAL_REVIEW' || snap.pending_actions.length > 0) next = CommandStatus.MANUAL_REVIEW;
   else if (prev === CommandStatus.RECONCILING) {
