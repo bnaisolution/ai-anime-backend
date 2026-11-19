@@ -1,24 +1,24 @@
 # BYOD SaaS + AI Director Gap Closure Master Plan
 
 Date: 2026-11-18
-Status: **WAVE 1 IMPLEMENTED & DEPLOYED — PHASES 4–9 PENDING OWNER GO-AHEAD**
-Baseline: backend `origin/main` `9ee99e5`; Android `origin/main` `8cb4e2c`; live container `anime-backend:director-gap1-20261118`
+Status: **WAVE 2 DEPLOYED — PHASE 4/5/8/9 UI + CONTROL PLANE LIVE; PHASE 7 BLOCKED ON BYOD TEST PLANE**
+Baseline: backend `origin/main` `406d359`; Android `origin/main` `f31f688`; live container `anime-backend:director-gap3-20261119`
 
-## Implementation Status (2026-11-18)
+## Implementation Status (2026-11-19)
 | Phase | Status | Evidence |
 |---|---|---|
-| 0 Baseline/flags | DONE (partial) | `src/config/flags.ts`; backups in `/tmp/opencode/sync-backup-20261118` |
+| 0 Baseline/flags | DONE | `src/config/flags.ts`; backups in `/tmp/opencode/sync-backup-20261118` |
 | 1 Capability registry | DONE | `director.capabilities.ts`, `GET /ai/director/capabilities`, unit tests |
 | 2 Readiness + fail-closed | DONE (flag off by default) | `director.readiness.ts`, `GET /ai/director/readiness`, `SETUP_REQUIRED` |
 | 3 Model catalog + profiles | DONE (backend) | `modelCatalog.ts`, migration 017, `GET /ai/models/catalog` |
-| 4 Director UX | PARTIAL | Android readiness strip done; timeline/deep links/plan/attachments pending |
-| 5 Publish OAuth | NOT STARTED | — |
-| 6 CPU/Git/S3 wiring | NOT STARTED | — |
-| 7 14-workflow BYOD validation | NOT STARTED | — |
-| 8 SaaS billing/onboarding | NOT STARTED | — |
-| 9 Observability/GA | NOT STARTED | — |
+| 4 Director UX | DONE (text-only; attachments pending) | timeline + plan cards, deep links, `POST /ai/director/plan`, `GET /ai/director/timeline` |
+| 5 Publish OAuth | DONE (credentials pending) | `publish.service.ts`, migration 019, real channel UI |
+| 6 CPU/Git/S3 wiring | PARTIAL | CPU target resolver/test + UI done; n8n consumption and S3 generation handoff pending |
+| 7 14-workflow BYOD validation | BLOCKED | no validated BYOD n8n test plane; WF-03 tunnel stale |
+| 8 SaaS billing/onboarding | PARTIAL | plans/subscription/usage/onboarding + UI; checkout gated by `SAAS_BILLING=false` |
+| 9 Observability/GA | PARTIAL | Prometheus metrics for Director/publish/CPU/SaaS, live/ready; SLO window + canary pending |
 
-**Open blocker:** migrations 015–017 are not applied (no DB DSN on the host); Android APK `anime-debug-apk` from run `44378365016` is the build to test.
+**Open blocker:** migrations 015–021 are not applied (no DB DSN on the host); Android APK for `f31f688` is the build to test.
 Scope: Backend (Fastify), Supabase, n8n (14 canonical workflows), Android, GPU/Kaggle/CPU workers, BYOD providers, publishing channels, SaaS control plane.
 
 This document converts the 2026-11-18 audit findings into a dependency-ordered implementation plan. It does not authorize source, schema, workflow, credential, deployment, or production changes. Each phase starts only after explicit Owner approval.
