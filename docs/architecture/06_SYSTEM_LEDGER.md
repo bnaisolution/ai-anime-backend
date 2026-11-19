@@ -1,5 +1,13 @@
 # SYSTEM STATE LEDGER (Single Source of Truth)
 
+## 2026-11-19 AI Director First Onboarding Waves 1–4 (CODE COMPLETE)
+- Backend `main` @ `d8da697` (Backend Tests `44566561866` green). Added server-side project setup and publish gates, fixed the setup gate to read `visual_medium`, and added unit/static coverage for production intents, missing Bible/cast, QC/episode approval, publish approval, and Android command-gateway bypass.
+- Android `main` @ `db826f6` (Build APK `44566562822` green; Android Tests `44566562808` green after rerun). Bible approval now hands off to scoped characters and first-episode preflight; manual character creation uses `createCharacterSync`; Studio handoff and playlist labels are covered.
+- EC2 checkouts synced: `/home/ec2-user/ai-backend` @ `d8da697`, `/home/ec2-user/ai-anime-android` @ `db826f6`.
+- Live container image is still `anime-backend:director-gap4-20261120`; Phase 4 backend has not been deployed. Migration 018 remains a deploy prerequisite.
+- Phase 4 acceptance is met for server gates and direct-command bypass. Remaining P1 UX: Director timeline failure reason and retry affordance.
+- Phase 5 remains blocked on the central DB DSN and explicit migration approval.
+
 ## 2026-11-20 Gap Closure Wave 3 (DEPLOYED)
 - Backend `main` @ `615a622` (Backend Tests green): publish token refresh (YouTube `refresh_token`, Instagram `fb_exchange_token`), `POST /v1/anime/publish/channels/:id/refresh`, PUBLISH_NOW refresh gate, refreshed tokens mirrored to `user_infrastructure`.
 - Android `main` @ `77e3254` (Android Tests `44449929507` green: lint, JVM, Compose instrumentation, Maestro; APK build `44449929698` green). Settings ab catalog-driven hai: `/api/v1/ai/models/catalog` se providers/models, vision-capable filter, FAST/STANDARD/HIGH render profile, preferences hydrate + `/models/select` persistence. Build `v1.0.1-director.20261120`, asset `anime-debug-77e3254.apk` (22.0 MB).
@@ -9,7 +17,7 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM); containers `ai-backend` and `n8n` healthy.
-- ai-anime-backend: code `615a622`; ai-anime-android: `77e3254`; anime-cpu-worker: `ee47fdc`.
+- ai-anime-backend: `d8da697`; ai-anime-android: `db826f6`; anime-cpu-worker: `ee47fdc`.
 - n8n: 14 canonical StoryWF workflows active; no workflow changed in waves 1–3.
 - Anime central DB: `lqdjlcfczjottagobega.supabase.co`; Auth DB: `icypjilkcqylgbpmkyes.supabase.co`.
 - Migrations 007–011 applied; BYOD runtime enabled for the dedicated test account only.

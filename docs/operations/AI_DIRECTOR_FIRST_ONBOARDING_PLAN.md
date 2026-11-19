@@ -14,6 +14,19 @@ persistence, studio prefill, approval gates, migrations, or deployment.
 Do not replace this plan with ad-hoc gates or side quests. If scope changes,
 update this document with an explicit decision and date.
 
+## Implementation Status
+
+Last verified: 2026-11-19.
+
+| Phase | Status | Evidence |
+|---|---|---|
+| 0 Baseline freeze | Complete | Local/remote/EC2 checkouts synced; migration gap documented. |
+| 1 Projectless Director chat | Complete | Backend `1420c78`, Android `b098dc0`; backend and Android CI green. |
+| 2 Bible draft/apply correctness | Complete | Backend `e5c7685`, Android `c7ea942`; full backend suite green. Atomic RPC remains a follow-up. |
+| 3 Studio prefill + first episode | Complete | Backend `707e197`, Android `4cde5b9` + `e9dd1a0`; static contracts and CI green. |
+| 4 Approval gates + bypass closure | Complete | Backend `d8da697`, Android `db826f6`; gate tests and Android tests green. Director failure-reason/retry UX remains a P1 follow-up. |
+| 5 Migrations/deploy/E2E | Blocked | Central DB DSN and migration approval still required; live container not yet redeployed. |
+
 ## Target Flow
 
 ```text
