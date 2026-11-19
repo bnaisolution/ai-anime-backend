@@ -4,6 +4,7 @@
 - Backend `main` @ `19e1ee7` (Backend Tests `44573541427` green). Added server-side project setup and publish gates, fixed the setup gate to read `visual_medium`, and added unit/static coverage for production intents, missing Bible/cast, QC/episode approval, publish approval, Android command-gateway bypass, Director failure timelines, and server-gated production retry.
 - Android `main` @ `b84efe0` (Build APK `44573541709` green; Android Tests `44573541720` green). Bible approval now hands off to scoped characters and first-episode preflight; manual character creation uses `createCharacterSync`; Director timeline shows failure reason and retries failed production only through the server-gated endpoint.
 - EC2 checkouts synced to the latest code SHAs; live deployment remains separate.
+- Phase 5 prep done: `anime-backend:director-onboarding-449a816` image built on EC2 and health-smoke-tested on port 3001 (`{"status":"ok"}`), then removed. Deployment package generated with migrations 015–021 and rollback files; SHA256 verified.
 - Live container image is still `anime-backend:director-gap4-20261120`; Phase 4 backend has not been deployed. Migration 018 remains a deploy prerequisite.
 - Phase 4 acceptance is met for server gates, direct-command bypass, failure reporting, and retry.
 - Phase 5 remains blocked on the central DB DSN and explicit migration approval.
