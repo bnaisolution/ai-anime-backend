@@ -32,6 +32,20 @@ test('director and approval migrations are present with rollback files', () => {
   assert.match(read('supabase/migrations/014_approval_decision_idempotency.sql'), /decision_idempotency_key/);
 });
 
+test('director chat supports projectless onboarding without production actions', () => {
+  const routes = read('src/modules/ai/director/director.routes.ts');
+  assert.match(routes, /Production actions require a project/);
+  assert.match(routes, /chatAccess/);
+  assert.match(routes, /preHandler:\s*\[fastify\.authenticate, chatAccess\]/);
+
+  const service = read('src/modules/ai/director/director.service.ts');
+  assert.match(service, /ONBOARDING MODE/);
+  assert.match(service, /buildDirectorReadiness\(fastify, auth, null\)/);
+  assert.match(service, /conversation_id:\s*null/);
+  assert.match(service, /actions:\s*\[\]/);
+  assert.doesNotMatch(service, /buildActionProposal\([\s\S]{0,200}projectId:\s*''/);
+});
+
 test('AI execute gateway routes through the hardened WF-00 adapter', () => {
   const source = read('src/modules/ai/ai.routes.ts');
   assert.match(source, /dispatchToWf00/);

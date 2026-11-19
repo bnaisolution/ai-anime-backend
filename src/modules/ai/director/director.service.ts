@@ -9,7 +9,7 @@ import { submitAnimeCommand } from '../../anime/commands/commands.service';
 import { refreshChannelsForPublish } from '../../anime/publish/publish.service';
 import { buildActionProposal, extractStructuredDirectorAction, isMutatingDirectorIntent, verifyDirectorActionToken, type RequestedDirectorAction } from './director.actions';
 import { buildDirectorContext, compactDirectorContext } from './director.context';
-import { buildDirectorReadiness, missingResourcesFor } from './director.readiness';
+import { buildDirectorReadiness, missingResourcesFor, type DirectorReadiness } from './director.readiness';
 import { updateProjectFromSetup } from '../../anime/reads/project.setup.service';
 import { recordDirectorAudit, listDirectorAudit } from './director.audit';
 import { loadDirectorAttachments, attachmentPromptBlock } from './director.attachments';
@@ -27,7 +27,7 @@ import type { DirectorActionExecution, DirectorChatResult } from './director.typ
 
 export interface DirectorChatInput {
   message: string;
-  projectId: string;
+  projectId?: string | null;
   conversationId?: string | null;
   currentScreen?: string | null;
   explicitSeasonNo?: number | null;
@@ -60,6 +60,41 @@ function directorSystemPrompt(context: Awaited<ReturnType<typeof buildDirectorCo
     '',
     'PROJECT CONTEXT JSON:',
     compactDirectorContext(context),
+  ].join('\n');
+}
+
+function onboardingSystemPrompt(readiness: DirectorReadiness): string {
+  const setup = readiness.setup;
+  return [
+    'You are BNAI AI Studio Director, a professional film-production director for anime production.',
+    'Answer in the user\'s language (Hindi, Hinglish, or English). Be concise, concrete, and production-focused.',
+    'You are in ONBOARDING MODE because the user has no project yet.',
+    'Do not invent project facts, canon, characters, episode numbers, or completed work.',
+    'Your job in onboarding mode is to collect the minimum project brief: title, premise/logline, genre, project format, total seasons, episodes per season, and episode duration in minutes.',
+    'Ask at most three short questions at a time. If the user gives enough detail, summarize the brief and tell them to tap "Create project with Director".',
+    'Do not propose production actions and never emit a <director_actions> block in onboarding mode.',
+    'Never claim that a project, command, render, QC run, or publish has started unless execution evidence is present.',
+    'If setup resources are missing, explain the exact setup step from the readiness JSON instead of implying that platform keys exist.',
+    'Never reveal internal workflow identifiers, service tokens, provider keys, or infrastructure credentials.',
+    '',
+    'ONBOARDING READINESS JSON:',
+    JSON.stringify({
+      overall: readiness.overall,
+      setup: setup ? {
+        complete: setup.complete,
+        active_track: setup.active_track,
+        byod_missing: setup.byod.missing,
+        saas_enabled: setup.saas.enabled,
+        next_step: setup.next_step,
+        deep_link: setup.deep_link,
+      } : null,
+      blocking: readiness.blocking.map((item) => ({
+        capability: item.capability,
+        missing: item.missing,
+        deep_links: item.deep_links,
+      })),
+      setup_hints: readiness.setup_hints,
+    }),
   ].join('\n');
 }
 
@@ -122,8 +157,87 @@ export async function runDirectorChat(
     throw Object.assign(new Error(quota.reason || 'Quota exceeded.'), { code: 'QUOTA_EXCEEDED' });
   }
 
+  const projectId = typeof input.projectId === 'string' ? input.projectId.trim() : '';
+  if (!projectId) {
+    if (input.attachmentIds && input.attachmentIds.length > 0) {
+      throw Object.assign(new Error('Attachments require a project.'), { code: 'INVALID_INPUT' });
+    }
+    if (input.requestedAction) {
+      throw Object.assign(new Error('Production actions require a project.'), { code: 'INVALID_INPUT' });
+    }
+
+    const readiness = await buildDirectorReadiness(fastify, auth, null);
+    const aiRes = await callByodModel(
+      fastify,
+      auth.userId,
+      [
+        { role: 'system', content: onboardingSystemPrompt(readiness) },
+        { role: 'user', content: message },
+      ],
+      0.3,
+      auth.workspaceId || undefined
+    );
+
+    if (!aiRes.ok) {
+      await recordDirectorExecution(fastify, {
+        userId: auth.userId,
+        requestId,
+        skillKey: 'cinematic_director_onboarding',
+        conversationId: 'onboarding',
+        provider: aiRes.provider,
+        model: aiRes.model,
+        replyLength: 0,
+        tokensUsed: 0,
+        durationMs: Date.now() - started,
+        success: false,
+        error: aiRes.reason,
+      });
+      incrementCounter('ai_director_chat_total', { status: 'failed', provider: aiRes.provider || 'none', error: aiRes.reason || 'unknown' });
+      observeHistogram('ai_director_chat_duration_seconds', (Date.now() - started) / 1000, { status: 'failed' });
+      throw Object.assign(new Error(byodFailureMessage(aiRes.resolution, aiRes.reason)), { code: 'BYOD_FAILED' });
+    }
+
+    const structuredAction = extractStructuredDirectorAction(aiRes.reply);
+    const safeReply = String(redactSecrets(structuredAction.reply) || '').trim();
+    await recordDirectorExecution(fastify, {
+      userId: auth.userId,
+      requestId,
+      skillKey: 'cinematic_director_onboarding',
+      conversationId: 'onboarding',
+      provider: aiRes.provider,
+      model: aiRes.model,
+      replyLength: safeReply.length,
+      tokensUsed: aiRes.tokensUsed,
+      durationMs: Date.now() - started,
+      success: true,
+    });
+    incrementCounter('ai_director_chat_total', { status: 'success', provider: aiRes.provider, error: 'none' });
+    incrementCounter('ai_director_onboarding_chat_total', { status: 'success' });
+    observeHistogram('ai_director_chat_duration_seconds', (Date.now() - started) / 1000, { status: 'success' });
+
+    return {
+      request_id: requestId,
+      conversation_id: null,
+      status: 'completed',
+      reply: safeReply,
+      message: safeReply,
+      provider: aiRes.provider,
+      model: aiRes.model,
+      key_source: 'byod',
+      context: null,
+      actions: [],
+      verification: {
+        status: 'verified',
+        evidence: [
+          `BYOD provider ${aiRes.provider} executed onboarding chat`,
+          'No project-scoped action was proposed',
+        ],
+      },
+    };
+  }
+
   const context = await buildDirectorContext(fastify, auth, {
-    projectId: input.projectId,
+    projectId,
     explicitSeasonNo: input.explicitSeasonNo,
     explicitEpisodeNo: input.explicitEpisodeNo,
     explicitTargetDurationSec: input.explicitTargetDurationSec,
@@ -132,7 +246,7 @@ export async function runDirectorChat(
     projectRole,
   });
 
-  const conversationId = await ensureDirectorConversation(fastify, auth.userId, input.projectId, input.conversationId);
+  const conversationId = await ensureDirectorConversation(fastify, auth.userId, projectId, input.conversationId);
   let history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   try {
     history = await loadDirectorMessages(fastify, auth.userId, conversationId, 10);
@@ -140,13 +254,13 @@ export async function runDirectorChat(
     fastify.log.warn({ err: error }, 'Director conversation history unavailable');
   }
   const conversationSummary = await loadConversationSummary(auth.userId, conversationId);
-  const attachments = await loadDirectorAttachments(auth.userId, input.projectId, input.attachmentIds || []);
+  const attachments = await loadDirectorAttachments(auth.userId, projectId, input.attachmentIds || []);
   const userContent = `${message}${attachmentPromptBlock(attachments)}`;
 
   await appendDirectorMessage(fastify, {
     conversationId,
     userId: auth.userId,
-    projectId: input.projectId,
+    projectId,
     role: 'user',
     content: message,
     metadata: {
@@ -195,7 +309,7 @@ export async function runDirectorChat(
   await appendDirectorMessage(fastify, {
     conversationId,
     userId: auth.userId,
-    projectId: input.projectId,
+    projectId,
     role: 'assistant',
     content: safeReply,
     metadata: {
@@ -222,7 +336,7 @@ export async function runDirectorChat(
       try {
         actions.push(buildActionProposal({
           userId: auth.userId,
-          projectId: input.projectId,
+          projectId,
           contextVersion: context.context_version,
           targetDurationSec: context.target.targetDurationSec,
           requested: requestedAction,
@@ -248,7 +362,7 @@ export async function runDirectorChat(
   if (actionError) {
     await recordDirectorAudit({
       userId: auth.userId,
-      projectId: input.projectId,
+      projectId,
       conversationId,
       actionId: `blocked:${String(requestedAction?.intent || 'unknown').toUpperCase()}`,
       intent: String(requestedAction?.intent || 'unknown').toUpperCase(),
@@ -261,7 +375,7 @@ export async function runDirectorChat(
   for (const action of actions) {
     await recordDirectorAudit({
       userId: auth.userId,
-      projectId: input.projectId,
+      projectId,
       conversationId,
       actionId: action.action_id,
       intent: action.intent,

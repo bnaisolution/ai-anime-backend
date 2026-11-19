@@ -55,6 +55,21 @@ function projectRole(request: unknown): string {
 }
 
 export default async function directorRoutes(fastify: FastifyInstance): Promise<void> {
+  const projectChatGuard = requireProjectRole(
+    ['owner', 'admin', 'editor', 'reviewer', 'viewer'],
+    { bodyProjectId: true }
+  );
+  const chatAccess = async (request: any, reply: FastifyReply): Promise<void> => {
+    const projectId = typeof request.body?.project_id === 'string'
+      ? request.body.project_id.trim()
+      : '';
+    if (!projectId) {
+      request.anime = { ...(request.anime || {}), role: 'owner', project_id: null };
+      return;
+    }
+    await projectChatGuard(request, reply);
+  };
+
   fastify.get('/director/capabilities', {
     preHandler: [fastify.authenticate],
   }, async (request, reply) => {
@@ -176,18 +191,20 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
   });
 
   fastify.post('/director/chat', {
-    preHandler: [fastify.authenticate, requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'], { bodyProjectId: true })],
+    preHandler: [fastify.authenticate, chatAccess],
   }, async (request, reply) => {
     const body = (request.body as Record<string, unknown>) || {};
     const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
-    if (!projectId) return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
     const requestedAction = body.requested_action && typeof body.requested_action === 'object'
       ? body.requested_action as DirectorChatInput['requestedAction']
       : null;
+    if (!projectId && requestedAction) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'Production actions require a project.' }] });
+    }
     try {
       const result = await runDirectorChat(fastify, request.authContext, projectRole(request), {
         message: String(body.message || ''),
-        projectId,
+        projectId: projectId || null,
         conversationId: typeof body.conversation_id === 'string' ? body.conversation_id : null,
         currentScreen: typeof body.current_screen === 'string' ? body.current_screen : null,
         explicitSeasonNo: body.season_no != null ? Number(body.season_no) : null,

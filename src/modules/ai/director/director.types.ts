@@ -83,14 +83,14 @@ export interface DirectorContext {
 
 export interface DirectorChatResult {
   request_id: string;
-  conversation_id: string;
+  conversation_id: string | null;
   status: 'completed';
   reply: string;
   message: string;
   provider: string;
   model: string;
   key_source: string;
-  context: DirectorContext;
+  context: DirectorContext | null;
   actions: DirectorActionProposal[];
   verification: { status: 'verified' | 'not_verified'; evidence: string[] };
 }
