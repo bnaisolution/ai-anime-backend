@@ -11,7 +11,7 @@ Baseline: backend `origin/main` `406d359`; Android `origin/main` `f31f688`; live
 | 1 Capability registry | DONE | `director.capabilities.ts`, `GET /ai/director/capabilities`, unit tests |
 | 2 Readiness + fail-closed | DONE (flag off by default) | `director.readiness.ts`, `GET /ai/director/readiness`, `SETUP_REQUIRED` |
 | 3 Model catalog + profiles | DONE (backend) | `modelCatalog.ts`, migration 017, `GET /ai/models/catalog` |
-| 4 Director UX | DONE (text-only; attachments pending) | timeline + plan cards, deep links, `POST /ai/director/plan`, `GET /ai/director/timeline` |
+| 4 Director UX | DONE (text-only; attachments pending) | timeline + plan cards, deep links, `POST /ai/director/plan`, `GET /ai/director/timeline`; Android suites green at `46518c2` |
 | 5 Publish OAuth | DONE (credentials pending) | `publish.service.ts`, migration 019, real channel UI |
 | 6 CPU/Git/S3 wiring | PARTIAL | CPU target resolver/test + UI done; n8n consumption and S3 generation handoff pending |
 | 7 14-workflow BYOD validation | BLOCKED | no validated BYOD n8n test plane; WF-03 tunnel stale |
