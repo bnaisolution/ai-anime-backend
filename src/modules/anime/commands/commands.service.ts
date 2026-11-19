@@ -34,7 +34,7 @@ async function assertProjectSetupForProduction(_userId: string, body: CreateComm
   if (!flags.projectSetupGate || !PRODUCTION_INTENTS.has(body.intent)) return;
   const { data: project, error } = await animeSupabase
     .from('projects')
-    .select('id, user_id, name, genre, visual_style, story_bible')
+    .select('id, user_id, name, genre, visual_medium, visual_style, story_bible')
     .eq('id', body.project_id)
     .maybeSingle<Record<string, unknown>>();
   if (error || !project) {
