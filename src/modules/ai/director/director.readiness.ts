@@ -260,20 +260,32 @@ export async function buildDirectorReadiness(
   ) || byType.has(platform);
 
   const projectIdValue = typeof projectId === 'string' && projectId.trim() ? projectId.trim() : null;
-  let databaseMode = 'platform';
+  let databaseMode = 'central';
   let projectRow: Record<string, unknown> | null = null;
   if (projectIdValue) {
     try {
-      const { data } = await animeSupabase
+      const { data, error } = await animeSupabase
         .from('projects')
-        .select('id, name, genre, visual_medium, visual_style, story_bible, db_mode')
+        .select('id, name, genre, visual_medium, visual_style, story_bible')
         .eq('id', projectIdValue)
         .maybeSingle();
+      if (error) {
+        fastify.log.debug({ err: error }, 'Director readiness: project lookup unavailable');
+      }
       projectRow = (data as Record<string, unknown> | null) || null;
-      const rawMode = text(projectRow?.db_mode);
+    } catch (error) {
+      fastify.log.debug({ err: error }, 'Director readiness: project lookup unavailable');
+    }
+    try {
+      const { data } = await animeSupabase
+        .from('anime_tenant_project_index')
+        .select('data_plane')
+        .eq('project_id', projectIdValue)
+        .maybeSingle();
+      const rawMode = text((data as Record<string, unknown> | null)?.data_plane);
       if (rawMode) databaseMode = rawMode;
     } catch (error) {
-      fastify.log.debug({ err: error }, 'Director readiness: project mode lookup unavailable');
+      fastify.log.debug({ err: error }, 'Director readiness: project data plane lookup unavailable');
     }
   }
 
