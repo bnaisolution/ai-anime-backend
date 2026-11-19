@@ -1,7 +1,7 @@
 # SYSTEM STATE LEDGER (Single Source of Truth)
 
 ## 2026-11-19 Gap Closure Wave 2 (DEPLOYED)
-- Backend `main` @ `406d359` (Backend Tests green): `POST /ai/director/plan`, `GET /ai/director/timeline`, publish OAuth (`019`), CPU target resolver/test (`020`), SaaS plans/subscription/usage/onboarding (`021`), Prometheus counters for all new paths.
+- Backend `main` @ `125c378` (code `406d359`, Backend Tests green): `POST /ai/director/plan`, `GET /ai/director/timeline`, publish OAuth (`019`), CPU target resolver/test (`020`), SaaS plans/subscription/usage/onboarding (`021`), Prometheus counters for all new paths.
 - Android `main` @ `46518c2` (Android Tests `44442291140` green: lint, JVM, Compose instrumentation, Maestro; APK build `44442290996` green, artifact 20.0 MB). Test build `v1.0.0-director.20261119` asset `anime-debug-f31f688.apk` (21.0 MB). Director timeline + plan cards, action deep links, real publish channel OAuth UI, CPU target test, Plan & Usage tab.
 - Live container `anime-backend:director-gap3-20261119`; alias `backend`, health 200. New routes return 401 unauthenticated. Rollback image: `anime-backend:director-gap2-20261118`.
 - Flags: `DIRECTOR_CAPABILITIES_V2/DIRECTOR_READINESS=true`, `BYOD_FAIL_CLOSED=false`, `MODEL_CATALOG/PUBLISH_OAUTH_V2/SAAS_BILLING=false`.
@@ -9,7 +9,7 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM); containers `ai-backend` and `n8n` healthy.
-- ai-anime-backend: code `406d359`; ai-anime-android: code `f31f688`; anime-cpu-worker: `ee47fdc`.
+- ai-anime-backend: main `125c378` (code `406d359`); ai-anime-android: `46518c2`; anime-cpu-worker: `ee47fdc`.
 - n8n: 14 canonical StoryWF workflows active; no workflow changed in wave 1/2.
 - Anime central DB: `lqdjlcfczjottagobega.supabase.co`; Auth DB: `icypjilkcqylgbpmkyes.supabase.co`.
 - Migrations 007/008/009/010/011 applied; BYOD runtime enabled for the dedicated test account only.
