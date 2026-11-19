@@ -2,7 +2,7 @@
 
 ## 2026-11-19 Gap Closure Wave 2 (DEPLOYED)
 - Backend `main` @ `406d359` (Backend Tests green): `POST /ai/director/plan`, `GET /ai/director/timeline`, publish OAuth (`019`), CPU target resolver/test (`020`), SaaS plans/subscription/usage/onboarding (`021`), Prometheus counters for all new paths.
-- Android `main` @ `f31f688` (APK build pending): Director timeline + plan cards, action deep links, real publish channel OAuth UI, CPU target test, Plan & Usage tab.
+- Android `main` @ `f31f688` (APK `v1.0.0-director.20261119`, asset `anime-debug-f31f688.apk` 21.0 MB; JVM/lint green, emulator suites pending): Director timeline + plan cards, action deep links, real publish channel OAuth UI, CPU target test, Plan & Usage tab.
 - Live container `anime-backend:director-gap3-20261119`; alias `backend`, health 200. New routes return 401 unauthenticated. Rollback image: `anime-backend:director-gap2-20261118`.
 - Flags: `DIRECTOR_CAPABILITIES_V2/DIRECTOR_READINESS=true`, `BYOD_FAIL_CLOSED=false`, `MODEL_CATALOG/PUBLISH_OAUTH_V2/SAAS_BILLING=false`.
 - Migrations 015–021 NOT applied (no DB DSN on host). All code paths are guarded; apply through the pooler with `psql -v ON_ERROR_STOP=1 -1` before enabling publish/model flags.

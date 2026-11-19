@@ -16,9 +16,9 @@ Baseline: backend `origin/main` `406d359`; Android `origin/main` `f31f688`; live
 | 6 CPU/Git/S3 wiring | PARTIAL | CPU target resolver/test + UI done; n8n consumption and S3 generation handoff pending |
 | 7 14-workflow BYOD validation | BLOCKED | no validated BYOD n8n test plane; WF-03 tunnel stale |
 | 8 SaaS billing/onboarding | PARTIAL | plans/subscription/usage/onboarding + UI; checkout gated by `SAAS_BILLING=false` |
-| 9 Observability/GA | PARTIAL | Prometheus metrics for Director/publish/CPU/SaaS, live/ready; SLO window + canary pending |
+| 9 Observability/GA | PARTIAL | Prometheus metrics for Director/publish/CPU/SaaS, live/ready, `08_SLO_CANARY_RUNBOOK.md`; 7-day SLO capture + canary pending |
 
-**Open blocker:** migrations 015–021 are not applied (no DB DSN on the host); Android APK for `f31f688` is the build to test.
+**Open blocker:** migrations 015–021 are not applied (no DB DSN on the host); APK test build `v1.0.0-director.20261119` (asset `anime-debug-f31f688.apk`) is ready.
 Scope: Backend (Fastify), Supabase, n8n (14 canonical workflows), Android, GPU/Kaggle/CPU workers, BYOD providers, publishing channels, SaaS control plane.
 
 This document converts the 2026-11-18 audit findings into a dependency-ordered implementation plan. It does not authorize source, schema, workflow, credential, deployment, or production changes. Each phase starts only after explicit Owner approval.
