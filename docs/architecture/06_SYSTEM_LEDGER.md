@@ -1,11 +1,11 @@
 # SYSTEM STATE LEDGER (Single Source of Truth)
 
 ## 2026-11-19 AI Director First Onboarding Waves 1–4 (CODE COMPLETE)
-- Backend `main` @ `d8da697` (Backend Tests `44566561866` green). Added server-side project setup and publish gates, fixed the setup gate to read `visual_medium`, and added unit/static coverage for production intents, missing Bible/cast, QC/episode approval, publish approval, and Android command-gateway bypass.
-- Android `main` @ `db826f6` (Build APK `44566562822` green; Android Tests `44566562808` green after rerun). Bible approval now hands off to scoped characters and first-episode preflight; manual character creation uses `createCharacterSync`; Studio handoff and playlist labels are covered.
-- EC2 checkouts synced: `/home/ec2-user/ai-backend` @ `d8da697`, `/home/ec2-user/ai-anime-android` @ `db826f6`.
+- Backend `main` @ `19e1ee7` (Backend Tests `44573541427` green). Added server-side project setup and publish gates, fixed the setup gate to read `visual_medium`, and added unit/static coverage for production intents, missing Bible/cast, QC/episode approval, publish approval, Android command-gateway bypass, Director failure timelines, and server-gated production retry.
+- Android `main` @ `b84efe0` (Build APK `44573541709` green; Android Tests `44573541720` green). Bible approval now hands off to scoped characters and first-episode preflight; manual character creation uses `createCharacterSync`; Director timeline shows failure reason and retries failed production only through the server-gated endpoint.
+- EC2 checkouts synced to the latest code SHAs; live deployment remains separate.
 - Live container image is still `anime-backend:director-gap4-20261120`; Phase 4 backend has not been deployed. Migration 018 remains a deploy prerequisite.
-- Phase 4 acceptance is met for server gates and direct-command bypass. Remaining P1 UX: Director timeline failure reason and retry affordance.
+- Phase 4 acceptance is met for server gates, direct-command bypass, failure reporting, and retry.
 - Phase 5 remains blocked on the central DB DSN and explicit migration approval.
 
 ## 2026-11-20 Gap Closure Wave 3 (DEPLOYED)
@@ -17,7 +17,7 @@
 
 ## Current Heads & Infrastructure
 - Host: AWS EC2 t3.small (1.9 GB RAM); containers `ai-backend` and `n8n` healthy.
-- ai-anime-backend: `d8da697`; ai-anime-android: `db826f6`; anime-cpu-worker: `ee47fdc`.
+- ai-anime-backend: `19e1ee7`; ai-anime-android: `b84efe0`; anime-cpu-worker: `ee47fdc`.
 - n8n: 14 canonical StoryWF workflows active; no workflow changed in waves 1–3.
 - Anime central DB: `lqdjlcfczjottagobega.supabase.co`; Auth DB: `icypjilkcqylgbpmkyes.supabase.co`.
 - Migrations 007–011 applied; BYOD runtime enabled for the dedicated test account only.
