@@ -10,13 +10,17 @@ import { refreshChannelsForPublish } from '../../anime/publish/publish.service';
 import { buildActionProposal, extractStructuredDirectorAction, isMutatingDirectorIntent, verifyDirectorActionToken, type RequestedDirectorAction } from './director.actions';
 import { buildDirectorContext, compactDirectorContext } from './director.context';
 import { buildDirectorReadiness, missingResourcesFor } from './director.readiness';
+import { recordDirectorAudit, listDirectorAudit } from './director.audit';
+import { loadDirectorAttachments, attachmentPromptBlock } from './director.attachments';
 import { directorActionPromptCatalog, roleSatisfiesIntent } from './director.capabilities';
 import { flags } from '../../../config/flags';
 import { incrementCounter, observeHistogram } from '../../anime/observability/metrics';
 import {
   appendDirectorMessage,
   ensureDirectorConversation,
+  loadConversationSummary,
   loadDirectorMessages,
+  summarizeConversationIfNeeded,
 } from './director.conversation';
 import type { DirectorActionExecution, DirectorChatResult } from './director.types';
 
@@ -28,6 +32,7 @@ export interface DirectorChatInput {
   explicitSeasonNo?: number | null;
   explicitEpisodeNo?: number | null;
   explicitTargetDurationSec?: number | null;
+  attachmentIds?: string[] | null;
   requestedAction?: RequestedDirectorAction | null;
 }
 
@@ -128,6 +133,9 @@ export async function runDirectorChat(
   } catch (error) {
     fastify.log.warn({ err: error }, 'Director conversation history unavailable');
   }
+  const conversationSummary = await loadConversationSummary(auth.userId, conversationId);
+  const attachments = await loadDirectorAttachments(auth.userId, input.projectId, input.attachmentIds || []);
+  const userContent = `${message}${attachmentPromptBlock(attachments)}`;
 
   await appendDirectorMessage(fastify, {
     conversationId,
@@ -135,7 +143,11 @@ export async function runDirectorChat(
     projectId: input.projectId,
     role: 'user',
     content: message,
-    metadata: { current_screen: input.currentScreen || null, context_version: context.context_version },
+    metadata: {
+      current_screen: input.currentScreen || null,
+      context_version: context.context_version,
+      attachment_ids: attachments.map((attachment) => attachment.id),
+    },
   }).catch((error) => fastify.log.warn({ err: error }, 'Director user message persistence failed'));
 
   const aiRes = await callByodModel(
@@ -143,8 +155,11 @@ export async function runDirectorChat(
     auth.userId,
     [
       { role: 'system', content: directorSystemPrompt(context) },
+      ...(conversationSummary
+        ? [{ role: 'system' as const, content: `Conversation summary so far:\n${conversationSummary}` }]
+        : []),
       ...history.map((item) => ({ role: item.role, content: item.content })),
-      { role: 'user', content: message },
+      { role: 'user', content: userContent },
     ],
     0.3,
     auth.workspaceId || undefined
@@ -185,6 +200,9 @@ export async function runDirectorChat(
     },
   }).catch((error) => fastify.log.warn({ err: error }, 'Director assistant message persistence failed'));
 
+  void summarizeConversationIfNeeded(fastify, auth.userId, conversationId)
+    .catch((error) => fastify.log.warn({ err: error }, 'Director conversation summary failed'));
+
   const actions = [];
   let actionError: string | null = null;
   const requestedAction = input.requestedAction || structuredAction.requested;
@@ -221,6 +239,31 @@ export async function runDirectorChat(
     durationMs: Date.now() - started,
     success: true,
   });
+  if (actionError) {
+    await recordDirectorAudit({
+      userId: auth.userId,
+      projectId: input.projectId,
+      conversationId,
+      actionId: `blocked:${String(requestedAction?.intent || 'unknown').toUpperCase()}`,
+      intent: String(requestedAction?.intent || 'unknown').toUpperCase(),
+      status: 'blocked',
+      requestId,
+      reason: actionError,
+      payload: requestedAction?.payload || null,
+    });
+  }
+  for (const action of actions) {
+    await recordDirectorAudit({
+      userId: auth.userId,
+      projectId: input.projectId,
+      conversationId,
+      actionId: action.action_id,
+      intent: action.intent,
+      status: 'proposed',
+      requestId,
+      payload: action.preview?.payload || null,
+    });
+  }
   incrementCounter('ai_director_chat_total', { status: 'success', provider: aiRes.provider, error: 'none' });
   incrementCounter('ai_director_actions_proposed_total', { blocked: actionError ? 'true' : 'false' }, actions.length);
   observeHistogram('ai_director_chat_duration_seconds', (Date.now() - started) / 1000, { status: 'success' });
@@ -281,6 +324,16 @@ export async function executeDirectorAction(
     const readiness = await buildDirectorReadiness(fastify, auth, input.projectId);
     const missing = missingResourcesFor(readiness, action.intent);
     if (missing.length > 0) {
+      await recordDirectorAudit({
+        userId: auth.userId,
+        projectId: input.projectId,
+        actionId: input.actionId,
+        intent: action.intent,
+        status: 'blocked',
+        requestId: input.requestId || null,
+        reason: `SETUP_REQUIRED: ${missing.join(', ')}`,
+        payload: action.payload,
+      });
       throw Object.assign(
         new Error(`Setup required before this action: ${missing.join(', ')}.`),
         { code: 'SETUP_REQUIRED', missing }
@@ -299,6 +352,16 @@ export async function executeDirectorAction(
       .filter((platform) => known[platform])
       .filter((platform) => readiness.resources[known[platform] as 'youtube' | 'instagram'].status === 'missing');
     if (missingChannels.length > 0) {
+      await recordDirectorAudit({
+        userId: auth.userId,
+        projectId: input.projectId,
+        actionId: input.actionId,
+        intent: action.intent,
+        status: 'blocked',
+        requestId: input.requestId || null,
+        reason: `SETUP_REQUIRED: ${missingChannels.join(', ')}`,
+        payload: action.payload,
+      });
       throw Object.assign(
         new Error(`Connect these publishing channels first: ${missingChannels.join(', ')}.`),
         { code: 'SETUP_REQUIRED', missing: missingChannels }
@@ -306,6 +369,16 @@ export async function executeDirectorAction(
     }
     const refreshed = await refreshChannelsForPublish(auth.userId, requestedPlatforms);
     if (refreshed.failed.length > 0) {
+      await recordDirectorAudit({
+        userId: auth.userId,
+        projectId: input.projectId,
+        actionId: input.actionId,
+        intent: action.intent,
+        status: 'blocked',
+        requestId: input.requestId || null,
+        reason: `CHANNEL_EXPIRED: ${refreshed.failed.map((item) => item.platform).join(', ')}`,
+        payload: action.payload,
+      });
       throw Object.assign(
         new Error('Publishing authorization expired. Reconnect the channel from Publish Studio and retry.'),
         {
@@ -315,24 +388,50 @@ export async function executeDirectorAction(
       );
     }
   }
-  const result = await submitAnimeCommand({
-    idempotencyKey,
-    userId: auth.userId,
-    requestId: input.requestId || crypto.randomUUID(),
-    body: {
-      intent: action.intent,
-      project_id: input.projectId,
-      payload: {
-        ...action.payload,
-        target_duration_sec: action.target_duration_sec,
+  let result: Awaited<ReturnType<typeof submitAnimeCommand>>;
+  try {
+    result = await submitAnimeCommand({
+      idempotencyKey,
+      userId: auth.userId,
+      requestId: input.requestId || crypto.randomUUID(),
+      body: {
+        intent: action.intent,
+        project_id: input.projectId,
+        payload: {
+          ...action.payload,
+          target_duration_sec: action.target_duration_sec,
+          season_no: action.season_no,
+          episode_no: action.episode_no,
+          source: 'ai_director_action',
+        },
+        mode: action.mode || undefined,
         season_no: action.season_no,
         episode_no: action.episode_no,
-        source: 'ai_director_action',
-      },
-      mode: action.mode || undefined,
-      season_no: action.season_no,
-      episode_no: action.episode_no,
-    } as any,
+      } as any,
+    });
+  } catch (error) {
+    await recordDirectorAudit({
+      userId: auth.userId,
+      projectId: input.projectId,
+      actionId: input.actionId,
+      intent: action.intent,
+      status: 'failed',
+      requestId: input.requestId || null,
+      reason: error instanceof Error ? error.message : 'Command submission failed',
+      payload: action.payload,
+    });
+    throw error;
+  }
+
+  await recordDirectorAudit({
+    userId: auth.userId,
+    projectId: input.projectId,
+    actionId: input.actionId,
+    intent: action.intent,
+    status: 'executed',
+    commandId: String(result.command.id),
+    requestId: input.requestId || null,
+    payload: action.payload,
   });
 
   return {

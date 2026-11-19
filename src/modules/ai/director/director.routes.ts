@@ -3,6 +3,8 @@ import { requireProjectRole } from '../../anime/auth/project-guard';
 import { clearDirectorConversation } from './director.conversation';
 import { executeDirectorAction, runDirectorChat, type DirectorChatInput } from './director.service';
 import { CAPABILITY_VERSION, listDirectorCapabilities, rolesForIntent } from './director.capabilities';
+import { listDirectorAudit } from './director.audit';
+import { deleteDirectorAttachment, saveDirectorAttachment } from './director.attachments';
 import { buildDirectorReadiness } from './director.readiness';
 import { buildDirectorTimeline } from './director.timeline';
 import { buildDirectorPlan } from './director.plan';
@@ -152,6 +154,9 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
         explicitSeasonNo: body.season_no != null ? Number(body.season_no) : null,
         explicitEpisodeNo: body.episode_no != null ? Number(body.episode_no) : null,
         explicitTargetDurationSec: body.target_duration_sec != null ? Number(body.target_duration_sec) : null,
+        attachmentIds: Array.isArray(body.attachment_ids)
+          ? body.attachment_ids.map((id) => String(id)).filter(Boolean)
+          : null,
         requestedAction,
       });
       return reply.send(result);
@@ -180,6 +185,62 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
     } catch (error) {
       return errorReply(reply, error);
     }
+  });
+
+  fastify.post('/director/attachments', {
+    preHandler: [fastify.authenticate, requireProjectRole(['owner', 'admin', 'editor'], { bodyProjectId: true })],
+  }, async (request, reply) => {
+    const body = (request.body as Record<string, unknown>) || {};
+    const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
+    if (!projectId) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
+    }
+    try {
+      const attachment = await saveDirectorAttachment({
+        userId: request.authContext.userId,
+        projectId,
+        conversationId: typeof body.conversation_id === 'string' ? body.conversation_id : null,
+        filename: String(body.filename || 'attachment'),
+        mimeType: String(body.mime_type || 'application/octet-stream'),
+        dataBase64: String(body.data_base64 || ''),
+      });
+      return reply.code(201).send({ data: attachment });
+    } catch (error) {
+      return errorReply(reply, error);
+    }
+  });
+
+  fastify.delete('/director/attachments/:id', {
+    preHandler: [fastify.authenticate, requireProjectRole(['owner', 'admin', 'editor'], { bodyProjectId: true })],
+  }, async (request, reply) => {
+    const params = (request.params as Record<string, unknown>) || {};
+    const query = (request.query as Record<string, unknown>) || {};
+    const projectId = typeof query.project_id === 'string' ? query.project_id.trim() : '';
+    if (!projectId) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
+    }
+    const ok = await deleteDirectorAttachment(request.authContext.userId, projectId, String(params.id || ''));
+    if (!ok) return reply.code(404).send({ status: 'failed', errors: [{ category: 'ATTACHMENT_NOT_FOUND', message: 'Attachment not found.' }] });
+    return reply.send({ data: { deleted: true } });
+  });
+
+  fastify.get('/director/audit', {
+    preHandler: [
+      fastify.authenticate,
+      requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'], { bodyProjectId: true }),
+    ],
+  }, async (request, reply) => {
+    const query = (request.query as Record<string, unknown>) || {};
+    const projectId = typeof query.project_id === 'string' ? query.project_id.trim() : '';
+    if (!projectId) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
+    }
+    const entries = await listDirectorAudit({
+      userId: request.authContext.userId,
+      projectId,
+      limit: query.limit != null ? Number(query.limit) : 25,
+    });
+    return reply.send({ data: { entries, count: entries.length } });
   });
 
   fastify.post('/director/conversation/clear', {
