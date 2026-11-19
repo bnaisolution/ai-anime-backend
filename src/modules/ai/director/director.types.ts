@@ -1,6 +1,7 @@
 import type { CommandIntent } from '../../anime/commands/commands.types';
 import type { DirectorActionProposal } from './director.actions';
 import type { TargetSelection } from './director.duration';
+import type { DirectorSetupSummary } from './director.readiness';
 
 export interface DirectorProjectSummary {
   id: string;
@@ -27,6 +28,14 @@ export interface DirectorTargetSummary extends TargetSelection {
 export interface DirectorContext {
   context_version: string;
   project: DirectorProjectSummary;
+  setup: DirectorSetupSummary;
+  access: {
+    role: string;
+    can_edit: boolean;
+    can_review: boolean;
+    can_publish: boolean;
+    can_manage_settings: boolean;
+  };
   target: DirectorTargetSummary;
   bible: Record<string, unknown>;
   cast: Array<{ name: string; status: string | null; age_group: string | null }>;

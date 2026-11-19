@@ -14,6 +14,8 @@ export const flags = {
   directorReadiness: boolFlag('DIRECTOR_READINESS', true),
   /** Production actions fail closed when a required BYOD resource is missing. */
   byodFailClosed: boolFlag('BYOD_FAIL_CLOSED', false),
+  /** Direct commands must pass project setup/cast gates before production. */
+  projectSetupGate: boolFlag('PROJECT_SETUP_GATE', true),
   /** Curated model catalog + render profiles. */
   modelCatalog: boolFlag('MODEL_CATALOG', false),
   /** Real publishing OAuth channels. */

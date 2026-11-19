@@ -67,7 +67,7 @@ export async function buildDirectorPlan(
   let contextVersion = '';
   let targetDurationSec = 0;
   try {
-    const context = await buildDirectorContext(fastify, auth, { projectId: input.projectId });
+    const context = await buildDirectorContext(fastify, auth, { projectId: input.projectId, projectRole });
     contextVersion = context.context_version;
     targetDurationSec = context.target.targetDurationSec;
   } catch {
@@ -95,6 +95,8 @@ export async function buildDirectorPlan(
 
     const missing = missingResourcesFor(readiness, capability.key);
     const roleOk = roleSatisfiesIntent(capability.key, projectRole);
+    const productionIntents = new Set(['GENERATE_EPISODE', 'CONTINUE_EPISODE', 'REGENERATE_EPISODE', 'RUN_QC', 'PUBLISH_NOW']);
+    const projectReady = readiness.setup.project?.ready_for_production === true;
     let action: DirectorActionProposal | null = null;
     let blockedReason: string | null = null;
 
@@ -102,6 +104,8 @@ export async function buildDirectorPlan(
       blockedReason = 'ROLE_NOT_ALLOWED';
     } else if (missing.length > 0) {
       blockedReason = `SETUP_REQUIRED:${missing.join(',')}`;
+    } else if (productionIntents.has(capability.key) && !projectReady) {
+      blockedReason = `SETUP_REQUIRED:${readiness.setup.next_step}`;
     } else {
       try {
         action = buildActionProposal({

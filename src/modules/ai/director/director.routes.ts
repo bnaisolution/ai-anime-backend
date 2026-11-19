@@ -62,17 +62,18 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
   });
 
   fastify.get('/director/readiness', {
-    preHandler: [
-      fastify.authenticate,
-      requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'], { bodyProjectId: true }),
-    ],
+    preHandler: [fastify.authenticate],
   }, async (request, reply) => {
     const query = (request.query as Record<string, unknown>) || {};
     const projectId = typeof query.project_id === 'string' ? query.project_id.trim() : '';
-    if (!projectId) {
-      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
+    if (projectId) {
+      await requireProjectRole(
+        ['owner', 'admin', 'editor', 'reviewer', 'viewer'],
+        { bodyProjectId: true }
+      )(request, reply);
+      if (reply.sent) return;
     }
-    const readiness = await buildDirectorReadiness(fastify, request.authContext, projectId);
+    const readiness = await buildDirectorReadiness(fastify, request.authContext, projectId || null);
     setGauge('ai_director_readiness_overall', readiness.overall === 'ready' ? 1 : 0, { state: readiness.overall });
     incrementCounter('ai_director_readiness_checks_total', { overall: readiness.overall });
     return reply.send({

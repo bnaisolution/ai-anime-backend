@@ -6,7 +6,7 @@ import { list as listInfrastructure } from '../../anime/infrastructure/infrastru
 import { retrieveContext } from '../../anime/intelligence/memory.service';
 import { getQuotaStatus } from '../../../security/executionGuard';
 import { flags } from '../../../config/flags';
-import { buildDirectorReadiness, compactReadiness } from './director.readiness';
+import { buildDirectorReadiness, compactReadiness, evaluateProjectSetup, type DirectorSetupSummary } from './director.readiness';
 import {
   actualRuntimeSec,
   classifyDuration,
@@ -24,6 +24,7 @@ export interface BuildDirectorContextInput {
   explicitTargetDurationSec?: number | null;
   currentScreen?: string | null;
   memoryQuery?: string | null;
+  projectRole?: string | null;
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -82,6 +83,7 @@ function buildContextVersion(input: {
   episodeNo: number;
   episodeState: string;
   latestCommandId: string | null;
+  onboardingStep: string;
 }): string {
   const raw = JSON.stringify({
     project_id: input.project.id,
@@ -93,6 +95,7 @@ function buildContextVersion(input: {
     episode_no: input.episodeNo,
     episode_state: input.episodeState,
     latest_command_id: input.latestCommandId,
+    onboarding_step: input.onboardingStep,
   });
   return crypto.createHash('sha256').update(raw).digest('hex').slice(0, 24);
 }
@@ -280,6 +283,41 @@ export async function buildDirectorContext(
     readiness: readinessSummary,
   };
 
+  const projectSetup = evaluateProjectSetup(project, {
+    castCount: cast.length,
+    bibleVersionCount: asString(bible.bible_approved_at) ? 1 : 0,
+  });
+  const setup: DirectorSetupSummary = readiness?.setup ?? {
+    complete: false,
+    active_track: null,
+    byod: { complete: false, missing: ['database'], configured: {} },
+    saas: { enabled: flags.saasBilling, tenant_configured: false, complete: false },
+    project: projectSetup,
+    next_step: projectSetup?.next_step ?? 'project_create',
+    deep_link: projectSetup?.deep_link ?? 'projects',
+  };
+  const role = String(input.projectRole || (auth.role === 'owner_admin' ? 'owner' : 'viewer')).toLowerCase();
+  const access: DirectorContext['access'] = {
+    role,
+    can_edit: ['editor', 'admin', 'owner'].includes(role),
+    can_review: ['reviewer', 'admin', 'owner'].includes(role),
+    can_publish: ['editor', 'admin', 'owner'].includes(role),
+    can_manage_settings: ['editor', 'admin', 'owner'].includes(role),
+  };
+  const onboardingPhase = readiness && !setup.complete
+    ? 'BYOD_SETUP'
+    : projectSetup
+      ? (!projectSetup.settings_complete
+        ? 'PROJECT_SETTINGS'
+        : !projectSetup.bible_draft_ready
+          ? 'STORY_BIBLE'
+          : !projectSetup.bible_approved
+            ? 'BIBLE_APPROVAL'
+            : !projectSetup.cast_ready
+              ? 'CAST_SETUP'
+              : String(targetEpisodeRow?.current_state || 'PRODUCTION_READY'))
+      : 'PROJECT_SETUP';
+
   const context: DirectorContext = {
     context_version: buildContextVersion({
       project,
@@ -288,7 +326,10 @@ export async function buildDirectorContext(
       episodeNo: explicitEpisode,
       episodeState: String(targetEpisodeRow?.current_state || 'NOT_STARTED'),
       latestCommandId: recentCommands[0] ? String(recentCommands[0].id) : null,
+      onboardingStep: onboardingPhase,
     }),
+    setup,
+    access,
     project: {
       id: String(project.id),
       name: String(project.name || 'Untitled Project'),
@@ -296,7 +337,7 @@ export async function buildDirectorContext(
       format: asString(bible.format) || asString(bible.project_format) || asString(project.visual_style),
       language: asString(project.language) || 'hi',
       visual_style: asString(project.visual_style),
-      phase: String(targetEpisodeRow?.current_state || 'PROJECT_SETUP'),
+      phase: onboardingPhase,
       current_season: Number(project.current_season) || 1,
       current_episode: Number(project.current_episode) || 0,
       canon_version: Number(project.canon_version) || 1,

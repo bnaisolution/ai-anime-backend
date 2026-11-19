@@ -24,6 +24,7 @@ process.env.N8N_BASE_URL = 'http://127.0.0.1:9';
 process.env.N8N_WEBHOOK_SECRET = 'stage3-test-n8n-webhook-secret';
 process.env.TRUSTED_SERVICE_TOKEN = 'stage3-test-service-token';
 process.env.OWNER_EMAILS = 'owner@test.invalid';
+process.env.PROJECT_SETUP_GATE = 'false';
 process.env.PORT = '0';
 
 const backendRoot = path.resolve(__dirname, '..', '..');

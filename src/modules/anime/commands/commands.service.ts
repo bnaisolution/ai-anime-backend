@@ -6,6 +6,8 @@ import { redactSensitivePayload } from '../../../security/payloadRedaction';
 import { DEFAULT_DOMAIN_PROMPTS, canonicalMediumKey, type PromptCategory } from '../prompts/creative.registry';
 import { buildProjectCreativeContext, creativeConfigurationSnapshot, loadCreativePromptRows, type ProjectCreativeContext } from '../prompts/creative.service';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { flags } from '../../../config/flags';
+import { evaluateProjectSetup } from '../../ai/director/director.readiness';
 import {
   findCommandById,
   findCommandByIdempotencyKey,
@@ -19,6 +21,54 @@ import {
   CommandStatus,
   type WorkflowKey,
 } from './commands.types';
+
+const PRODUCTION_INTENTS = new Set<CommandIntent>([
+  CommandIntent.GENERATE_EPISODE,
+  CommandIntent.CONTINUE_EPISODE,
+  CommandIntent.REGENERATE_EPISODE,
+  CommandIntent.RUN_QC,
+  CommandIntent.PUBLISH_NOW,
+]);
+
+async function assertProjectSetupForProduction(_userId: string, body: CreateCommandBody): Promise<void> {
+  if (!flags.projectSetupGate || !PRODUCTION_INTENTS.has(body.intent)) return;
+  const { data: project, error } = await animeSupabase
+    .from('projects')
+    .select('id, user_id, name, genre, visual_style, story_bible')
+    .eq('id', body.project_id)
+    .maybeSingle<Record<string, unknown>>();
+  if (error || !project) {
+    throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Project not found or access denied.' });
+  }
+  const [castRes, versionRes] = await Promise.all([
+    animeSupabase
+      .from('characters')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', body.project_id),
+    animeSupabase
+      .from('bible_versions')
+      .select('id', { count: 'exact', head: true })
+      .eq('project_id', body.project_id),
+  ]);
+  const setup = evaluateProjectSetup(project, {
+    castCount: Number(castRes.count || 0),
+    bibleVersionCount: Number(versionRes.count || 0),
+  });
+  if (!setup?.ready_for_production) {
+    const missing = [...(setup?.missing_settings || [])];
+    if (!setup?.cast_ready) missing.push('characters');
+    if (!setup?.bible_approved) missing.push('bible_approval');
+    const error = new AnimeError({
+      code: AnimeErrorCode.STAGE_DEPENDENCY_BLOCKED,
+      httpStatus: 422,
+      message: `Finish ${setup?.next_step || 'project_settings'} before production.`,
+    });
+    (error as any).missing = missing;
+    (error as any).next_step = setup?.next_step || 'project_settings';
+    (error as any).deep_link = setup?.deep_link || 'project_detail';
+    throw error;
+  }
+}
 
 export interface SubmitCommandParams {
   readonly idempotencyKey: string | undefined;
@@ -448,6 +498,8 @@ export async function submitAnimeCommand(
       idempotent_replay: true,
     };
   }
+
+  await assertProjectSetupForProduction(params.userId, params.body);
 
   const commandId = randomUUID();
   const effectiveMode =

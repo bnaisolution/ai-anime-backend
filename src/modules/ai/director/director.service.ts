@@ -41,6 +41,10 @@ function directorSystemPrompt(context: Awaited<ReturnType<typeof buildDirectorCo
     'You are BNAI AI Studio Director, a professional film-production director for anime production.',
     'Answer in the user\'s language (Hindi, Hinglish, or English). Be concise, concrete, and production-focused.',
     'Use ONLY the supplied project context. Never invent project facts, canon, characters, episode numbers, or completed work.',
+    'Follow this onboarding order strictly: 1) BYOD/SaaS setup, 2) project settings, 3) Story Bible draft and explicit user approval, 4) characters/cast, 5) production.',
+    'Before proposing any production action, inspect context.setup.project.ready_for_production. If it is false, do not propose production; explain the exact missing setup step and the deep link instead.',
+    'Project settings live on their existing separate screen. Do not claim you changed settings from chat. If the user lacks context.access.can_manage_settings, tell them to make the change themselves.',
+    'If the user asks for a change and context.access.can_edit is false, tell them they do not have edit access and must make the change themselves or ask an editor/owner.',
     'The target episode duration is authoritative. The project default is a fallback, never a silent replacement for an explicit target.',
     'You do not execute actions in chat. The server issues server-signed action proposals separately. Never claim that a command, render, QC run, or publish has started unless execution evidence is present.',
     'Never reveal internal workflow identifiers, service tokens, provider keys, or infrastructure credentials.',
@@ -124,6 +128,7 @@ export async function runDirectorChat(
     explicitTargetDurationSec: input.explicitTargetDurationSec,
     currentScreen: input.currentScreen,
     memoryQuery: message,
+    projectRole,
   });
 
   const conversationId = await ensureDirectorConversation(fastify, auth.userId, input.projectId, input.conversationId);
@@ -209,7 +214,7 @@ export async function runDirectorChat(
   if (requestedAction) {
     const requestedIntent = String(requestedAction.intent || '').toUpperCase();
     if (!roleSatisfiesIntent(requestedIntent, projectRole)) {
-      actionError = 'Your project role is read-only. Ask a project editor or owner to execute this action.';
+      actionError = `Your project role (${projectRole}) cannot make this change. Please make it yourself from the relevant project screen, or ask an editor/owner.`;
     } else if (!isMutatingDirectorIntent(requestedIntent as any)) {
       actionError = 'The requested action is not available to AI Director.';
     } else {
@@ -307,15 +312,42 @@ export async function executeDirectorAction(
   if (action.project_id !== input.projectId) {
     throw Object.assign(new Error('Action project does not match the requested project.'), { code: 'ACTION_PROJECT_MISMATCH' });
   }
-  if (action.target_duration_sec > 0) {
+  const productionIntents = new Set([
+    'GENERATE_EPISODE',
+    'CONTINUE_EPISODE',
+    'REGENERATE_EPISODE',
+    'RUN_QC',
+    'PUBLISH_NOW',
+  ]);
+  if (action.target_duration_sec > 0 || productionIntents.has(action.intent)) {
     const context = await buildDirectorContext(fastify, auth, {
       projectId: input.projectId,
       explicitSeasonNo: action.season_no,
       explicitEpisodeNo: action.episode_no,
       explicitTargetDurationSec: action.target_duration_sec,
     });
-    if (context.context_version !== action.context_version) {
+    if (action.target_duration_sec > 0 && context.context_version !== action.context_version) {
       throw Object.assign(new Error('Project context changed after this action was proposed. Ask AI Director for a fresh action.'), { code: 'CONTEXT_STALE' });
+    }
+    if (productionIntents.has(action.intent) && !context.setup.project?.ready_for_production) {
+      const missing = [
+        ...context.setup.byod.missing,
+        ...(context.setup.project?.missing_settings || []),
+      ];
+      await recordDirectorAudit({
+        userId: auth.userId,
+        projectId: input.projectId,
+        actionId: input.actionId,
+        intent: action.intent,
+        status: 'blocked',
+        requestId: input.requestId || null,
+        reason: `SETUP_REQUIRED: ${context.setup.next_step}`,
+        payload: action.payload,
+      });
+      throw Object.assign(
+        new Error(`Finish ${context.setup.next_step.replaceAll('_', ' ')} before production.`),
+        { code: 'SETUP_REQUIRED', missing, next_step: context.setup.next_step, deep_link: context.setup.deep_link }
+      );
     }
   }
 

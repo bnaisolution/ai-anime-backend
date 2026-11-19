@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { writeAudit } from '../audit/audit.writer';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { applyBibleEntities, hasBibleEntities, normalizeBibleEntities, type BibleEntities } from './bible.entities.service';
 
 const PATCH_ACTION_TYPE = 'BIBLE_PATCH';
 const PENDING_STATUSES = ['PATCH_READY', 'PENDING_APPROVAL'];
@@ -22,6 +23,7 @@ export interface BiblePatchRecord {
   base_hash: string;
   base_version: number;
   fields: Record<string, unknown>;
+  entities: BibleEntities;
   summary: string;
   created_at: string;
   expires_at: string | null;
@@ -39,12 +41,12 @@ export function hashStoryBible(value: unknown): string {
   return createHash('sha256').update(stableStringify(value ?? {})).digest('hex');
 }
 
-export function normalizePatchFields(raw: unknown): Record<string, unknown> {
+export function normalizePatchFields(raw: unknown, options?: { allowEmpty?: boolean }): Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Bible patch fields must be a JSON object.' });
   }
   const entries = Object.entries(raw as Record<string, unknown>);
-  if (entries.length === 0) {
+  if (entries.length === 0 && options?.allowEmpty !== true) {
     throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Bible patch contains no changes.' });
   }
   if (entries.length > MAX_FIELDS) {
@@ -66,6 +68,10 @@ export function normalizePatchFields(raw: unknown): Record<string, unknown> {
   return fields;
 }
 
+function entityCounts(entities: BibleEntities): Record<string, number> {
+  return Object.fromEntries(Object.entries(entities).map(([key, value]) => [key, Array.isArray(value) ? value.length : 0]));
+}
+
 function mapPatch(row: any): BiblePatchRecord {
   const payload = (row?.action_payload && typeof row.action_payload === 'object') ? row.action_payload : {};
   return {
@@ -76,6 +82,7 @@ function mapPatch(row: any): BiblePatchRecord {
     base_hash: String(payload.base_hash || ''),
     base_version: Number(payload.base_version || 0),
     fields: (payload.fields && typeof payload.fields === 'object') ? payload.fields : {},
+    entities: normalizeBibleEntities(payload.entities),
     summary: String(payload.summary || 'AI Story Bible update'),
     created_at: String(row.created_at || ''),
     expires_at: row.expires_at ? String(row.expires_at) : null,
@@ -94,7 +101,8 @@ export async function persistBiblePatchFromCallback(input: {
   const status = String(result.status || '').toUpperCase();
   const patch = result.patch;
   if (status !== 'PATCH_READY' || !patch || typeof patch !== 'object') return null;
-  const fields = normalizePatchFields(patch.fields);
+  const entities = normalizeBibleEntities(patch.entities);
+  const fields = normalizePatchFields(patch.fields, { allowEmpty: hasBibleEntities(entities) });
   const summary = String(patch.summary || result.output || 'AI Story Bible update').slice(0, 500);
   const { data: project, error: projectError } = await animeSupabase
     .from('projects')
@@ -126,6 +134,7 @@ export async function persistBiblePatchFromCallback(input: {
     base_hash: baseHash,
     base_version: baseVersion,
     fields,
+    entities,
     summary,
   };
   const { data: inserted, error: insertError } = await animeSupabase
@@ -168,7 +177,7 @@ export async function persistBiblePatchFromCallback(input: {
     action: 'BIBLE_PATCH_READY',
     entity_type: 'PENDING_ACTION',
     entity_id: patchId,
-    new_value: { command_id: input.command_id, fields: Object.keys(fields), base_hash: baseHash },
+    new_value: { command_id: input.command_id, fields: Object.keys(fields), entities: entityCounts(entities), base_hash: baseHash },
     request_id: input.request_id,
   });
   return mapPatch(inserted);
@@ -243,9 +252,15 @@ export async function approveBiblePatch(input: {
     throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Story Bible changed after this preview. Generate a fresh preview.' });
   }
 
-  const fields = normalizePatchFields(queued.fields);
-  const mergedBible = { ...currentBible, ...fields };
+  const fields = normalizePatchFields(queued.fields, { allowEmpty: hasBibleEntities(queued.entities) });
   const now = new Date().toISOString();
+  const mergedBible = {
+    ...currentBible,
+    ...fields,
+    bible_approved_at: now,
+    bible_approved_by: input.user_id,
+  };
+  const entityCountsApplied = await applyBibleEntities(input.project_id, queued.entities);
   const { data: updated, error: updateError } = await animeSupabase
     .from('projects')
     .update({ story_bible: mergedBible })
@@ -274,7 +289,7 @@ export async function approveBiblePatch(input: {
     action: 'BIBLE_PATCH_APPLIED',
     entity_type: 'PENDING_ACTION',
     entity_id: row.id,
-    new_value: { fields: Object.keys(fields), base_hash: queued.base_hash },
+    new_value: { fields: Object.keys(fields), entities: entityCountsApplied, base_hash: queued.base_hash },
     request_id: input.request_id,
   });
   return { ...queued, status: 'APPLIED', fields };

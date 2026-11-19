@@ -9,6 +9,7 @@ const {
   stableStringify, hashStoryBible, normalizePatchFields,
   persistBiblePatchFromCallback, approveBiblePatch,
 } = H.dist('modules/anime/bible/bible.patch.service.js');
+const { normalizeBibleEntities } = H.dist('modules/anime/bible/bible.entities.service.js');
 
 const PROJECT = '11111111-1111-4111-8111-111111111111';
 const COMMAND = '22222222-2222-4222-8222-222222222222';
@@ -28,6 +29,49 @@ test('patch fields reject protected keys, prototype pollution, and empty payload
   assert.throws(() => normalizePatchFields({ auto_approve: true }), /Protected field/);
   assert.throws(() => normalizePatchFields(JSON.parse('{"__proto__":{"x":1}}')), /Invalid Bible patch field/);
   assert.deepEqual(normalizePatchFields({ premise: 'new' }), { premise: 'new' });
+});
+
+test('Bible entities normalize codes and keep only writable fields', () => {
+  const entities = normalizeBibleEntities({
+    characters: [{ character_code: 'char_001', name: 'Aarav', gender: 'male' }],
+    arcs: [{ character_code: 'char_001', arc_name: 'Rise', stages: ['a'] }],
+    powers: [{ power_name: 'Shadow Step', abilities: ['blink'] }],
+    relationships: [{ char_a_code: 'char_001', char_b_code: 'char_002', trust_level: 70 }],
+    locations: [{ location_code: 'loc_001', name: 'Neo Delhi' }],
+    artifacts: [{ artifact_code: 'art_001', name: 'Blade', owner: 'char_001' }],
+    rules: [{ rule_code: 'rule_001', rule_text: 'No guns', priority: 1 }],
+  });
+  assert.equal(entities.characters[0].character_code, 'CHAR_001');
+  assert.equal('gender' in entities.characters[0], false);
+  assert.equal(entities.powers[0].character_code, 'GLOBAL');
+  assert.equal(entities.relationships[0].trust_level, 70);
+  assert.equal(entities.locations[0].location_code, 'LOC_001');
+  assert.equal(entities.artifacts[0].current_owner_code, 'CHAR_001');
+  assert.equal(entities.rules[0].priority, '1');
+});
+
+test('callback PATCH_READY persists entity-only patches', async () => {
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.table === 'projects' && call.action === 'select') {
+      return { data: { id: PROJECT, user_id: USER, story_bible: { premise: 'old' } }, error: null };
+    }
+    if (call.table === 'pending_actions' && call.action === 'select') return { data: null, error: null };
+    if (call.table === 'pending_actions' && call.action === 'insert') {
+      return { data: { ...call.payload, created_at: new Date().toISOString() }, error: null };
+    }
+    return { data: null, error: null };
+  });
+  const patch = await persistBiblePatchFromCallback({
+    project_id: PROJECT, command_id: COMMAND,
+    callback: { result: { status: 'PATCH_READY', patch: {
+      fields: {}, summary: 'new cast',
+      entities: { characters: [{ character_code: 'CHAR_001', name: 'Aarav' }] },
+    } } },
+  });
+  assert.equal(patch.status, 'PATCH_READY');
+  const inserted = state.calls.find((c) => c.table === 'pending_actions' && c.action === 'insert').payload;
+  assert.deepEqual(inserted.action_payload.fields, {});
+  assert.equal(inserted.action_payload.entities.characters.length, 1);
 });
 
 test('callback PATCH_READY is queued once in pending_actions with approval row', async () => {
@@ -73,7 +117,10 @@ test('approve merges approved fields, snapshots bible_versions, and refuses stal
   });
   const applied = await approveBiblePatch({ project_id: PROJECT, patch_id: PATCH, user_id: USER, expected_base_hash: baseHash });
   assert.equal(applied.status, 'APPLIED');
-  assert.deepEqual(updateAttempt.payload.story_bible, { premise: 'new', tone: 'calm' });
+  assert.equal(updateAttempt.payload.story_bible.premise, 'new');
+  assert.equal(updateAttempt.payload.story_bible.tone, 'calm');
+  assert.ok(updateAttempt.payload.story_bible.bible_approved_at);
+  assert.equal(updateAttempt.payload.story_bible.bible_approved_by, USER);
   assert.ok(updateAttempt.filters.some((f) => f.op === 'eq' && f.col === 'story_bible'));
   assert.equal(state.calls.filter((c) => c.table === 'bible_versions' && c.action === 'insert').length, 1);
   assert.equal(state.calls.filter((c) => c.table === 'pending_actions' && c.action === 'update').length, 1);
