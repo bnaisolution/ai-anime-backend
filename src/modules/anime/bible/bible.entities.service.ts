@@ -206,6 +206,104 @@ async function upsertRows(table: string, rowsToWrite: Array<Record<string, unkno
   return rowsToWrite.length;
 }
 
+async function existingCodes(table: string, projectId: string, column: string, codes: string[]): Promise<Set<string>> {
+  if (codes.length === 0) return new Set();
+  const { data, error } = await animeSupabase
+    .from(table)
+    .select(column)
+    .eq('project_id', projectId)
+    .in(column, codes);
+  if (error) {
+    throw new AnimeError({
+      code: AnimeErrorCode.INTERNAL,
+      message: `Failed to validate Bible references in ${table}.`,
+      cause: error,
+    });
+  }
+  return new Set(((data || []) as unknown as Record<string, unknown>[])
+    .map((row) => asString(row[column])?.toUpperCase())
+    .filter((code): code is string => Boolean(code)));
+}
+
+export async function validateBibleEntities(projectId: string, entities: BibleEntities): Promise<void> {
+  const duplicateGroups = [
+    ['characters', 'character_code'],
+    ['arcs', 'character_code,arc_name'],
+    ['powers', 'character_code,power_name'],
+    ['relationships', 'char_a_code,char_b_code'],
+    ['locations', 'location_code'],
+    ['artifacts', 'artifact_code'],
+    ['rules', 'rule_code'],
+  ] as const;
+  for (const [group, keyList] of duplicateGroups) {
+    const keys = keyList.split(',');
+    const composite = entities[group].map((row) => keys.map((key) => asString(row[key])?.toUpperCase() || '').join('|'));
+    const seen = new Set<string>();
+    const duplicate = composite.find((value) => {
+      if (!value.replaceAll('|', '')) return false;
+      if (seen.has(value)) return true;
+      seen.add(value);
+      return false;
+    });
+    if (duplicate) {
+      throw new AnimeError({
+        code: AnimeErrorCode.OUTPUT_INVALID,
+        message: `Duplicate Bible entity in ${group}: ${duplicate.replaceAll('|', ' / ')}`,
+      });
+    }
+  }
+
+  const patchCharacters = new Set(entities.characters
+    .map((row) => asString(row.character_code)?.toUpperCase())
+    .filter((code): code is string => Boolean(code)));
+  const referencedCharacters = new Set<string>();
+  for (const row of [...entities.arcs, ...entities.powers]) {
+    const code = asString(row.character_code)?.toUpperCase();
+    if (code && code !== 'GLOBAL') referencedCharacters.add(code);
+  }
+  for (const row of entities.relationships) {
+    const a = asString(row.char_a_code)?.toUpperCase();
+    const b = asString(row.char_b_code)?.toUpperCase();
+    if (a) referencedCharacters.add(a);
+    if (b) referencedCharacters.add(b);
+  }
+  const existingCharacters = await existingCodes(
+    'characters',
+    projectId,
+    'character_code',
+    [...referencedCharacters].filter((code) => !patchCharacters.has(code))
+  );
+  const missingCharacters = [...referencedCharacters]
+    .filter((code) => !patchCharacters.has(code) && !existingCharacters.has(code));
+  if (missingCharacters.length > 0) {
+    throw new AnimeError({
+      code: AnimeErrorCode.OUTPUT_INVALID,
+      message: `Bible references unknown characters: ${missingCharacters.join(', ')}`,
+    });
+  }
+
+  const patchLocations = new Set(entities.locations
+    .map((row) => asString(row.location_code)?.toUpperCase())
+    .filter((code): code is string => Boolean(code)));
+  const referencedLocations = new Set(entities.artifacts
+    .map((row) => asString(row.current_location)?.toUpperCase())
+    .filter((code): code is string => Boolean(code) && /^LOC_[A-Z0-9_]+$/.test(code!)));
+  const existingLocations = await existingCodes(
+    'locations',
+    projectId,
+    'location_code',
+    [...referencedLocations].filter((code) => !patchLocations.has(code))
+  );
+  const missingLocations = [...referencedLocations]
+    .filter((code) => !patchLocations.has(code) && !existingLocations.has(code));
+  if (missingLocations.length > 0) {
+    throw new AnimeError({
+      code: AnimeErrorCode.OUTPUT_INVALID,
+      message: `Bible artifacts reference unknown locations: ${missingLocations.join(', ')}`,
+    });
+  }
+}
+
 export async function applyBibleEntities(projectId: string, entities: BibleEntities): Promise<Record<string, number>> {
   const withProject = (rowsToWrite: Array<Record<string, unknown>>) => rowsToWrite.map((row) => ({ ...row, project_id: projectId }));
   const counts: Record<string, number> = {};

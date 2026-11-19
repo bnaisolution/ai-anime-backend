@@ -109,6 +109,9 @@ test('approve merges approved fields, snapshots bible_versions, and refuses stal
         action_payload: { base_hash: baseHash, base_version: 1, fields: { premise: 'new' }, summary: 'tighten' } }, error: null };
     }
     if (call.table === 'projects' && call.action === 'select') return { data: { id: PROJECT, story_bible: current, current_season: 1 }, error: null };
+    if (call.table === 'pending_actions' && call.action === 'update') {
+      return { data: { id: PATCH }, error: null };
+    }
     if (call.table === 'projects' && call.action === 'update') {
       updateAttempt = call;
       return { data: { id: PROJECT, story_bible: call.payload.story_bible }, error: null };
@@ -123,10 +126,48 @@ test('approve merges approved fields, snapshots bible_versions, and refuses stal
   assert.equal(updateAttempt.payload.story_bible.bible_approved_by, USER);
   assert.ok(updateAttempt.filters.some((f) => f.op === 'eq' && f.col === 'story_bible'));
   assert.equal(state.calls.filter((c) => c.table === 'bible_versions' && c.action === 'insert').length, 1);
-  assert.equal(state.calls.filter((c) => c.table === 'pending_actions' && c.action === 'update').length, 1);
+  assert.equal(state.calls.filter((c) => c.table === 'pending_actions' && c.action === 'update').length, 2);
 
   await assert.rejects(
     () => approveBiblePatch({ project_id: PROJECT, patch_id: PATCH, user_id: USER, expected_base_hash: 'stale' }),
     (error) => error.httpStatus === 409
   );
+});
+
+
+test('approve rejects unknown Bible entity references before writing', async () => {
+  const current = { premise: 'old' };
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.table === 'pending_actions' && call.action === 'select') {
+      return { data: { id: PATCH, project_id: PROJECT, status: 'PATCH_READY', created_at: new Date().toISOString(), expires_at: null,
+        action_payload: {
+          base_hash: hashStoryBible(current), base_version: 1, fields: {},
+          entities: { relationships: [{ char_a_code: 'CHAR_001', char_b_code: 'CHAR_999' }] },
+          summary: 'bad refs',
+        } }, error: null };
+    }
+    if (call.table === 'projects' && call.action === 'select') return { data: { id: PROJECT, story_bible: current, current_season: 1 }, error: null };
+    if (call.table === 'characters' && call.action === 'select') return { data: [], error: null };
+    return { data: null, error: null };
+  });
+  await assert.rejects(
+    () => approveBiblePatch({ project_id: PROJECT, patch_id: PATCH, user_id: USER }),
+    (error) => error.code === 'OUTPUT_INVALID' && /unknown characters/i.test(error.message)
+  );
+  assert.equal(state.calls.filter((call) => call.table === 'projects' && call.action === 'update').length, 0);
+  assert.equal(state.calls.filter((call) => call.table === 'pending_actions' && call.action === 'update').length, 0);
+});
+
+test('re-applying an applied Bible patch is idempotent', async () => {
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.table === 'pending_actions' && call.action === 'select') {
+      return { data: { id: PATCH, project_id: PROJECT, status: 'APPLIED', created_at: new Date().toISOString(), expires_at: null,
+        action_payload: { fields: { premise: 'new' }, summary: 'done' } }, error: null };
+    }
+    return { data: null, error: null };
+  });
+  const result = await approveBiblePatch({ project_id: PROJECT, patch_id: PATCH, user_id: USER });
+  assert.equal(result.status, 'APPLIED');
+  assert.equal(state.calls.filter((call) => call.table === 'projects' && call.action === 'update').length, 0);
+  assert.equal(state.calls.filter((call) => call.table === 'pending_actions' && call.action === 'update').length, 0);
 });

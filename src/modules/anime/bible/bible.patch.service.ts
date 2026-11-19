@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { writeAudit } from '../audit/audit.writer';
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
-import { applyBibleEntities, hasBibleEntities, normalizeBibleEntities, type BibleEntities } from './bible.entities.service';
+import { applyBibleEntities, hasBibleEntities, normalizeBibleEntities, validateBibleEntities, type BibleEntities } from './bible.entities.service';
 
 const PATCH_ACTION_TYPE = 'BIBLE_PATCH';
 const PENDING_STATUSES = ['PATCH_READY', 'PENDING_APPROVAL'];
@@ -230,7 +230,7 @@ export async function approveBiblePatch(input: {
 }): Promise<BiblePatchRecord> {
   const row = await loadPendingPatch(input.project_id, input.patch_id);
   const status = String(row.status || '').toUpperCase();
-  if (status === 'APPLIED') throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'This Bible patch is already applied.' });
+  if (status === 'APPLIED') return { ...mapPatch(row), status: 'APPLIED' };
   if (status === 'REJECTED' || status === 'EXPIRED') throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'This Bible patch can no longer be applied.' });
   if (!PENDING_STATUSES.includes(status)) throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'This Bible patch is not awaiting approval.' });
   if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) {
@@ -255,7 +255,23 @@ export async function approveBiblePatch(input: {
   }
 
   const fields = normalizePatchFields(queued.fields, { allowEmpty: hasBibleEntities(queued.entities) });
+  await validateBibleEntities(input.project_id, queued.entities);
+
   const now = new Date().toISOString();
+  const { data: claimed } = await animeSupabase
+    .from('pending_actions')
+    .update({ status: 'APPLYING', last_error: null, updated_at: now })
+    .eq('id', row.id)
+    .in('status', PENDING_STATUSES)
+    .select('id')
+    .maybeSingle();
+  if (!claimed) {
+    const fresh = await loadPendingPatch(input.project_id, input.patch_id);
+    const freshStatus = String(fresh.status || '').toUpperCase();
+    if (freshStatus === 'APPLIED') return { ...mapPatch(fresh), status: 'APPLIED' };
+    throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'This Bible patch is already being applied.' });
+  }
+
   const mergedBible = {
     ...currentBible,
     ...fields,
