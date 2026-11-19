@@ -66,10 +66,12 @@ export async function buildDirectorPlan(
   const readiness = await buildDirectorReadiness(fastify, auth, input.projectId);
   let contextVersion = '';
   let targetDurationSec = 0;
+  let episode: Awaited<ReturnType<typeof buildDirectorContext>>['episode'] = null;
   try {
     const context = await buildDirectorContext(fastify, auth, { projectId: input.projectId, projectRole });
     contextVersion = context.context_version;
     targetDurationSec = context.target.targetDurationSec;
+    episode = context.episode;
   } catch {
     contextVersion = `plan:${Date.now()}`;
     targetDurationSec = 0;
@@ -97,6 +99,8 @@ export async function buildDirectorPlan(
     const roleOk = roleSatisfiesIntent(capability.key, projectRole);
     const productionIntents = new Set(['GENERATE_EPISODE', 'CONTINUE_EPISODE', 'REGENERATE_EPISODE', 'RUN_QC', 'PUBLISH_NOW']);
     const projectReady = readiness.setup.project?.ready_for_production === true;
+    const qcPassed = ['PASS', 'PASSED', 'APPROVED', 'QC_PASSED'].includes(String(episode?.qc_status || '').toUpperCase());
+    const episodeApproved = String(episode?.approval_status || '').toUpperCase() === 'APPROVED';
     let action: DirectorActionProposal | null = null;
     let blockedReason: string | null = null;
 
@@ -106,6 +110,10 @@ export async function buildDirectorPlan(
       blockedReason = `SETUP_REQUIRED:${missing.join(',')}`;
     } else if (productionIntents.has(capability.key) && !projectReady) {
       blockedReason = `SETUP_REQUIRED:${readiness.setup.next_step}`;
+    } else if ((capability.key === 'RUN_QC' || capability.key === 'PUBLISH_NOW') && !episode) {
+      blockedReason = 'EPISODE_NOT_FOUND';
+    } else if (capability.key === 'PUBLISH_NOW' && (!qcPassed || !episodeApproved)) {
+      blockedReason = `APPROVAL_REQUIRED:${[!qcPassed ? 'qc_pass' : null, !episodeApproved ? 'episode_approval' : null].filter(Boolean).join(',')}`;
     } else {
       try {
         action = buildActionProposal({

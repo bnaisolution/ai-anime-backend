@@ -8,6 +8,9 @@ import { deleteDirectorAttachment, saveDirectorAttachment } from './director.att
 import { buildDirectorReadiness } from './director.readiness';
 import { buildDirectorTimeline } from './director.timeline';
 import { buildDirectorPlan } from './director.plan';
+import { createProjectFromSetup } from '../../anime/reads/project.setup.service';
+import { isByodFirstEnabled } from '../../anime/tenant/tenantDatabase.service';
+import { resolveRequestTenant } from '../../anime/tenant/tenant.service';
 import { incrementCounter, setGauge } from '../../anime/observability/metrics';
 
 function errorReply(reply: FastifyReply, error: unknown) {
@@ -15,16 +18,22 @@ function errorReply(reply: FastifyReply, error: unknown) {
   const message = error instanceof Error ? error.message : 'AI Director request failed';
   const status: Record<string, number> = {
     INVALID_INPUT: 400,
+    OUTPUT_INVALID: 400,
     ACTION_INVALID: 400,
     ACTION_NOT_ALLOWED: 400,
     UNSUPPORTED_ACTION_INTENT: 400,
     ACTION_PROJECT_MISMATCH: 403,
     ACTION_FORBIDDEN: 403,
+    NOT_FOUND: 404,
     PROJECT_NOT_FOUND: 404,
     ACTION_EXPIRED: 410,
     TARGET_CONFLICT: 409,
     CONTEXT_STALE: 409,
     SETUP_REQUIRED: 422,
+    APPROVAL_REQUIRED: 422,
+    QC_FAILED: 422,
+    STAGE_DEPENDENCY_BLOCKED: 422,
+    TENANT_REQUIRED: 422,
     BYOD_REQUIRED: 422,
     BYOD_FAILED: 502,
     QUOTA_EXCEEDED: 429,
@@ -59,6 +68,35 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
       },
       meta: { request_id: (request as any).anime?.request_id || null },
     });
+  });
+
+  fastify.post('/director/setup/project', {
+    preHandler: [fastify.authenticate],
+  }, async (request, reply) => {
+    const body = (request.body as Record<string, unknown>) || {};
+    let tenantId: string | null = null;
+    if (isByodFirstEnabled()) {
+      try {
+        tenantId = (await resolveRequestTenant(request)).tenant.id;
+      } catch (error) {
+        if ((error as { code?: string })?.code === 'TENANT_REQUIRED') throw error;
+      }
+    }
+    try {
+      const created = await createProjectFromSetup({
+        userId: request.authContext.userId,
+        tenantId,
+        input: body,
+      });
+      const readiness = await buildDirectorReadiness(fastify, request.authContext, created.id);
+      incrementCounter('ai_director_projects_created_total', {});
+      return reply.code(201).send({
+        data: { project: created, readiness },
+        meta: { request_id: (request as any).anime?.request_id || null },
+      });
+    } catch (error) {
+      return errorReply(reply, error);
+    }
   });
 
   fastify.get('/director/readiness', {

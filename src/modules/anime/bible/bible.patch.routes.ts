@@ -24,6 +24,37 @@ export async function registerAnimeBiblePatchRoutes(app: FastifyInstance): Promi
     preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'])],
   }, async (request: any) => ({ data: await listBiblePatches(request.params.id) }));
 
+  app.get('/v1/anime/projects/:id/bible/drafts', {
+    schema: { params: ProjParamsSchema },
+    preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'editor', 'reviewer', 'viewer'])],
+  }, async (request: any) => ({ data: await listBiblePatches(request.params.id) }));
+
+  app.post('/v1/anime/projects/:id/bible/drafts/:patchId/apply', {
+    schema: { params: PatchParamsSchema, body: ApproveSchema },
+    preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'editor'])],
+  }, async (request: any) => ({
+    data: await approveBiblePatch({
+      project_id: request.params.id,
+      patch_id: request.params.patchId,
+      user_id: requireUserId(request),
+      expected_base_hash: request.body?.expected_base_hash || request.body?.base_hash,
+      request_id: request.anime?.request_id,
+    }),
+  }));
+
+  app.post('/v1/anime/projects/:id/bible/drafts/:patchId/reject', {
+    schema: { params: PatchParamsSchema, body: RejectSchema },
+    preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'editor'])],
+  }, async (request: any) => ({
+    data: await rejectBiblePatch({
+      project_id: request.params.id,
+      patch_id: request.params.patchId,
+      user_id: requireUserId(request),
+      reason: request.body?.reason,
+      request_id: request.anime?.request_id,
+    }),
+  }));
+
   app.post('/v1/anime/projects/:id/bible/patches/:patchId/approve', {
     schema: { params: PatchParamsSchema, body: ApproveSchema },
     preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'editor'])],

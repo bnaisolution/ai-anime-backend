@@ -767,6 +767,59 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
     }
   );
 
+  // 21b. POST /v1/anime/projects/:id/episodes/:episodeNo/approval
+  app.post(
+    '/v1/anime/projects/:id/episodes/:episodeNo/approval',
+    {
+      schema: { params: EpisodeParamsSchema },
+      preHandler: [app.authenticate, requireProjectRole(['owner', 'admin', 'reviewer'])],
+    },
+    async (request: any) => {
+      const projectId = request.params.id;
+      const episodeNo = Number(request.params.episodeNo);
+      const body = (request.body ?? {}) as Record<string, any>;
+      const seasonNo = Number(body.season_no || request.query?.seasonNo || 1);
+      const decision = String(body.decision || 'APPROVED').toUpperCase();
+      if (!['APPROVED', 'REJECTED'].includes(decision)) {
+        throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Decision must be APPROVED or REJECTED.' });
+      }
+
+      const { data: episode, error: fetchError } = await animeSupabase
+        .from('episodes')
+        .select('episode_no, season_no, qc_status')
+        .eq('project_id', projectId)
+        .eq('season_no', seasonNo)
+        .eq('episode_no', episodeNo)
+        .maybeSingle();
+      if (fetchError || !episode) {
+        throw new AnimeError({ code: AnimeErrorCode.NOT_FOUND, message: 'Episode not found.', cause: fetchError });
+      }
+      if (decision === 'APPROVED') {
+        const qc = String((episode as Record<string, unknown>).qc_status || '').toUpperCase();
+        if (!['PASS', 'PASSED', 'APPROVED', 'QC_PASSED'].includes(qc)) {
+          throw new AnimeError({ code: AnimeErrorCode.QC_FAILED, httpStatus: 422, message: 'Episode must pass QC before approval.' });
+        }
+      }
+
+      const userId = await requireAuthenticatedUserId(request);
+      const { data: updated, error: updateError } = await animeSupabase
+        .from('episodes')
+        .update({
+          approval_status: decision,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('project_id', projectId)
+        .eq('season_no', seasonNo)
+        .eq('episode_no', episodeNo)
+        .select('*')
+        .single();
+      if (updateError || !updated) {
+        throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to update episode approval.', cause: updateError });
+      }
+      return { data: { ...updated, approved_by: decision === 'APPROVED' ? userId : null } };
+    }
+  );
+
   // 22. PATCH /v1/anime/projects/:id/episodes/:episodeNo/scenes/:sceneId
   app.patch(
     '/v1/anime/projects/:id/episodes/:episodeNo/scenes/:sceneId',

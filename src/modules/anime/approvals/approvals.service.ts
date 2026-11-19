@@ -41,6 +41,19 @@ function approvalCommandKey(approvalId: string, decision: string, provided?: str
   return provided && provided.trim().length > 0 ? provided.trim() : `approval:${approvalId}:${decision}`;
 }
 
+async function applyEpisodeApproval(existing: ApprovalRecord): Promise<void> {
+  if (existing.type !== ApprovalType.EPISODE_APPROVAL) return;
+  const diff = (existing.exact_diff ?? {}) as { season_no?: number; episode_no?: number };
+  const seasonNo = Number(diff.season_no) || 1;
+  const episodeNo = Number(diff.episode_no) || parseInt(String(existing.resource_id || '').split(':').pop() || '1', 10) || 1;
+  await animeSupabase
+    .from('episodes')
+    .update({ approval_status: 'APPROVED', updated_at: new Date().toISOString() })
+    .eq('project_id', existing.project_id)
+    .eq('season_no', seasonNo)
+    .eq('episode_no', episodeNo);
+}
+
 async function submitCanonApprovalCommand(existing: ApprovalRecord, actorUserId: string, requestId: string, idempotencyKey: string): Promise<void> {
   if (existing.type !== ApprovalType.CANON_CHANGE) return;
   const exactDiff = (existing.exact_diff ?? {}) as {
@@ -93,6 +106,7 @@ export async function decideApproval(input: { project_id: string, approval_id: s
   if (existing.status !== ApprovalStatus.PENDING) {
     if (existing.status === input.decision && existing.decision_idempotency_key === decisionKey) {
       if (input.decision === ApprovalStatus.APPROVED) {
+        await applyEpisodeApproval(existing);
         await submitCanonApprovalCommand(existing, input.actor_user_id, input.request_id, decisionKey);
       }
       return existing;
@@ -112,6 +126,7 @@ export async function decideApproval(input: { project_id: string, approval_id: s
   await writeAudit({ project_id: input.project_id, user_id: input.actor_user_id, workflow_name: 'APPROVAL_ENGINE', action: `APPROVAL_${input.decision}`, entity_type: existing.type, entity_id: existing.resource_id, new_value: { approval_id: updated.id, status: updated.status, decision: updated.decision }, reason: input.reason, request_id: input.request_id });
 
   if (input.decision === ApprovalStatus.APPROVED) {
+    await applyEpisodeApproval(existing);
     await submitCanonApprovalCommand(existing, input.actor_user_id, input.request_id, decisionKey);
   }
 

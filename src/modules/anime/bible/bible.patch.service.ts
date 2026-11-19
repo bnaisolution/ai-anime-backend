@@ -17,6 +17,7 @@ const MAX_PAYLOAD_BYTES = 256 * 1024;
 
 export interface BiblePatchRecord {
   id: string;
+  draft_id: string;
   project_id: string;
   command_id: string | null;
   status: string;
@@ -76,6 +77,7 @@ function mapPatch(row: any): BiblePatchRecord {
   const payload = (row?.action_payload && typeof row.action_payload === 'object') ? row.action_payload : {};
   return {
     id: String(row.id),
+    draft_id: String(row.id),
     project_id: String(row.project_id),
     command_id: payload.command_id ? String(payload.command_id) : null,
     status: String(row.status || 'PATCH_READY').toUpperCase(),
@@ -260,7 +262,6 @@ export async function approveBiblePatch(input: {
     bible_approved_at: now,
     bible_approved_by: input.user_id,
   };
-  const entityCountsApplied = await applyBibleEntities(input.project_id, queued.entities);
   const { data: updated, error: updateError } = await animeSupabase
     .from('projects')
     .update({ story_bible: mergedBible })
@@ -271,6 +272,26 @@ export async function approveBiblePatch(input: {
   if (updateError || !updated) {
     await animeSupabase.from('pending_actions').update({ status: 'CONFLICT', last_error: 'Concurrent Bible update detected', updated_at: now }).eq('id', row.id);
     throw new AnimeError({ code: AnimeErrorCode.VERSION_CONFLICT, httpStatus: 409, message: 'Concurrent Story Bible update detected. Reload and preview again.', cause: updateError });
+  }
+
+  let entityCountsApplied: Record<string, number>;
+  try {
+    entityCountsApplied = await applyBibleEntities(input.project_id, queued.entities);
+  } catch (entityError) {
+    await animeSupabase
+      .from('projects')
+      .update({ story_bible: currentBible })
+      .eq('id', input.project_id)
+      .eq('story_bible', mergedBible);
+    await animeSupabase
+      .from('pending_actions')
+      .update({ status: PENDING_STATUSES[0], last_error: 'Entity persistence failed; Bible row rolled back', updated_at: new Date().toISOString() })
+      .eq('id', row.id);
+    throw new AnimeError({
+      code: AnimeErrorCode.INTERNAL,
+      message: 'Story Bible entities could not be persisted. No Bible fields were applied; retry the preview.',
+      cause: entityError,
+    });
   }
 
   await animeSupabase.from('bible_versions').insert({

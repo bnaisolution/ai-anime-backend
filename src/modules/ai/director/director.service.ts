@@ -10,6 +10,7 @@ import { refreshChannelsForPublish } from '../../anime/publish/publish.service';
 import { buildActionProposal, extractStructuredDirectorAction, isMutatingDirectorIntent, verifyDirectorActionToken, type RequestedDirectorAction } from './director.actions';
 import { buildDirectorContext, compactDirectorContext } from './director.context';
 import { buildDirectorReadiness, missingResourcesFor } from './director.readiness';
+import { updateProjectFromSetup } from '../../anime/reads/project.setup.service';
 import { recordDirectorAudit, listDirectorAudit } from './director.audit';
 import { loadDirectorAttachments, attachmentPromptBlock } from './director.attachments';
 import { directorActionPromptCatalog, roleSatisfiesIntent } from './director.capabilities';
@@ -43,7 +44,7 @@ function directorSystemPrompt(context: Awaited<ReturnType<typeof buildDirectorCo
     'Use ONLY the supplied project context. Never invent project facts, canon, characters, episode numbers, or completed work.',
     'Follow this onboarding order strictly: 1) BYOD/SaaS setup, 2) project settings, 3) Story Bible draft and explicit user approval, 4) characters/cast, 5) production.',
     'Before proposing any production action, inspect context.setup.project.ready_for_production. If it is false, do not propose production; explain the exact missing setup step and the deep link instead.',
-    'Project settings live on their existing separate screen. Do not claim you changed settings from chat. If the user lacks context.access.can_manage_settings, tell them to make the change themselves.',
+    'Project settings live on their existing separate screen. You may propose UPDATE_PROJECT_SETTINGS with only the changed fields, but never claim the change is saved until execution evidence exists. If the user lacks context.access.can_manage_settings, tell them to make the change themselves.',
     'If the user asks for a change and context.access.can_edit is false, tell them they do not have edit access and must make the change themselves or ask an editor/owner.',
     'The target episode duration is authoritative. The project default is a fallback, never a silent replacement for an explicit target.',
     'You do not execute actions in chat. The server issues server-signed action proposals separately. Never claim that a command, render, QC run, or publish has started unless execution evidence is present.',
@@ -311,6 +312,44 @@ export async function executeDirectorAction(
   }
   if (action.project_id !== input.projectId) {
     throw Object.assign(new Error('Action project does not match the requested project.'), { code: 'ACTION_PROJECT_MISMATCH' });
+  }
+  if (action.intent === 'UPDATE_PROJECT_SETTINGS') {
+    try {
+      const updated = await updateProjectFromSetup({
+        userId: auth.userId,
+        projectId: input.projectId,
+        input: action.payload as Record<string, unknown>,
+      });
+      await recordDirectorAudit({
+        userId: auth.userId,
+        projectId: input.projectId,
+        actionId: input.actionId,
+        intent: action.intent,
+        status: 'executed',
+        commandId: `settings:${action.nonce}`,
+        requestId: input.requestId || null,
+        payload: action.payload,
+      });
+      return {
+        action_id: input.actionId,
+        intent: action.intent,
+        command_id: `settings:${action.nonce}`,
+        status: String(updated?.story_bible?.project_status || 'UPDATED'),
+        idempotent_replay: false,
+      };
+    } catch (error) {
+      await recordDirectorAudit({
+        userId: auth.userId,
+        projectId: input.projectId,
+        actionId: input.actionId,
+        intent: action.intent,
+        status: 'failed',
+        requestId: input.requestId || null,
+        reason: error instanceof Error ? error.message : 'Project settings update failed',
+        payload: action.payload,
+      });
+      throw error;
+    }
   }
   const productionIntents = new Set([
     'GENERATE_EPISODE',

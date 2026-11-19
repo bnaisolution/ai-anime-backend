@@ -39,7 +39,7 @@ export interface DirectorCapability {
   version: number;
 }
 
-export const CAPABILITY_VERSION = '2026-11-18.1';
+export const CAPABILITY_VERSION = '2026-11-19.1';
 
 function humanize(intent: CommandIntent): string {
   return intent.replaceAll('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
@@ -74,6 +74,14 @@ function make(
 }
 
 export const DIRECTOR_CAPABILITIES: readonly DirectorCapability[] = [
+  make(CommandIntent.UPDATE_PROJECT_SETTINGS, {
+    risk: 'low_risk_write',
+    required_role: 'editor',
+    required_resources: ['database'],
+    description: 'Update the active project name, format, genre, season plan, episode length or budget.',
+    deep_link: 'project_detail',
+    mode: null,
+  }),
   make(CommandIntent.SAVE_BIBLE, {
     risk: 'low_risk_write',
     required_role: 'editor',

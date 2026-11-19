@@ -70,6 +70,104 @@ async function assertProjectSetupForProduction(_userId: string, body: CreateComm
   }
 }
 
+async function assertPublishApproval(userId: string, body: CreateCommandBody): Promise<void> {
+  if (body.intent !== CommandIntent.PUBLISH_NOW) return;
+  const seasonNo = Number(body.season_no || 1);
+  const episodeNo = Number(body.episode_no || 1);
+  const { data: episode, error } = await animeSupabase
+    .from('episodes')
+    .select('episode_no, season_no, qc_status, approval_status, current_state')
+    .eq('project_id', body.project_id)
+    .eq('season_no', seasonNo)
+    .eq('episode_no', episodeNo)
+    .maybeSingle<Record<string, unknown>>();
+  if (error || !episode) {
+    const approvalError = new AnimeError({
+      code: AnimeErrorCode.STAGE_DEPENDENCY_BLOCKED,
+      httpStatus: 422,
+      message: `Episode S${seasonNo}E${episodeNo} does not exist yet.`,
+    });
+    (approvalError as any).missing = ['episode'];
+    (approvalError as any).deep_link = 'episodes';
+    throw approvalError;
+  }
+
+  const qc = String(episode.qc_status || '').toUpperCase();
+  const episodeApproval = String(episode.approval_status || '').toUpperCase();
+  const missing: string[] = [];
+  if (!['PASS', 'PASSED', 'APPROVED', 'QC_PASSED'].includes(qc)) missing.push('qc_pass');
+  if (episodeApproval !== 'APPROVED') {
+    missing.push('episode_approval');
+    const episodeResource = `${seasonNo}:${episodeNo}`;
+    const { data: existingEpisodeApproval } = await animeSupabase
+      .from('approval_decisions')
+      .select('id')
+      .eq('project_id', body.project_id)
+      .eq('type', 'EPISODE_APPROVAL')
+      .eq('resource_id', episodeResource)
+      .eq('status', 'PENDING')
+      .maybeSingle();
+    if (!existingEpisodeApproval) {
+      await animeSupabase.from('approval_decisions').insert({
+        project_id: body.project_id,
+        type: 'EPISODE_APPROVAL',
+        resource_id: episodeResource,
+        resource_version: 1,
+        requested_by: 'system',
+        approver_role: 'reviewer',
+        exact_diff: { season_no: seasonNo, episode_no: episodeNo, requested_by: userId },
+        risk: 'MEDIUM',
+        status: 'PENDING',
+        expires_at: null,
+      });
+    }
+  }
+  if (missing.length > 0) {
+    const approvalError = new AnimeError({
+      code: AnimeErrorCode.APPROVAL_REQUIRED,
+      httpStatus: 422,
+      message: `Episode S${seasonNo}E${episodeNo} needs QC and explicit episode approval before publishing.`,
+    });
+    (approvalError as any).missing = missing;
+    (approvalError as any).deep_link = 'review_inbox';
+    throw approvalError;
+  }
+
+  const resourceId = `${seasonNo}:${episodeNo}`;
+  const { data: decisions } = await animeSupabase
+    .from('approval_decisions')
+    .select('id, status')
+    .eq('project_id', body.project_id)
+    .eq('type', 'PUBLISH')
+    .eq('resource_id', resourceId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  const rows = Array.isArray(decisions) ? decisions : [];
+  if (rows.some((row) => String(row.status || '').toUpperCase() === 'APPROVED')) return;
+  if (!rows.some((row) => String(row.status || '').toUpperCase() === 'PENDING')) {
+    await animeSupabase.from('approval_decisions').insert({
+      project_id: body.project_id,
+      type: 'PUBLISH',
+      resource_id: resourceId,
+      resource_version: 1,
+      requested_by: 'system',
+      approver_role: 'owner',
+      exact_diff: { season_no: seasonNo, episode_no: episodeNo, requested_by: userId },
+      risk: 'HIGH',
+      status: 'PENDING',
+      expires_at: null,
+    });
+  }
+  const approvalError = new AnimeError({
+    code: AnimeErrorCode.APPROVAL_REQUIRED,
+    httpStatus: 422,
+    message: `Publish approval is pending for S${seasonNo}E${episodeNo}. Approve it in Review Inbox, then publish again.`,
+  });
+  (approvalError as any).missing = ['publish_approval'];
+  (approvalError as any).deep_link = 'review_inbox';
+  throw approvalError;
+}
+
 export interface SubmitCommandParams {
   readonly idempotencyKey: string | undefined;
   readonly userId: string;
@@ -481,6 +579,12 @@ export async function submitAnimeCommand(
       message: 'Header Idempotency-Key is required for all command submissions.',
     });
   }
+  if (params.body.intent === CommandIntent.UPDATE_PROJECT_SETTINGS) {
+    throw new AnimeError({
+      code: AnimeErrorCode.OUTPUT_INVALID,
+      message: 'Project settings are updated through the project settings screen or AI Director action, not a workflow command.',
+    });
+  }
   const wfKey = COMMAND_INTENT_WF_MAP[params.body.intent];
   if (!wfKey) {
     throw new AnimeError({
@@ -500,6 +604,7 @@ export async function submitAnimeCommand(
   }
 
   await assertProjectSetupForProduction(params.userId, params.body);
+  await assertPublishApproval(params.userId, params.body);
 
   const commandId = randomUUID();
   const effectiveMode =

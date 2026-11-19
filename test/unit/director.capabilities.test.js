@@ -65,9 +65,19 @@ test('role ladder is monotonic and reviewer-gated for canon approvals', () => {
 test('prompt catalog exposes production capabilities with resource requirements', () => {
   const catalog = caps.directorActionPromptCatalog();
   assert.match(catalog, /GENERATE_EPISODE/);
+  assert.match(catalog, /UPDATE_PROJECT_SETTINGS/);
   assert.match(catalog, /resources: database, ai_text, gpu, storage/);
   assert.match(catalog, /min role: reviewer/);
   assert.doesNotMatch(catalog, /^$/m);
+});
+
+test('project settings are editor-managed and deep-link to the canonical screen', () => {
+  const capability = caps.getDirectorCapability('UPDATE_PROJECT_SETTINGS');
+  assert.ok(capability);
+  assert.equal(capability.required_role, 'editor');
+  assert.equal(capability.deep_link, 'project_detail');
+  assert.equal(caps.roleSatisfiesIntent('UPDATE_PROJECT_SETTINGS', 'viewer'), false);
+  assert.equal(caps.roleSatisfiesIntent('UPDATE_PROJECT_SETTINGS', 'editor'), true);
 });
 
 test('risk and resource helpers mirror the manifest', () => {
