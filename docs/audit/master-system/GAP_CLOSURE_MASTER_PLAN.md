@@ -10,15 +10,15 @@ Baseline: backend `origin/main` `406d359`; Android `origin/main` `f31f688`; live
 | 0 Baseline/flags | DONE | `src/config/flags.ts`; backups in `/tmp/opencode/sync-backup-20261118` |
 | 1 Capability registry | DONE | `director.capabilities.ts`, `GET /ai/director/capabilities`, unit tests |
 | 2 Readiness + fail-closed | DONE (flag off by default) | `director.readiness.ts`, `GET /ai/director/readiness`, `SETUP_REQUIRED` |
-| 3 Model catalog + profiles | DONE (backend) | `modelCatalog.ts`, migration 017, `GET /ai/models/catalog` |
+| 3 Model catalog + profiles | DONE (code) | `modelCatalog.ts`, migration 017, `GET /ai/models/catalog`; Android catalog + FAST/STANDARD/HIGH UI at `77e3254`; migration unapplied |
 | 4 Director UX | DONE (text-only; attachments pending) | timeline + plan cards, deep links, `POST /ai/director/plan`, `GET /ai/director/timeline`; Android suites green at `46518c2` |
-| 5 Publish OAuth | DONE (credentials pending) | `publish.service.ts`, migration 019, real channel UI |
+| 5 Publish OAuth | DONE (code; credentials pending) | `publish.service.ts`, migration 019, real channel UI, refresh-before-publish + manual refresh route at `615a622` |
 | 6 CPU/Git/S3 wiring | PARTIAL | CPU target resolver/test + UI done; n8n consumption and S3 generation handoff pending |
 | 7 14-workflow BYOD validation | BLOCKED | no validated BYOD n8n test plane; WF-03 tunnel stale |
 | 8 SaaS billing/onboarding | PARTIAL | plans/subscription/usage/onboarding + UI; checkout gated by `SAAS_BILLING=false` |
 | 9 Observability/GA | PARTIAL | Prometheus metrics for Director/publish/CPU/SaaS, live/ready, `08_SLO_CANARY_RUNBOOK.md`; 7-day SLO capture + canary pending |
 
-**Open blocker:** migrations 015–021 are not applied (no DB DSN on the host); APK test build `v1.0.0-director.20261119` (asset `anime-debug-f31f688.apk`) is ready.
+**Open blocker:** migrations 015–021 are not applied (no DB DSN on the host); latest APK test build `v1.0.1-director.20261120` (asset `anime-debug-77e3254.apk`) is ready.
 Scope: Backend (Fastify), Supabase, n8n (14 canonical workflows), Android, GPU/Kaggle/CPU workers, BYOD providers, publishing channels, SaaS control plane.
 
 This document converts the 2026-11-18 audit findings into a dependency-ordered implementation plan. It does not authorize source, schema, workflow, credential, deployment, or production changes. Each phase starts only after explicit Owner approval.
