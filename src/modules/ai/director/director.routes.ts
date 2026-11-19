@@ -7,6 +7,7 @@ import { listDirectorAudit } from './director.audit';
 import { deleteDirectorAttachment, saveDirectorAttachment } from './director.attachments';
 import { buildDirectorReadiness } from './director.readiness';
 import { buildDirectorTimeline } from './director.timeline';
+import { retryDirectorCommand } from './director.retry';
 import { buildDirectorPlan } from './director.plan';
 import { createProjectFromSetup } from '../../anime/reads/project.setup.service';
 import { isByodFirstEnabled } from '../../anime/tenant/tenantDatabase.service';
@@ -154,6 +155,32 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
     });
     incrementCounter('ai_director_timeline_requests_total', { status: timeline.command_status || 'none' });
     return reply.send({ data: timeline });
+  });
+
+  fastify.post('/director/timeline/:command_id/retry', {
+    preHandler: [
+      fastify.authenticate,
+      requireProjectRole(['owner', 'admin', 'editor'], { bodyProjectId: true }),
+    ],
+  }, async (request, reply) => {
+    const body = (request.body as Record<string, unknown>) || {};
+    const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
+    const commandId = typeof (request.params as Record<string, unknown>)?.command_id === 'string'
+      ? String((request.params as Record<string, unknown>).command_id).trim()
+      : '';
+    if (!projectId || !commandId) {
+      return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id and command_id are required' }] });
+    }
+    try {
+      const result = await retryDirectorCommand(fastify, request.authContext, {
+        projectId,
+        commandId,
+        requestId: (request as any).anime?.request_id || null,
+      });
+      return reply.code(202).send({ data: result, meta: { request_id: (request as any).anime?.request_id } });
+    } catch (error) {
+      return errorReply(reply, error);
+    }
   });
 
   fastify.post('/director/plan', {

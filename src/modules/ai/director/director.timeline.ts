@@ -25,6 +25,12 @@ export interface DirectorTimeline {
     scene_count: number;
     clip_count: number;
   } | null;
+  job: {
+    status: string;
+    failure_reason: string | null;
+    retry_count: number;
+    retryable: boolean;
+  } | null;
   updated_at: string;
 }
 
@@ -54,6 +60,12 @@ const PRODUCTION_INTENTS = new Set([
   'GENERATE_EPISODE', 'CONTINUE_EPISODE', 'REGENERATE_EPISODE',
   'QUICK_GENERATE_REEL', 'QUICK_GENERATE_IMAGE', 'QUICK_GENERATE_VIDEO',
 ]);
+
+const RETRYABLE_INTENTS = new Set([
+  'GENERATE_EPISODE', 'CONTINUE_EPISODE', 'REGENERATE_EPISODE', 'RUN_QC', 'PUBLISH_NOW',
+]);
+
+const RETRYABLE_STATUSES = new Set(['FAILED', 'DEFERRED', 'MANUAL_REVIEW']);
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : value == null ? '' : String(value);
@@ -166,6 +178,31 @@ export async function buildDirectorTimeline(
     fastify.log.debug({ err: error }, 'Director timeline: episode lookup failed');
   }
 
+  let job: DirectorTimeline['job'] = null;
+  if (input.commandId) {
+    let jobRow: Record<string, unknown> | null = null;
+    try {
+      const { data } = await animeSupabase
+        .from('pending_actions')
+        .select('status, last_error, retry_count')
+        .eq('project_id', input.projectId)
+        .eq('job_id', input.commandId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      jobRow = (data as Record<string, unknown> | null) ?? null;
+    } catch (error) {
+      fastify.log.debug({ err: error }, 'Director timeline: job lookup failed');
+    }
+    const normalizedStatus = status.toUpperCase();
+    job = {
+      status: asString(jobRow?.status) || normalizedStatus.toLowerCase(),
+      failure_reason: asString(jobRow?.last_error) || null,
+      retry_count: asNumber(jobRow?.retry_count),
+      retryable: RETRYABLE_INTENTS.has(intent) && RETRYABLE_STATUSES.has(normalizedStatus),
+    };
+  }
+
   const stageIndex = STATUS_STAGE[status] ?? 0;
   const stages = buildStages({
     status,
@@ -182,6 +219,7 @@ export async function buildDirectorTimeline(
     stage_index: stageIndex < 0 ? 0 : stageIndex,
     stages,
     episode,
+    job,
     updated_at: new Date().toISOString(),
   };
 }

@@ -48,3 +48,30 @@ test('Approving an episode updates persisted episode approval state', () => {
   assert.match(source, /approval_status:\s*'APPROVED'/);
   assert.match(source, /\.from\('episodes'\)/);
 });
+
+test('Director retry is owner-scoped and reuses server gates', () => {
+  const route = fs.readFileSync(
+    path.join(root, 'src/modules/ai/director/director.routes.ts'),
+    'utf8'
+  );
+  const service = fs.readFileSync(
+    path.join(root, 'src/modules/ai/director/director.retry.ts'),
+    'utf8'
+  );
+  assert.match(route, /director\/timeline\/:command_id\/retry/);
+  assert.match(route, /requireProjectRole\(\['owner', 'admin', 'editor'\]/);
+  assert.match(service, /command\.user_id/);
+  assert.match(service, /submitAnimeCommand/);
+  assert.match(service, /RETRYABLE_STATUSES/);
+});
+
+test('Android Director timeline consumes failure reason and retry state', () => {
+  const api = fs.readFileSync(
+    path.join(root, '../ai-anime-android/app/src/main/java/org/dpdns/bnai/anime/core/network/AnimeApiService.kt'),
+    'utf8'
+  );
+  assert.match(api, /data class DirectorTimelineJobDto/);
+  assert.match(api, /failure_reason/);
+  assert.match(api, /retryable/);
+  assert.match(api, /director\/timeline\/\{command_id\}\/retry/);
+});
