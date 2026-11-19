@@ -155,6 +155,33 @@ async function exchangeCode(platform: string, code: string, config: OAuthConfig)
   return await response.json() as TokenPayload;
 }
 
+async function exchangeRefreshToken(
+  platform: string,
+  refreshToken: string,
+  config: OAuthConfig
+): Promise<TokenPayload> {
+  const body = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+  });
+  if (platform === 'instagram') {
+    body.set('grant_type', 'fb_exchange_token');
+    body.set('fb_exchange_token', refreshToken);
+  } else {
+    body.set('grant_type', 'refresh_token');
+    body.set('refresh_token', refreshToken);
+  }
+  const response = await fetch(config.tokenUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!response.ok) {
+    throw Object.assign(new Error(`Token refresh failed (HTTP ${response.status}).`), { code: 'CHANNEL_EXPIRED' });
+  }
+  return await response.json() as TokenPayload;
+}
+
 async function fetchChannelIdentity(platform: string, accessToken: string): Promise<{ id: string | null; name: string | null }> {
   try {
     if (platform === 'youtube') {
@@ -311,6 +338,133 @@ function decryptTokens(row: ChannelRecord): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+const REFRESH_SKEW_MS = 120_000;
+
+async function markChannelStatus(channelId: string, status: string): Promise<void> {
+  try {
+    await animeSupabase
+      .from('publish_channels')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', channelId);
+  } catch {
+    /* status is best-effort; the caller already returns CHANNEL_EXPIRED */
+  }
+}
+
+export async function refreshChannelTokens(
+  userId: string,
+  channelId: string,
+  options: { force?: boolean } = {}
+): Promise<PublishChannelPublic> {
+  const { data } = await animeSupabase
+    .from('publish_channels')
+    .select('*')
+    .eq('id', channelId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const row = data as ChannelRecord | null;
+  if (!row) throw Object.assign(new Error('Publishing channel not found.'), { code: 'CHANNEL_NOT_FOUND' });
+  if (row.status === 'revoked') throw Object.assign(new Error('Publishing channel is disconnected.'), { code: 'CHANNEL_REVOKED' });
+
+  const expiresAt = row.expires_at ? new Date(row.expires_at).getTime() : 0;
+  const stillValid = expiresAt > Date.now() + REFRESH_SKEW_MS;
+  if (!options.force && stillValid) return toPublic(row);
+
+  const config = platformConfig(row.platform);
+  if (!config) throw Object.assign(new Error('Unsupported publishing platform.'), { code: 'PLATFORM_INVALID' });
+  if (!config.configured) {
+    throw Object.assign(new Error('OAuth is not configured for this platform.'), { code: 'OAUTH_NOT_CONFIGURED' });
+  }
+
+  const tokens = decryptTokens(row);
+  const refreshToken = String(tokens.refresh_token || '');
+  if (!refreshToken) {
+    await markChannelStatus(row.id, 'expired');
+    throw Object.assign(new Error('Channel authorization expired. Reconnect it from Publish Studio.'), { code: 'CHANNEL_EXPIRED' });
+  }
+
+  let refreshed: TokenPayload;
+  try {
+    refreshed = await exchangeRefreshToken(row.platform, refreshToken, config);
+  } catch {
+    await markChannelStatus(row.id, 'expired');
+    throw Object.assign(
+      new Error('Channel authorization expired. Reconnect it from Publish Studio.'),
+      { code: 'CHANNEL_EXPIRED' }
+    );
+  }
+  if (!refreshed.access_token) {
+    await markChannelStatus(row.id, 'expired');
+    throw Object.assign(new Error('Token refresh returned no access token.'), { code: 'CHANNEL_EXPIRED' });
+  }
+
+  const nextTokens = {
+    access_token: refreshed.access_token,
+    refresh_token: refreshed.refresh_token ?? refreshToken,
+    token_type: refreshed.token_type ?? String(tokens.token_type || 'Bearer'),
+    scope: refreshed.scope ?? String(tokens.scope || config.scope),
+  };
+  const encrypted = encryptWithCurrentKey(JSON.stringify(nextTokens));
+  const nextExpiry = refreshed.expires_in
+    ? new Date(Date.now() + refreshed.expires_in * 1000).toISOString()
+    : row.expires_at;
+
+  const { data: updated } = await animeSupabase
+    .from('publish_channels')
+    .update({
+      encrypted_tokens: encrypted.ciphertext,
+      key_version: encrypted.key_version,
+      expires_at: nextExpiry,
+      status: 'active',
+      last_verified_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', row.id)
+    .eq('user_id', userId)
+    .select()
+    .single();
+  const saved = (updated as ChannelRecord | null) ?? { ...row, expires_at: nextExpiry, status: 'active' };
+
+  await syncInfrastructureMirror(userId, row.platform, {
+    access_token: nextTokens.access_token,
+    refresh_token: nextTokens.refresh_token,
+    channel_id: row.external_id,
+    channel_name: row.channel_name,
+  }).catch(() => undefined);
+
+  return toPublic(saved);
+}
+
+export async function refreshChannelsForPublish(
+  userId: string,
+  platforms: string[]
+): Promise<{ refreshed: string[]; failed: Array<{ platform: string; code: string }> }> {
+  const wanted = Array.from(new Set(platforms.map((platform) => platform.toLowerCase()).filter(Boolean)));
+  const result: { refreshed: string[]; failed: Array<{ platform: string; code: string }> } = { refreshed: [], failed: [] };
+  if (wanted.length === 0) return result;
+
+  const { data } = await animeSupabase
+    .from('publish_channels')
+    .select('*')
+    .eq('user_id', userId)
+    .in('platform', wanted)
+    .neq('status', 'revoked');
+  const rows = (data ?? []) as ChannelRecord[];
+
+  for (const row of rows) {
+    try {
+      await refreshChannelTokens(userId, row.id);
+      result.refreshed.push(row.platform);
+    } catch (error) {
+      result.failed.push({
+        platform: row.platform,
+        code: String((error as { code?: string })?.code || 'CHANNEL_EXPIRED'),
+      });
+    }
+  }
+  return result;
 }
 
 export async function testChannel(userId: string, channelId: string): Promise<{ ok: boolean; channel: PublishChannelPublic | null; reason?: string }> {

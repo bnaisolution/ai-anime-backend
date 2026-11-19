@@ -6,6 +6,7 @@ import { redactSecrets } from '../../../security/permissionEngine';
 import { byodFailureMessage, callByodModel } from '../../../core/ai-brain/modelRouter';
 import { resolveByodProviderCandidates } from '../../../core/ai-brain/providerResolver';
 import { submitAnimeCommand } from '../../anime/commands/commands.service';
+import { refreshChannelsForPublish } from '../../anime/publish/publish.service';
 import { buildActionProposal, extractStructuredDirectorAction, isMutatingDirectorIntent, verifyDirectorActionToken, type RequestedDirectorAction } from './director.actions';
 import { buildDirectorContext, compactDirectorContext } from './director.context';
 import { buildDirectorReadiness, missingResourcesFor } from './director.readiness';
@@ -301,6 +302,16 @@ export async function executeDirectorAction(
       throw Object.assign(
         new Error(`Connect these publishing channels first: ${missingChannels.join(', ')}.`),
         { code: 'SETUP_REQUIRED', missing: missingChannels }
+      );
+    }
+    const refreshed = await refreshChannelsForPublish(auth.userId, requestedPlatforms);
+    if (refreshed.failed.length > 0) {
+      throw Object.assign(
+        new Error('Publishing authorization expired. Reconnect the channel from Publish Studio and retry.'),
+        {
+          code: 'CHANNEL_EXPIRED',
+          failed: refreshed.failed.map((item) => item.platform),
+        }
       );
     }
   }

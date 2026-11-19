@@ -6,6 +6,7 @@ import {
   disconnectChannel,
   listChannels,
   platformConfig,
+  refreshChannelTokens,
   startOAuth,
   testChannel,
 } from './publish.service';
@@ -91,6 +92,19 @@ export async function registerAnimePublishRoutes(app: FastifyInstance): Promise<
     incrementCounter('anime_publish_channel_tests_total', { ok: String(result.ok) });
     if (!result.channel) return fail(reply, 404, 'CHANNEL_NOT_FOUND', 'Publishing channel not found.');
     return reply.send({ data: result });
+  });
+
+  app.post('/v1/anime/publish/channels/:id/refresh', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const params = (request.params as Record<string, unknown>) || {};
+    const channelId = String(params.id || '');
+    try {
+      const channel = await refreshChannelTokens(request.authContext.userId, channelId, { force: true });
+      return reply.send({ data: { ok: true, channel } });
+    } catch (error) {
+      const code = String((error as { code?: string })?.code || 'CHANNEL_REFRESH_FAILED');
+      const status = code === 'CHANNEL_NOT_FOUND' ? 404 : code === 'CHANNEL_EXPIRED' ? 409 : 502;
+      return fail(reply, status, code, error instanceof Error ? error.message : 'Channel refresh failed.');
+    }
   });
 
   app.post('/v1/anime/publish/channels/:id/disconnect', { preHandler: [app.authenticate] }, async (request, reply) => {
