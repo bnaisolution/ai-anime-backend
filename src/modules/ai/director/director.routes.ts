@@ -6,6 +6,7 @@ import { CAPABILITY_VERSION, listDirectorCapabilities, rolesForIntent } from './
 import { buildDirectorReadiness } from './director.readiness';
 import { buildDirectorTimeline } from './director.timeline';
 import { buildDirectorPlan } from './director.plan';
+import { incrementCounter, setGauge } from '../../anime/observability/metrics';
 
 function errorReply(reply: FastifyReply, error: unknown) {
   const code = String((error as { code?: unknown })?.code || 'INTERNAL');
@@ -70,6 +71,8 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
       return reply.code(400).send({ status: 'failed', errors: [{ category: 'INVALID_INPUT', message: 'project_id is required' }] });
     }
     const readiness = await buildDirectorReadiness(fastify, request.authContext, projectId);
+    setGauge('ai_director_readiness_overall', readiness.overall === 'ready' ? 1 : 0, { state: readiness.overall });
+    incrementCounter('ai_director_readiness_checks_total', { overall: readiness.overall });
     return reply.send({
       data: readiness,
       meta: { request_id: (request as any).anime?.request_id || null },
@@ -93,6 +96,7 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
       seasonNo: query.season_no != null ? Number(query.season_no) : null,
       episodeNo: query.episode_no != null ? Number(query.episode_no) : null,
     });
+    incrementCounter('ai_director_timeline_requests_total', { status: timeline.command_status || 'none' });
     return reply.send({ data: timeline });
   });
 
@@ -122,6 +126,10 @@ export default async function directorRoutes(fastify: FastifyInstance): Promise<
       projectId,
       goal: typeof body.goal === 'string' ? body.goal : null,
       steps,
+    });
+    incrementCounter('ai_director_plans_total', {
+      overall: plan.overall,
+      ready: String(plan.steps.filter((step) => step.ready).length),
     });
     return reply.send({ data: plan });
   });

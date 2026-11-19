@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { flags } from '../../../config/flags';
+import { incrementCounter } from '../observability/metrics';
 import {
   completeOAuth,
   disconnectChannel,
@@ -50,6 +51,7 @@ export async function registerAnimePublishRoutes(app: FastifyInstance): Promise<
     const projectId = typeof body.project_id === 'string' ? body.project_id : null;
     try {
       const result = await startOAuth(request.authContext.userId, platform, projectId);
+      incrementCounter('anime_publish_oauth_starts_total', { platform, configured: String(result.configured) });
       if (!result.configured) {
         return fail(reply, 503, 'OAUTH_NOT_CONFIGURED', 'This platform is not configured on the server yet.');
       }
@@ -71,10 +73,12 @@ export async function registerAnimePublishRoutes(app: FastifyInstance): Promise<
     }
     try {
       const result = await completeOAuth({ platform, code, state });
+      incrementCounter('anime_publish_oauth_callbacks_total', { platform, status: 'success' });
       return reply.type('text/html').send(
         htmlPage('Channel connected', `${result.channel.channel_name || result.platform} is now connected.`)
       );
     } catch (error) {
+      incrementCounter('anime_publish_oauth_callbacks_total', { platform, status: 'failed' });
       const message = error instanceof Error ? error.message : 'OAuth callback failed.';
       return reply.code(400).type('text/html').send(htmlPage('Connection failed', message));
     }
@@ -84,6 +88,7 @@ export async function registerAnimePublishRoutes(app: FastifyInstance): Promise<
     const params = (request.params as Record<string, unknown>) || {};
     const channelId = String(params.id || '');
     const result = await testChannel(request.authContext.userId, channelId);
+    incrementCounter('anime_publish_channel_tests_total', { ok: String(result.ok) });
     if (!result.channel) return fail(reply, 404, 'CHANNEL_NOT_FOUND', 'Publishing channel not found.');
     return reply.send({ data: result });
   });

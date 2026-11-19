@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { flags } from '../../../config/flags';
+import { incrementCounter } from '../observability/metrics';
 import {
   assignPlan,
   getOnboarding,
@@ -64,6 +65,7 @@ export async function registerAnimeSaasRoutes(app: FastifyInstance): Promise<voi
         errors: [{ category: 'PLAN_INVALID', message: 'Unknown plan or subscription store unavailable.' }],
       });
     }
+    incrementCounter('anime_saas_plan_assignments_total', { plan: subscription.plan_key, provider: 'manual' });
     return reply.send({ data: subscription });
   });
 }
