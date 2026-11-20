@@ -16,7 +16,7 @@ update this document with an explicit decision and date.
 
 ## Implementation Status
 
-Last verified: 2026-11-19.
+Last verified: 2026-11-20.
 
 | Phase | Status | Evidence |
 |---|---|---|
@@ -25,7 +25,7 @@ Last verified: 2026-11-19.
 | 2 Bible draft/apply correctness | Complete | Backend `e5c7685`, Android `c7ea942`; full backend suite green. Atomic RPC remains a follow-up. |
 | 3 Studio prefill + first episode | Complete | Backend `707e197`, Android `4cde5b9` + `e9dd1a0`; static contracts and CI green. |
 | 4 Approval gates + bypass closure | Complete | Backend `19e1ee7`, Android `b84efe0`; gate tests, Director failure-reason/retry, and Android tests green. |
-| 5 Migrations/deploy/E2E | Blocked | Deployment image `anime-backend:director-onboarding-c2de9e8` built and health-smoke-tested; package generated. Central DB DSN and migration approval still required before live deploy. |
+| 5 Migrations/deploy/E2E | Partial | Migrations `015`–`021` applied; `anime-backend:director-onboarding-c2de9e8` deployed; backup verified; BYOD Director E2E and 12/12 hardening drills green. Full Bible→episode→publish E2E, rollback restore drill, Android device smoke, and WF-03/WF-08 validation remain. |
 
 ## Target Flow
 
