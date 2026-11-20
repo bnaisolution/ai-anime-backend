@@ -25,7 +25,7 @@ Last verified: 2026-11-20.
 | 2 Bible draft/apply correctness | Complete | Backend `e5c7685`, Android `c7ea942`; full backend suite green. Atomic RPC remains a follow-up. |
 | 3 Studio prefill + first episode | Complete | Backend `707e197`, Android `4cde5b9` + `e9dd1a0`; static contracts and CI green. |
 | 4 Approval gates + bypass closure | Complete | Backend `19e1ee7`, Android `b84efe0`; gate tests, Director failure-reason/retry, and Android tests green. |
-| 5 Migrations/deploy/E2E | Partial | Migrations `015`–`021` applied; `anime-backend:director-onboarding-c2de9e8` deployed; backup verified; BYOD Director E2E and 12/12 hardening drills green. Full Bible→episode→publish E2E, rollback restore drill, Android device smoke, and WF-03/WF-08 validation remain. |
+| 5 Migrations/deploy/E2E | Partial | Migrations `015`–`021` applied; `anime-backend:director-onboarding-c2de9e8` deployed; backup verified; BYOD Director E2E and 12/12 hardening drills green; canonical BYOD validation 13/14 with WF-03 fixed (GitHub Actions Cloudflare worker). Remaining: WF-08 YouTube OAuth, full Bible→episode→publish E2E, rollback restore drill, Android device smoke. |
 
 ## Target Flow
 
