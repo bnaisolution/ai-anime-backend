@@ -44,3 +44,11 @@ Status: `OPEN` → `FIXING` → `FIXED (verify pending)` → `CLOSED`
 | D2 | P2 | Logout ke baad access token ~1h valid rehta hai | Refresh token revoke hota hai, access token stateless verify hota hai; client token locally clear karta hai | OPEN |
 | D3 | P3 | Worker CI `upload-artifact` step fail (code pass) | GitHub-side flake; rerun `startup_failure` de raha hai | OPEN |
 | D5 | P2 | `/api/v1/auth/me` me `workspaceId` empty (normal user) | Login response me `default-workspace` aata hai, `/me` me `""` | OPEN |
+
+
+## 2026-11-22 REAL_HUMAN pipeline fixes
+
+- B-23 (P1, FIXED verify pending): First AnimateDiff request hit Cloudflare 524; added GPU1 AnimateDiff prewarm and verified `animatediff_prewarmed=true`.
+- B-24 (P2, FIXED verify pending): Portrait keyframes were letterboxed; CPU/GPU assembly now scales to fill 1280x720 and crops.
+- B-25 (P2, FIXED verify pending): CPU worker mixed only the first SFX; now builds `amix` over every scene SFX.
+- B-26 (P2, FIXED verify pending): Commands schema rejected `REALISTIC`; `ProjectStyleSchema` now accepts custom visual styles.

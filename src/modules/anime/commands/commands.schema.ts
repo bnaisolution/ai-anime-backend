@@ -1,7 +1,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { CommandIntent } from './commands.types';
 export const ExecutionModeSchema = Type.Union([ Type.Literal('QUICK'), Type.Literal('SAVE') ]);
-export const ProjectStyleSchema = Type.Object({ visual_style: Type.Union([Type.Literal('ANIME'), Type.Literal('REALISTIC')]) }, { additionalProperties: true });
+export const ProjectStyleSchema = Type.Object({ visual_style: Type.String({ minLength: 1, maxLength: 40 }) }, { additionalProperties: true });
 export const CreateCommandBodySchema = Type.Object({
   intent: Type.Enum(CommandIntent), project_id: Type.String({ format: 'uuid' }), payload: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   mode: Type.Optional(ExecutionModeSchema), episode_no: Type.Optional(Type.Integer({ minimum: 1, maximum: 9999 })), season_no: Type.Optional(Type.Integer({ minimum: 1, maximum: 999 })),

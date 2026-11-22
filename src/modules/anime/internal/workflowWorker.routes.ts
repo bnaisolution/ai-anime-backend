@@ -161,7 +161,7 @@ export async function registerAnimeWorkflowWorkerRoutes(app: FastifyInstance): P
       tenant_id: null,
     };
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 240000);
+    const timeout = setTimeout(() => controller.abort(), 600000);
     let response: Response;
     try {
       response = await fetch(`${workerUrl}${path}`, {

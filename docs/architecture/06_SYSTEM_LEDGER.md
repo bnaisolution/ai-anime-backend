@@ -29,3 +29,14 @@
 4. Run cross-tenant denial, pause/unpause, DSN rotation, DB-down fail-closed, restore/7-day rollback drills.
 5. Wire `storage_choice`, `render_profile`, CPU target in WF-03; prove one real S3 upload.
 6. Phase 8 billing/plan enforcement/export-delete; Phase 9 SLO + canary + rollback.
+
+
+## 2026-11-22 REAL_HUMAN 60s Master + GPU/CPU Hardening
+- REAL_HUMAN project `b479db60-75c4-4e46-b5e4-89a271740cc8` / episode `16e059e2-1c26-4e15-b044-20acfa9c97c2` now has a verified 60s master: 1280x720 h264 24fps, AAC 96kHz stereo, 13,809,345 bytes, `freezedetect` clean, mean audio -17.0 dB / max -1.3 dB.
+- WF-03 execution `128919` succeeded on resume; all four clips `COMPLETED/MIXED`, episode `MIXED`, QC `PENDING`, Telegram master present.
+- Root cause of the first failure was Cloudflare quick-tunnel `524` on the **first** AnimateDiff request (model load exceeded the 120s proxy window). Added AnimateDiff prewarm on GPU1; `/health` now reports `animatediff_prewarmed=true`. Subsequent first request completed inside the window.
+- GPU fallback now catches animation failure, keeps the keyframe, applies Ken Burns/zoompan, and returns `animation_status` plus `stages_skipped`; worker disables further animation after a CUDA/memory failure.
+- CPU worker now mixes **all** scene SFX tracks (not only the first), fills 16:9 via `scale=increase,crop` instead of letterboxing, and all four clips were re-rendered with the corrected frame.
+- Backend `commands` schema now accepts arbitrary visual-medium/style strings (including `REALISTIC`/`REAL_HUMAN`), not only ANIME/REALISTIC literals.
+- Tunnel hardening verified live: `tunnel_registered=true`, `tunnel_last_error=null`, 2 GPUs, SDXL + AnimateDiff prewarmed. CPU worker URL refreshed to `rely-midnight-variation-ctrl.trycloudflare.com` in encrypted infrastructure.
+- Backend `npm run build` + `npm run test:safe` (209 unit + 109 route + 155 static) green; docs and Git heads updated separately.

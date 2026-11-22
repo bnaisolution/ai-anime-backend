@@ -186,6 +186,7 @@ function buildKaggleLocalTunnelScript(
   const idleShutdownSeconds = Math.max(60, Number(process.env.KAGGLE_IDLE_SHUTDOWN_SECONDS || 900));
   const maxLifetimeSeconds = Math.max(600, Number(process.env.KAGGLE_MAX_LIFETIME_SECONDS || 21600));
   return `import os
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 import re
 import gc
 import glob
@@ -202,6 +203,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 import torch
 import requests
+import urllib.request
 from PIL import Image
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
@@ -236,9 +238,13 @@ DEVICE_1 = ("cuda:1" if torch.cuda.device_count() > 1 else ("cuda:0" if torch.cu
 GPU_0_LOCK = threading.Lock()
 GPU_1_LOCK = threading.Lock()
 MODEL_CACHE: Dict[str, Any] = {}
+ANIMATION_DISABLED = False
+TUNNEL_REGISTERED = False
+TUNNEL_LAST_ERROR: Optional[str] = None
 JOBS_STORE: Dict[str, Dict[str, Any]] = {}
 PUBLIC_TUNNEL_URL: Optional[str] = None
 PREWARM_ERROR: Optional[str] = None
+ANIMATION_PREWARM_ERROR: Optional[str] = None
 STARTED_AT = time.time()
 LAST_ACTIVITY_TS = time.time()
 ACTIVE_JOBS = 0
@@ -443,21 +449,26 @@ def get_animatediff_pipeline() -> AnimateDiffPipeline:
                 adapter_ckpt = hf_hub_download(repo_id="ByteDance/AnimateDiff-Lightning", filename="animatediff_lightning_4step_diffusers.safetensors")
             except Exception:
                 adapter_ckpt = None
-    adapter = MotionAdapter().to(DEVICE_0, torch.float16)
+    adapter = MotionAdapter().to(DEVICE_1, torch.float16)
     if adapter_ckpt and os.path.exists(adapter_ckpt):
-        adapter.load_state_dict(load_file(adapter_ckpt, device=DEVICE_0))
-    pipe = AnimateDiffPipeline.from_pretrained("emilianJR/epiCRealism", motion_adapter=adapter, torch_dtype=torch.float16).to(DEVICE_0)
+        adapter.load_state_dict(load_file(adapter_ckpt, device=DEVICE_1))
+    pipe = AnimateDiffPipeline.from_pretrained("emilianJR/epiCRealism", motion_adapter=adapter, torch_dtype=torch.float16).to(DEVICE_1)
     pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing", beta_schedule="linear")
     MODEL_CACHE["animatediff"] = pipe
     return pipe
 
 def prewarm_models_background():
-    global PREWARM_ERROR
+    global PREWARM_ERROR, ANIMATION_PREWARM_ERROR
     try:
         with GPU_0_LOCK: get_sdxl_lightning_pipeline()
         PREWARM_ERROR = None
     except Exception as exc:
         PREWARM_ERROR = str(exc)[:500]
+    try:
+        with GPU_1_LOCK: get_animatediff_pipeline()
+        ANIMATION_PREWARM_ERROR = None
+    except Exception as exc:
+        ANIMATION_PREWARM_ERROR = str(exc)[:500]
 
 def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict[str, Any]:
     JOBS_STORE[job_id] = {"status": "processing"}
@@ -496,7 +507,10 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
             raise exc
 
 def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[str, Any]:
+    global ANIMATION_DISABLED
     JOBS_STORE[job_id] = {"status": "processing"}
+    stage_errors = []
+    animation_status = "SKIPPED"
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             current_media = os.path.join(tmpdir, "input_source.png")
@@ -525,34 +539,51 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
                                     if chunk: f.write(chunk)
                 except Exception: local_audio = None
             stages = req.stages or {}
-            if stages.get("branch_c_animatediff", {}).get("enabled"):
-                with GPU_0_LOCK:
-                    pipe = get_animatediff_pipeline()
-                    num_frames = min(max(req.duration_sec * 8, 16), 32)
-                    prompt = stages["branch_c_animatediff"].get("prompt") or "cinematic motion"
-                    with torch.inference_mode():
-                        frames = pipe(prompt=prompt, negative_prompt="bad quality, static, deformed", num_frames=num_frames, guidance_scale=1.0, num_inference_steps=4).frames[0]
-                    anim_mp4 = os.path.join(tmpdir, "stage_c.mp4")
-                    export_to_video(frames, anim_mp4, fps=8)
-                    current_media = anim_mp4
-                clear_vram(DEVICE_0)
+            branch_c = stages.get("branch_c_animatediff", {})
+            if branch_c.get("enabled") and not ANIMATION_DISABLED:
+                try:
+                    with GPU_1_LOCK:
+                        pipe = get_animatediff_pipeline()
+                        num_frames = min(max(req.duration_sec * 8, 16), 32)
+                        prompt = branch_c.get("prompt") or "cinematic motion"
+                        with torch.inference_mode():
+                            frames = pipe(prompt=prompt, negative_prompt="bad quality, static, deformed", num_frames=num_frames, guidance_scale=1.0, num_inference_steps=4).frames[0]
+                        anim_mp4 = os.path.join(tmpdir, "stage_c.mp4")
+                        export_to_video(frames, anim_mp4, fps=8)
+                        current_media = anim_mp4
+                    animation_status = "COMPLETED"
+                except Exception as anim_exc:
+                    animation_status = "DEGRADED"
+                    stage_errors.append({"stage": "branch_c_animatediff", "error": str(anim_exc)[:500]})
+                    if "cuda" in str(anim_exc).lower() or "memory" in str(anim_exc).lower():
+                        ANIMATION_DISABLED = True
+                finally:
+                    clear_vram(DEVICE_1)
+            elif branch_c.get("enabled") and ANIMATION_DISABLED:
+                animation_status = "DEGRADED_DISABLED"
+                stage_errors.append({"stage": "branch_c_animatediff", "error": "animation worker disabled after prior CUDA failure"})
             final_mp4 = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_s{req.season_no}_ep{req.episode_no}_sc{req.scene_order}_gpu.mp4")
             is_image = current_media.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+            total_frames = max(24, int(round(float(req.duration_sec) * 24)))
+            if is_image:
+                video_filter = f"scale=2560:1440:force_original_aspect_ratio=increase,crop=2560:1440,zoompan=z='min(zoom+0.0012,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s=1280x720:fps=24,format=yuv420p"
+            else:
+                video_filter = "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p"
             cmd = ["ffmpeg", "-y"] + (["-loop", "1", "-i", current_media] if is_image else ["-stream_loop", "-1", "-i", current_media])
             if local_audio and os.path.exists(local_audio):
-                cmd += ["-i", local_audio, "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p", "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", "-shortest", "-t", str(req.duration_sec), final_mp4]
+                cmd += ["-i", local_audio, "-vf", video_filter, "-af", "apad", "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", "-t", str(req.duration_sec), final_mp4]
             else:
-                cmd += ["-t", str(req.duration_sec), "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p", "-c:v", "libx264", "-preset", "fast", final_mp4]
+                cmd += ["-t", str(req.duration_sec), "-vf", video_filter, "-c:v", "libx264", "-preset", "fast", final_mp4]
             subprocess.run(cmd, check=True)
             file_size = os.path.getsize(final_mp4)
             caption = f"GPU CLIP Project: {req.project_id} | S{req.season_no} Ep: {req.episode_no} | Scene: {req.scene_order}"
             tg_res = upload_media_to_telegram(final_mp4, caption, req.telegram_upload)
-            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
+            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "animation_status": animation_status, "stages_skipped": stage_errors, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
             JOBS_STORE[job_id] = result_payload
             notify_n8n_webhook(req.callback_url, result_payload)
             return result_payload
     except Exception as exc:
-        err_payload = {"ok": False, "status": "failed", "job_id": job_id, "error": str(exc)}
+        err_payload = {"ok": False, "status": "failed", "job_id": job_id, "error": str(exc), "animation_status": animation_status, "stages_skipped": stage_errors}
         JOBS_STORE[job_id] = err_payload
         notify_n8n_webhook(req.callback_url, err_payload)
         raise exc
@@ -591,43 +622,87 @@ async def health():
         active_jobs = ACTIVE_JOBS
         idle_seconds = int(time.time() - LAST_ACTIVITY_TS)
         uptime_seconds = int(time.time() - STARTED_AT)
-    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "prewarm_error": PREWARM_ERROR, "model_paths": MODEL_PATHS, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0, "active_jobs": active_jobs, "idle_seconds": idle_seconds, "uptime_seconds": uptime_seconds, "idle_shutdown_seconds": WORKER_IDLE_SHUTDOWN_SECONDS, "max_lifetime_seconds": WORKER_MAX_LIFETIME_SECONDS}
+    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "tunnel_registered": TUNNEL_REGISTERED, "tunnel_last_error": TUNNEL_LAST_ERROR, "animation_disabled": ANIMATION_DISABLED, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "animatediff_prewarmed": "animatediff" in MODEL_CACHE, "prewarm_error": PREWARM_ERROR, "animation_prewarm_error": ANIMATION_PREWARM_ERROR, "model_paths": MODEL_PATHS, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0, "active_jobs": active_jobs, "idle_seconds": idle_seconds, "uptime_seconds": uptime_seconds, "idle_shutdown_seconds": WORKER_IDLE_SHUTDOWN_SECONDS, "max_lifetime_seconds": WORKER_MAX_LIFETIME_SECONDS}
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request, exc):
     return JSONResponse(status_code=500, content={"detail": str(exc)[:1000]})
 
 def register_tunnel_in_supabase(tunnel_url: str):
-    global PUBLIC_TUNNEL_URL
+    global PUBLIC_TUNNEL_URL, TUNNEL_REGISTERED, TUNNEL_LAST_ERROR
     PUBLIC_TUNNEL_URL = tunnel_url
-    if BACKEND_BASE and SESSION_TOKEN:
+    if not BACKEND_BASE or not SESSION_TOKEN:
+        TUNNEL_LAST_ERROR = "backend base or session token missing"
+        print(f"[tunnel] register skipped: {TUNNEL_LAST_ERROR}", flush=True)
+        return
+    try:
+        resp = requests.post(
+            f"{BACKEND_BASE}/v1/anime/internal/worker/session",
+            json={"session_name": SESSION_SLOT, "api_endpoint": tunnel_url, "gpu_id": "T4x2"},
+            headers={"Authorization": f"Bearer {SESSION_TOKEN}", "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true"},
+            timeout=20,
+        )
+        if resp.ok:
+            TUNNEL_REGISTERED = True
+            TUNNEL_LAST_ERROR = None
+            print(f"[tunnel] registered {tunnel_url}", flush=True)
+        else:
+            TUNNEL_REGISTERED = False
+            TUNNEL_LAST_ERROR = f"HTTP {resp.status_code}: {resp.text[:240]}"
+            print(f"[tunnel] register failed {TUNNEL_LAST_ERROR}", flush=True)
+    except Exception as exc:
+        TUNNEL_REGISTERED = False
+        TUNNEL_LAST_ERROR = str(exc)[:240]
+        print(f"[tunnel] register error {TUNNEL_LAST_ERROR}", flush=True)
+
+def ensure_cloudflared() -> bool:
+    if os.path.exists("/tmp/cloudflared"):
+        return True
+    url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+    for attempt in range(1, 4):
         try:
-            requests.post(f"{BACKEND_BASE}/v1/anime/internal/worker/session", json={"session_name": SESSION_SLOT, "api_endpoint": tunnel_url, "gpu_id": "T4x2"}, headers={"Authorization": f"Bearer {SESSION_TOKEN}", "Content-Type": "application/json", "Bypass-Tunnel-Reminder": "true"}, timeout=15)
-        except Exception: pass
+            print(f"[tunnel] downloading cloudflared attempt {attempt}", flush=True)
+            urllib.request.urlretrieve(url, "/tmp/cloudflared")
+            os.chmod("/tmp/cloudflared", 0o755)
+            return True
+        except Exception as exc:
+            print(f"[tunnel] download failed: {str(exc)[:240]}", flush=True)
+            time.sleep(3)
+    return False
 
 def start_tunnel_daemon():
+    print("[tunnel] daemon starting", flush=True)
     while True:
         try:
-            if os.path.exists("/tmp/cloudflared"):
+            if ensure_cloudflared():
                 proc = subprocess.Popen(["/tmp/cloudflared", "tunnel", "--url", "http://127.0.0.1:8000"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
                 for line in proc.stdout:
-                    m = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", line)
-                    if m: register_tunnel_in_supabase(m.group(1))
-                proc.wait()
+                    text = (line or "").strip()
+                    if text:
+                        print(f"[cloudflared] {text[:300]}", flush=True)
+                    m = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", text)
+                    if m:
+                        register_tunnel_in_supabase(m.group(1))
+                rc = proc.wait()
+                print(f"[tunnel] cloudflared exited rc={rc}", flush=True)
             else:
+                print("[tunnel] cloudflared unavailable; trying localtunnel", flush=True)
                 subprocess.run(["npm", "install", "-g", "localtunnel"], check=False)
                 proc = subprocess.Popen(["lt", "--port", "8000"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
                 for line in proc.stdout:
-                    m = re.search(r"(https://[a-zA-Z0-9-]+\.loca\.lt)", line)
-                    if m: register_tunnel_in_supabase(m.group(1))
-                proc.wait()
-        except Exception: time.sleep(5)
+                    text = (line or "").strip()
+                    if text:
+                        print(f"[localtunnel] {text[:300]}", flush=True)
+                    m = re.search(r"(https://[a-zA-Z0-9-]+\.loca\.lt)", text)
+                    if m:
+                        register_tunnel_in_supabase(m.group(1))
+                rc = proc.wait()
+                print(f"[tunnel] localtunnel exited rc={rc}", flush=True)
+        except Exception as exc:
+            print(f"[tunnel] daemon error: {str(exc)[:300]}", flush=True)
+        time.sleep(5)
 
 if __name__ == "__main__":
-    import subprocess, time
-    if not os.path.exists("/tmp/cloudflared"):
-        subprocess.run(["wget", "-q", "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64", "-O", "/tmp/cloudflared"], check=False)
-        subprocess.run(["chmod", "+x", "/tmp/cloudflared"], check=False)
     threading.Thread(target=start_tunnel_daemon, daemon=True).start()
     threading.Thread(target=prewarm_models_background, daemon=True).start()
     mark_activity()
