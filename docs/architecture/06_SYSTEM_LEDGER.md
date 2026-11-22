@@ -39,4 +39,5 @@
 - CPU worker now mixes **all** scene SFX tracks (not only the first), fills 16:9 via `scale=increase,crop` instead of letterboxing, and all four clips were re-rendered with the corrected frame.
 - Backend `commands` schema now accepts arbitrary visual-medium/style strings (including `REALISTIC`/`REAL_HUMAN`), not only ANIME/REALISTIC literals.
 - Tunnel hardening verified live: `tunnel_registered=true`, `tunnel_last_error=null`, 2 GPUs, SDXL + AnimateDiff prewarmed. CPU worker URL refreshed to `rely-midnight-variation-ctrl.trycloudflare.com` in encrypted infrastructure.
-- Backend `npm run build` + `npm run test:safe` (209 unit + 109 route + 155 static) green; docs and Git heads updated separately.
+- Backend `npm run build` + `npm run test:safe` (209 unit + 109 route + 155 static) green.
+- Git heads: backend `4baec49`; CPU worker `95094da`; audio assets `02b3a4f`. Verified master also at `/home/ec2-user/realhuman10-master.mp4`.
