@@ -52,3 +52,4 @@ Status: `OPEN` → `FIXING` → `FIXED (verify pending)` → `CLOSED`
 - B-24 (P2, FIXED verify pending): Portrait keyframes were letterboxed; CPU/GPU assembly now scales to fill 1280x720 and crops.
 - B-25 (P2, FIXED verify pending): CPU worker mixed only the first SFX; now builds `amix` over every scene SFX.
 - B-26 (P2, FIXED verify pending): Commands schema rejected `REALISTIC`; `ProjectStyleSchema` now accepts custom visual styles.
+- B-27 (P2, FIXED verify pending): Episode read API omitted `scene_count`/`target_duration_sec`; both are now selected and live `/episodes/1` returns 4/60.
