@@ -2,6 +2,7 @@ import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { canonicalMediumKey, parseGenreList } from '../prompts/creative.registry';
 import { createProjectRecord } from './projects.service';
+import { buildRuntimeContract, MAX_EPISODE_DURATION_MIN, screenplayWordTarget } from '../runtime/runtimeContract';
 
 function integerInRange(value: unknown, fallback: number, min: number, max: number, label: string): number {
   const parsed = Number(value);
@@ -82,11 +83,7 @@ export function normalizeProjectSetup(input: ProjectSetupInput, existingBible: R
     ),
     episode_duration_min: integerInRange(
       input.episode_duration_min ?? existingBible.episode_duration_min,
-      24, 1, 120, 'Episode duration'
-    ),
-    script_word_count: integerInRange(
-      input.script_word_count ?? existingBible.script_word_count,
-      1500, 100, 20_000, 'Script word count'
+      24, 1, MAX_EPISODE_DURATION_MIN, 'Episode duration'
     ),
     total_seasons: integerInRange(
       input.total_seasons ?? existingBible.total_seasons,
@@ -97,6 +94,10 @@ export function normalizeProjectSetup(input: ProjectSetupInput, existingBible: R
       12, 1, 500, 'Episodes per season'
     ),
   };
+  const runtimeContract = buildRuntimeContract(bible.episode_duration_min);
+  bible.runtime_contract = runtimeContract;
+  bible.target_duration_sec = runtimeContract.target_duration_sec;
+  bible.script_word_count = screenplayWordTarget(runtimeContract);
   return { name, genre, visualMedium, description, bible };
 }
 

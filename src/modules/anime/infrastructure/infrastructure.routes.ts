@@ -194,6 +194,7 @@ import uuid
 import time
 import json
 import shutil
+import shlex
 import asyncio
 import threading
 import tempfile
@@ -239,6 +240,10 @@ GPU_0_LOCK = threading.Lock()
 GPU_1_LOCK = threading.Lock()
 MODEL_CACHE: Dict[str, Any] = {}
 ANIMATION_DISABLED = False
+IP_ADAPTER_READY = False
+IP_ADAPTER_ERROR: Optional[str] = None
+ANIM_IP_ADAPTER_READY = False
+ANIM_IP_ADAPTER_ERROR: Optional[str] = None
 TUNNEL_REGISTERED = False
 TUNNEL_LAST_ERROR: Optional[str] = None
 JOBS_STORE: Dict[str, Dict[str, Any]] = {}
@@ -457,6 +462,50 @@ def get_animatediff_pipeline() -> AnimateDiffPipeline:
     MODEL_CACHE["animatediff"] = pipe
     return pipe
 
+def ensure_ip_adapter(pipe) -> bool:
+    global IP_ADAPTER_READY, IP_ADAPTER_ERROR
+    if IP_ADAPTER_READY:
+        return True
+    try:
+        pipe.load_ip_adapter("h94/IP-Adapter", subfolder="sdxl_models", weight_name="ip-adapter_sdxl.bin")
+        pipe.set_ip_adapter_scale(0.65)
+        IP_ADAPTER_READY = True
+        IP_ADAPTER_ERROR = None
+        return True
+    except Exception as exc:
+        IP_ADAPTER_ERROR = str(exc)[:300]
+        return False
+
+
+def ensure_animatediff_ip_adapter(pipe) -> bool:
+    global ANIM_IP_ADAPTER_READY, ANIM_IP_ADAPTER_ERROR
+    if ANIM_IP_ADAPTER_READY:
+        return True
+    try:
+        pipe.load_ip_adapter("h94/IP-Adapter", subfolder="models", weight_name="ip-adapter_sd15.bin")
+        pipe.set_ip_adapter_scale(0.55)
+        ANIM_IP_ADAPTER_READY = True
+        ANIM_IP_ADAPTER_ERROR = None
+        return True
+    except Exception as exc:
+        ANIM_IP_ADAPTER_ERROR = str(exc)[:300]
+        return False
+
+
+def run_configured_lipsync(kind: str, video_path: str, audio_path: str, output_path: str) -> tuple:
+    env_name = "MUSETALK_CMD" if kind == "musetalk" else "LIVEPORTRAIT_CMD"
+    template = os.getenv(env_name, "").strip()
+    if not template:
+        return False, f"{env_name} is not configured on this worker"
+    if not audio_path or not os.path.exists(audio_path):
+        return False, "lipsync audio is missing"
+    command = shlex.split(template.format(video=video_path, audio=audio_path, output=output_path))
+    subprocess.run(command, check=True, timeout=900)
+    if not os.path.exists(output_path):
+        return False, f"{kind} did not produce an output file"
+    return True, None
+
+
 def prewarm_models_background():
     global PREWARM_ERROR, ANIMATION_PREWARM_ERROR
     try:
@@ -472,6 +521,7 @@ def prewarm_models_background():
 
 def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict[str, Any]:
     JOBS_STORE[job_id] = {"status": "processing"}
+    stage_errors = []
     with GPU_0_LOCK:
         try:
             pipe = get_sdxl_lightning_pipeline()
@@ -486,8 +536,22 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
             neg_prompt = "deformed, blurry, bad anatomy, disfigured, extra limbs, text, watermark, low quality"
             seed = abs(hash(f"{req.project_id}_{req.season_no}_{req.episode_no}_{req.scene_order}")) % (2**31)
             generator = torch.Generator(device=DEVICE_0).manual_seed(seed)
+            reference_image = None
+            identity_mode = "TEXT_ONLY"
+            reference_id = (req.reference_image_file_id or "").strip()
+            if reference_id and not reference_id.startswith("ref_"):
+                reference_path = os.path.join(tempfile.gettempdir(), f"identity_{uuid.uuid4().hex}.png")
+                if download_telegram_media(reference_id, reference_path, req.telegram_upload):
+                    try:
+                        reference_image = Image.open(reference_path).convert("RGB")
+                    except Exception as ref_exc:
+                        stage_errors.append({"stage": "identity_reference", "error": str(ref_exc)[:200]})
+            pipe_kwargs = dict(prompt=full_prompt, negative_prompt=neg_prompt, num_inference_steps=4, guidance_scale=0.0, width=1280, height=720, generator=generator)
+            if reference_image is not None and ensure_ip_adapter(pipe):
+                pipe_kwargs["ip_adapter_image"] = reference_image
+                identity_mode = "IP_ADAPTER"
             with torch.inference_mode():
-                image: Image.Image = pipe(prompt=full_prompt, negative_prompt=neg_prompt, num_inference_steps=4, guidance_scale=0.0, width=1280, height=720, generator=generator).images[0]
+                image: Image.Image = pipe(**pipe_kwargs).images[0]
             with tempfile.TemporaryDirectory() as tmpdir:
                 out_png = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_s{req.season_no}_ep{req.episode_no}_sc{req.scene_order}.png")
                 image.save(out_png, format="PNG", optimize=True)
@@ -495,7 +559,7 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
                 caption = f"KEYFRAME Project: {req.project_id} | S{req.season_no} Ep: {req.episode_no} | Scene: {req.scene_order}"
                 tg_res = upload_media_to_telegram(out_png, caption, req.telegram_upload)
                 clear_vram(DEVICE_0)
-                result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "engine": req.engine, "slot": SESSION_SLOT, "file_size_bytes": file_size, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "image_url": tg_res["telegram_url"]}
+                result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "engine": req.engine, "slot": SESSION_SLOT, "file_size_bytes": file_size, "identity_mode": identity_mode, "identity_reference_used": reference_image is not None, "ip_adapter_error": IP_ADAPTER_ERROR, "stages_skipped": stage_errors, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "image_url": tg_res["telegram_url"]}
                 JOBS_STORE[job_id] = result_payload
                 notify_n8n_webhook(req.callback_url, result_payload)
                 return result_payload
@@ -540,14 +604,29 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
                 except Exception: local_audio = None
             stages = req.stages or {}
             branch_c = stages.get("branch_c_animatediff", {})
+            branch_d = stages.get("branch_d_musetalk", {})
+            branch_e = stages.get("branch_e_liveportrait", {})
+            lipsync_requested = bool(branch_d.get("enabled") or branch_e.get("enabled"))
+            lipsync_status = "NOT_REQUESTED"
+            lipsync_error = None
             if branch_c.get("enabled") and not ANIMATION_DISABLED:
                 try:
                     with GPU_1_LOCK:
                         pipe = get_animatediff_pipeline()
                         num_frames = min(max(req.duration_sec * 8, 16), 32)
                         prompt = branch_c.get("prompt") or "cinematic motion"
+                        anim_kwargs = dict(prompt=prompt, negative_prompt="bad quality, static, deformed", num_frames=num_frames, guidance_scale=1.0, num_inference_steps=4)
+                        keyframe_conditioned = False
+                        try:
+                            if os.path.exists(current_media) and current_media.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                                keyframe_image = Image.open(current_media).convert("RGB")
+                                if ensure_animatediff_ip_adapter(pipe):
+                                    anim_kwargs["ip_adapter_image"] = keyframe_image
+                                    keyframe_conditioned = True
+                        except Exception as condition_exc:
+                            stage_errors.append({"stage": "branch_c_keyframe_conditioning", "error": str(condition_exc)[:300]})
                         with torch.inference_mode():
-                            frames = pipe(prompt=prompt, negative_prompt="bad quality, static, deformed", num_frames=num_frames, guidance_scale=1.0, num_inference_steps=4).frames[0]
+                            frames = pipe(**anim_kwargs).frames[0]
                         anim_mp4 = os.path.join(tmpdir, "stage_c.mp4")
                         export_to_video(frames, anim_mp4, fps=8)
                         current_media = anim_mp4
@@ -562,6 +641,23 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
             elif branch_c.get("enabled") and ANIMATION_DISABLED:
                 animation_status = "DEGRADED_DISABLED"
                 stage_errors.append({"stage": "branch_c_animatediff", "error": "animation worker disabled after prior CUDA failure"})
+            if lipsync_requested:
+                lipsync_kind = "musetalk" if branch_d.get("enabled") else "liveportrait"
+                lipsync_out = os.path.join(tmpdir, f"stage_lipsync_{lipsync_kind}.mp4")
+                try:
+                    lipsync_ok, lipsync_error = run_configured_lipsync(lipsync_kind, current_media, local_audio, lipsync_out)
+                    if lipsync_ok:
+                        current_media = lipsync_out
+                        lipsync_status = "COMPLETED"
+                    else:
+                        lipsync_status = "UNAVAILABLE"
+                        stage_errors.append({"stage": f"branch_{'d' if lipsync_kind == 'musetalk' else 'e'}_{lipsync_kind}", "error": lipsync_error})
+                except Exception as lipsync_exc:
+                    lipsync_status = "DEGRADED"
+                    lipsync_error = str(lipsync_exc)[:500]
+                    stage_errors.append({"stage": f"branch_{'d' if lipsync_kind == 'musetalk' else 'e'}_{lipsync_kind}", "error": lipsync_error})
+                finally:
+                    clear_vram(DEVICE_1)
             final_mp4 = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_s{req.season_no}_ep{req.episode_no}_sc{req.scene_order}_gpu.mp4")
             is_image = current_media.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
             total_frames = max(24, int(round(float(req.duration_sec) * 24)))
@@ -578,7 +674,7 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
             file_size = os.path.getsize(final_mp4)
             caption = f"GPU CLIP Project: {req.project_id} | S{req.season_no} Ep: {req.episode_no} | Scene: {req.scene_order}"
             tg_res = upload_media_to_telegram(final_mp4, caption, req.telegram_upload)
-            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "animation_status": animation_status, "stages_skipped": stage_errors, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
+            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "animation_status": animation_status, "keyframe_conditioned": bool(locals().get("keyframe_conditioned", False)), "ip_adapter_error": ANIM_IP_ADAPTER_ERROR, "lipsync_requested": lipsync_requested, "lipsync_status": lipsync_status, "lipsync_error": lipsync_error, "stages_skipped": stage_errors, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
             JOBS_STORE[job_id] = result_payload
             notify_n8n_webhook(req.callback_url, result_payload)
             return result_payload
@@ -622,7 +718,7 @@ async def health():
         active_jobs = ACTIVE_JOBS
         idle_seconds = int(time.time() - LAST_ACTIVITY_TS)
         uptime_seconds = int(time.time() - STARTED_AT)
-    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "tunnel_registered": TUNNEL_REGISTERED, "tunnel_last_error": TUNNEL_LAST_ERROR, "animation_disabled": ANIMATION_DISABLED, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "animatediff_prewarmed": "animatediff" in MODEL_CACHE, "prewarm_error": PREWARM_ERROR, "animation_prewarm_error": ANIMATION_PREWARM_ERROR, "model_paths": MODEL_PATHS, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0, "active_jobs": active_jobs, "idle_seconds": idle_seconds, "uptime_seconds": uptime_seconds, "idle_shutdown_seconds": WORKER_IDLE_SHUTDOWN_SECONDS, "max_lifetime_seconds": WORKER_MAX_LIFETIME_SECONDS}
+    return {"ok": True, "slot": SESSION_SLOT, "tunnel_url": PUBLIC_TUNNEL_URL, "tunnel_registered": TUNNEL_REGISTERED, "tunnel_last_error": TUNNEL_LAST_ERROR, "animation_disabled": ANIMATION_DISABLED, "sdxl_prewarmed": "sdxl_lightning" in MODEL_CACHE, "animatediff_prewarmed": "animatediff" in MODEL_CACHE, "ip_adapter_ready": IP_ADAPTER_READY, "ip_adapter_error": IP_ADAPTER_ERROR, "animatediff_ip_adapter_ready": ANIM_IP_ADAPTER_READY, "animatediff_ip_adapter_error": ANIM_IP_ADAPTER_ERROR, "prewarm_error": PREWARM_ERROR, "animation_prewarm_error": ANIMATION_PREWARM_ERROR, "model_paths": MODEL_PATHS, "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0, "active_jobs": active_jobs, "idle_seconds": idle_seconds, "uptime_seconds": uptime_seconds, "idle_shutdown_seconds": WORKER_IDLE_SHUTDOWN_SECONDS, "max_lifetime_seconds": WORKER_MAX_LIFETIME_SECONDS}
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request, exc):
