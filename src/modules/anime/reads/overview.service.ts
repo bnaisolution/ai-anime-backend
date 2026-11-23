@@ -1,5 +1,6 @@
 import { animeSupabase } from '../db/anime.supabase';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
+import { buildRuntimeContract } from '../runtime/runtimeContract';
 
 type QueryResult<T> = { data: T[] | null; error: any };
 
@@ -92,10 +93,14 @@ export async function getProjectOverview(projectId: string) {
   const canonRows = rows<any>(canonRes as unknown as QueryResult<any>, 'canon');
   const continuityRows = rows<any>(continuityRes as unknown as QueryResult<any>, 'continuity');
 
+  const episodeDurationMin = boundedInt(bible.episode_duration_min, 24, 1, 30);
+  const runtimeContract = buildRuntimeContract(episodeDurationMin);
   const series = {
     total_seasons: boundedInt(bible.total_seasons, 1, 1, 100),
     episodes_per_season: boundedInt(bible.episodes_per_season, boundedInt(bible.target_episode_count, 12, 1, 500), 1, 500),
-    episode_duration_min: boundedInt(bible.episode_duration_min, 24, 1, 120),
+    episode_duration_min: episodeDurationMin,
+    target_duration_sec: runtimeContract.target_duration_sec,
+    runtime_contract: runtimeContract,
   };
 
   const activeStatuses = new Set(['QUEUED', 'DISPATCHED', 'ACKNOWLEDGED', 'RUNNING', 'RECONCILING']);

@@ -7,6 +7,7 @@ import { DEFAULT_DOMAIN_PROMPTS, canonicalMediumKey, type PromptCategory } from 
 import { buildProjectCreativeContext, creativeConfigurationSnapshot, loadCreativePromptRows, type ProjectCreativeContext } from '../prompts/creative.service';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { flags } from '../../../config/flags';
+import { buildRuntimeContract, screenplayWordTarget, type RuntimeContract } from '../runtime/runtimeContract';
 import { evaluateProjectSetup } from '../../ai/director/director.readiness';
 import {
   findCommandById,
@@ -368,12 +369,13 @@ async function resolveDynamicPromptAndInfra(
   let seasonContext: SeasonPlanContext | null = null;
   let seasonPromptOverride = false;
   let imagePromptSeasonOverride = false;
+  let runtimeContract: RuntimeContract = buildRuntimeContract(24);
   let seriesConfig: Record<string, number> = {
     total_seasons: 1,
     episodes_per_season: 12,
     episode_duration_min: 24,
-    script_word_count: 1500,
-    target_duration_sec: 1440,
+    script_word_count: screenplayWordTarget(runtimeContract),
+    target_duration_sec: runtimeContract.target_duration_sec,
     total_episode_capacity: 12,
     target_episode_count: 12,
   };
@@ -407,13 +409,14 @@ async function resolveDynamicPromptAndInfra(
       };
       const totalSeasons = bounded(bible.total_seasons, 1, 1, 100);
       const episodesPerSeason = bounded(bible.episodes_per_season, 12, 1, 500);
-      const episodeDurationMin = bounded(bible.episode_duration_min, 24, 1, 120);
+      const episodeDurationMin = bounded(bible.episode_duration_min, 24, 1, 30);
+      runtimeContract = buildRuntimeContract(episodeDurationMin);
       seriesConfig = {
         total_seasons: totalSeasons,
         episodes_per_season: episodesPerSeason,
         episode_duration_min: episodeDurationMin,
-        script_word_count: bounded(bible.script_word_count, 1500, 100, 20000),
-        target_duration_sec: episodeDurationMin * 60,
+        script_word_count: screenplayWordTarget(runtimeContract),
+        target_duration_sec: runtimeContract.target_duration_sec,
         total_episode_capacity: totalSeasons * episodesPerSeason,
         target_episode_count: bounded(bible.target_episode_count, totalSeasons * episodesPerSeason, 1, 50000),
       };
@@ -566,6 +569,7 @@ async function resolveDynamicPromptAndInfra(
     seasonPromptOverride,
     imagePromptSeasonOverride,
     seriesConfig,
+    runtimeContract,
   };
 }
 
@@ -620,6 +624,7 @@ export async function submitAnimeCommand(
     episodeNo,
     seasonNo
   );
+  const runtimeContract = dynamicCtx.runtimeContract;
 
   const payloadObj = (params.body.payload ?? {}) as Record<string, unknown>;
   const baseHash = typeof payloadObj.base_hash === 'string'
@@ -694,10 +699,7 @@ export async function submitAnimeCommand(
     prompt_text: resolvedImageSystemPrompt,
   };
 
-  const explicitTargetSec = Number(payloadObj.target_duration_sec ?? payloadObj.targetDurationSec);
-  const canonicalTargetSec = Number.isFinite(explicitTargetSec) && explicitTargetSec > 0
-    ? Math.max(15, Math.min(6 * 60 * 60, Math.round(explicitTargetSec)))
-    : Number(dynamicCtx.seriesConfig.target_duration_sec) || 1440;
+  const canonicalTargetSec = runtimeContract.target_duration_sec;
 
   const projectStyle = {
     ...(params.body.project_style ?? {}),
@@ -732,7 +734,8 @@ export async function submitAnimeCommand(
     custom_system_prompt: resolvedCustomSystemPrompt,
     image_system_prompt: resolvedImageSystemPrompt,
     image_prompt_config: imagePromptConfig,
-    series_config: dynamicCtx.seriesConfig,
+    series_config: { ...dynamicCtx.seriesConfig, runtime_contract: runtimeContract },
+    runtime_contract: runtimeContract,
     total_seasons: dynamicCtx.seriesConfig.total_seasons,
     episodes_per_season: dynamicCtx.seriesConfig.episodes_per_season,
     episode_duration_min: dynamicCtx.seriesConfig.episode_duration_min,
@@ -802,8 +805,9 @@ export async function submitAnimeCommand(
     image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
-    series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec },
+    series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec, runtime_contract: runtimeContract },
     target_duration_sec: canonicalTargetSec,
+    runtime_contract: runtimeContract,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},
@@ -854,8 +858,9 @@ export async function submitAnimeCommand(
     image_prompt_config: imagePromptConfig,
     system_prompt_config: systemPromptConfig,
     project_style: projectStyle,
-    series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec },
+    series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec, runtime_contract: runtimeContract },
     target_duration_sec: canonicalTargetSec,
+    runtime_contract: runtimeContract,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},

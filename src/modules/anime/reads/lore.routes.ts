@@ -10,6 +10,7 @@ import { isByodFirstEnabled, resolveProjectDataPlaneById } from '../tenant/tenan
 import { buildScopedDbRequest } from '../internal/workflowGateway.db';
 import { executeTenantDbRequest } from '../internal/workflowGateway.tenantDb';
 import { resolveRequestTenant } from '../tenant/tenant.service';
+import { buildRuntimeContract, MAX_EPISODE_DURATION_MIN, screenplayWordTarget } from '../runtime/runtimeContract';
 
 const READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
 const WRITE_ROLES = ['owner', 'admin', 'editor'];
@@ -299,6 +300,8 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
 
       const visualMedium = String(body.visual_medium || 'ANIME').toUpperCase();
       const genre = String(body.genre || 'Action / Fantasy');
+      const episodeDurationMin = normalizeGenerationSetting(body.episode_duration_min, 24, 1, MAX_EPISODE_DURATION_MIN);
+      const runtimeContract = buildRuntimeContract(episodeDurationMin);
       const initialBible = {
         ...(body.story_bible && typeof body.story_bible === 'object' ? body.story_bible : {}),
         visual_medium: visualMedium,
@@ -309,8 +312,10 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         budget_ceiling: Number(body.budget_ceiling ?? 1000),
         ...(body.cover_image_url ? { cover_image_url: body.cover_image_url } : {}),
         target_episode_count: normalizeGenerationSetting(body.target_episode_count, 12, 1, 500),
-        episode_duration_min: normalizeGenerationSetting(body.episode_duration_min, 24, 1, 120),
-        script_word_count: normalizeGenerationSetting(body.script_word_count, 1500, 100, 20000),
+        episode_duration_min: episodeDurationMin,
+        target_duration_sec: runtimeContract.target_duration_sec,
+        runtime_contract: runtimeContract,
+        script_word_count: screenplayWordTarget(runtimeContract),
         total_seasons: body.total_seasons !== undefined
           ? requireIntegerSetting(body.total_seasons, 'Total seasons', 1, 100)
           : normalizeGenerationSetting(body.story_bible?.total_seasons, 1, 1, 100),
@@ -419,10 +424,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
           ? { target_episode_count: normalizeGenerationSetting(body.target_episode_count, 12, 1, 500) }
           : {}),
         ...(body.episode_duration_min !== undefined
-          ? { episode_duration_min: normalizeGenerationSetting(body.episode_duration_min, 24, 1, 120) }
-          : {}),
-        ...(body.script_word_count !== undefined
-          ? { script_word_count: normalizeGenerationSetting(body.script_word_count, 1500, 100, 20000) }
+          ? { episode_duration_min: normalizeGenerationSetting(body.episode_duration_min, 24, 1, MAX_EPISODE_DURATION_MIN) }
           : {}),
         ...(body.total_seasons !== undefined
           ? { total_seasons: requireIntegerSetting(body.total_seasons, 'Total seasons', 1, 100) }
@@ -437,6 +439,18 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
             : {};
         })(),
       };
+
+      const resolvedDurationMin = normalizeGenerationSetting(
+        updatedBible.episode_duration_min,
+        24,
+        1,
+        MAX_EPISODE_DURATION_MIN
+      );
+      const resolvedRuntimeContract = buildRuntimeContract(resolvedDurationMin);
+      updatedBible.episode_duration_min = resolvedDurationMin;
+      updatedBible.target_duration_sec = resolvedRuntimeContract.target_duration_sec;
+      updatedBible.runtime_contract = resolvedRuntimeContract;
+      updatedBible.script_word_count = screenplayWordTarget(resolvedRuntimeContract);
 
       const patchPayload: Record<string, any> = {
         story_bible: updatedBible,
@@ -481,8 +495,10 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
           budget_ceiling: Number(updatedBible.budget_ceiling ?? 1000),
           total_seasons: Number(updatedBible.total_seasons ?? 1),
           episodes_per_season: Number(updatedBible.episodes_per_season ?? 12),
-          episode_duration_min: Number(updatedBible.episode_duration_min ?? 24),
-          script_word_count: Number(updatedBible.script_word_count ?? 1500),
+          episode_duration_min: resolvedDurationMin,
+          target_duration_sec: resolvedRuntimeContract.target_duration_sec,
+          runtime_contract: resolvedRuntimeContract,
+          script_word_count: screenplayWordTarget(resolvedRuntimeContract),
           total_episode_capacity: Number(updatedBible.total_seasons ?? 1) * Number(updatedBible.episodes_per_season ?? 12),
         },
       };

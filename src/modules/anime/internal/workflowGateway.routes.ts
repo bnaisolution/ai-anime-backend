@@ -184,17 +184,74 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
     if (!body || typeof body !== 'object') authInvalid('Request body is required.');
     verifyWorkflowGatewayRequest(request, false);
     const binding = await resolveCommandBinding(body);
-    const providerName = String(body.provider || '').toLowerCase();
     const userInfrastructure = await getDecryptedMapForUser(binding.user_id);
-    const providerConfig = userInfrastructure[providerName];
-    const userApiKey = providerConfig && typeof providerConfig === 'object'
-      ? providerConfig.api_key
-      : null;
+    const apiKeyFor = (providerName: string): string | null => {
+      const providerConfig = userInfrastructure[String(providerName || '').toLowerCase()];
+      return providerConfig && typeof providerConfig === 'object' && typeof providerConfig.api_key === 'string'
+        ? providerConfig.api_key
+        : null;
+    };
+
+    if (Array.isArray(body.batch) && body.batch.length > 0) {
+      const batch = body.batch as any[];
+      if (batch.length > 12) {
+        throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'LLM batch exceeds the supported limit.' });
+      }
+      const parsedResponses: any[] = await Promise.all(batch.map(async (item: any, index: number) => {
+        const providerName = String(item.provider || body.provider || '').toLowerCase();
+        const providerRequest = buildProviderRequest({
+          provider: providerName,
+          path: item.path,
+          body: item.body,
+          apiKey: apiKeyFor(providerName),
+        });
+        const response = await fetch(providerRequest.url, {
+          method: 'POST',
+          headers: providerRequest.headers,
+          body: JSON.stringify(item.body),
+        });
+        const text = await response.text();
+        if (!response.ok) {
+          throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: `LLM batch item ${index + 1} failed with status ${response.status}.` });
+        }
+        let providerJson: any;
+        try {
+          providerJson = JSON.parse(text);
+        } catch {
+          throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} returned invalid JSON.` });
+        }
+        const content = providerJson?.choices?.[0]?.message?.content;
+        if (typeof content !== 'string' || !content.trim()) {
+          throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} returned no content.` });
+        }
+        const clean = content.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
+        try {
+          return JSON.parse(clean);
+        } catch {
+          throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} content is not valid JSON.` });
+        }
+      }));
+      const base = parsedResponses[0] && typeof parsedResponses[0] === 'object' ? { ...parsedResponses[0] } : {};
+      const mergedScenes = parsedResponses.flatMap((item) => Array.isArray(item?.scenes) ? item.scenes : []);
+      if (mergedScenes.length === 0) {
+        throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'LLM batch returned no scenes.' });
+      }
+      mergedScenes.forEach((scene: any, index: number) => {
+        if (scene && typeof scene === 'object') scene.scene_order = index + 1;
+      });
+      base.scenes = mergedScenes;
+      base.batch_count = parsedResponses.length;
+      reply.status(200).header('content-type', 'application/json; charset=utf-8');
+      reply.send(JSON.stringify({ choices: [{ message: { content: JSON.stringify(base) } }], batch: { count: parsedResponses.length } }));
+      return;
+    }
+
+    const providerName = String(body.provider || '').toLowerCase();
     const providerRequest = buildProviderRequest({
-      provider: body.provider,
+      provider: providerName,
       path: body.path,
       body: body.body,
-      apiKey: typeof userApiKey === 'string' ? userApiKey : null,
+      apiKey: apiKeyFor(providerName),
     });
     const response = await fetch(providerRequest.url, {
       method: 'POST',

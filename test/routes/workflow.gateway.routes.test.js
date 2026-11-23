@@ -101,3 +101,40 @@ test('system token cannot read project tables and project token cannot read syst
   assert.equal(projectOnSystem.statusCode, 401);
   await app.close();
 });
+
+test('LLM gateway batches long-episode scene requests and renumbers merged scenes', async () => {
+  const app = await buildGatewayApp();
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    const content = JSON.stringify({ scenes: [{ scene_order: 1, voice_text: 'a' }, { scene_order: 1, voice_text: 'b' }] });
+    return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const payload = {
+      provider: 'groq',
+      path: '/openai/v1/chat/completions',
+      batch: [
+        { provider: 'groq', path: '/openai/v1/chat/completions', body: { model: 'm', messages: [{ role: 'user', content: 'act 1' }] } },
+        { provider: 'groq', path: '/openai/v1/chat/completions', body: { model: 'm', messages: [{ role: 'user', content: 'act 2' }] } },
+      ],
+      command_id: COMMAND_ID,
+      project_id: PROJECT_ID,
+    };
+    const response = await app.inject({ method: 'POST', url: '/v1/anime/internal/workflow/llm', headers: headers('n8'), payload });
+    assert.equal(response.statusCode, 200);
+    assert.equal(calls.length, 2);
+    const out = JSON.parse(response.payload);
+    assert.equal(out.batch.count, 2);
+    const merged = JSON.parse(out.choices[0].message.content);
+    assert.equal(merged.scenes.length, 4);
+    assert.deepEqual(merged.scenes.map((scene) => scene.scene_order), [1, 2, 3, 4]);
+  } finally {
+    global.fetch = originalFetch;
+    await app.close();
+  }
+});

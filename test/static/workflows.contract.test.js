@@ -147,6 +147,36 @@ test('WF-02 forwards the IMAGE prompt contract to WF-03', () => {
   assert.match(formatter.parameters.jsCode, /image_prompt_config/);
 });
 
+test('WF-02 derives script length from runtime contract and batches long episodes', () => {
+  const wf02 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf02.json');
+  const assembly = wf02.json.nodes.find((node) => node.name === 'Context Assembly & Prompt Constructor');
+  const parser = wf02.json.nodes.find((node) => node.name === 'Stage 1 Parser & Stage 2 Prompt Builder');
+  assert.ok(assembly && parser);
+  assert.doesNotMatch(assembly.parameters.jsCode, /30 to 50 granular beats/);
+  assert.doesNotMatch(assembly.parameters.jsCode, /at least \$\{seriesConfig\.script_word_count\}/);
+  assert.match(assembly.parameters.jsCode, /runtime_contract/);
+  assert.match(assembly.parameters.jsCode, /beat_range/);
+  assert.match(assembly.parameters.jsCode, /screenplay_word_range/);
+  assert.match(parser.parameters.jsCode, /batch: __stage2Batch/);
+  assert.match(parser.parameters.jsCode, /batch: __stage2FallbackBatch/);
+  assert.match(parser.parameters.jsCode, /act_count/);
+});
+
+test('WF-02 forwards canonical duration to WF-03 and WF-03 enforces the duration gate', () => {
+  const wf02 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf02.json');
+  const wf03 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf03.json');
+  const formatter = wf02.json.nodes.find((node) => node.name === 'WF-03 Dispatch & Output Formatter');
+  const normalizer = wf03.json.nodes.find((node) => node.name === 'Normalize Input & Enforce SAVE Mode');
+  const selector = wf03.json.nodes.find((node) => node.name === 'Audio Selector (3-Tier Fallback) & Scene Merge Gate');
+  const verifier = wf03.json.nodes.find((node) => node.name === 'Verify Final Master Video & Prepare DB Finalization');
+  assert.match(formatter.parameters.jsCode, /target_duration_sec: state\.target_duration_sec/);
+  assert.match(formatter.parameters.jsCode, /runtime_contract: state\.runtime_contract/);
+  assert.match(normalizer.parameters.jsCode, /target_duration_sec/);
+  assert.match(selector.parameters.jsCode, /target_duration_sec/);
+  assert.match(verifier.parameters.jsCode, /Duration Gate Failed/);
+  assert.match(verifier.parameters.jsCode, /duration_status/);
+});
+
 test('WF-03 composes the IMAGE system prompt into scene visual prompts', () => {
   const wf03 = loadWorkflows(DIR).find((workflow) => workflow.name === 'storywf03.json');
   const normalizer = wf03.json.nodes.find((node) => node.name === 'Normalize Input & Enforce SAVE Mode');

@@ -45,14 +45,35 @@ test('Director project setup validates season and runtime bounds', () => {
     project_format: 'movie',
     total_seasons: 2,
     episodes_per_season: 8,
-    episode_duration_min: 45,
+    episode_duration_min: 24,
     script_word_count: 2500,
     budget_ceiling: 500,
   });
   assert.equal(fields.bible.project_format, 'MOVIE');
   assert.equal(fields.bible.total_seasons, 2);
   assert.equal(fields.bible.episodes_per_season, 8);
-  assert.equal(fields.bible.episode_duration_min, 45);
-  assert.equal(fields.bible.script_word_count, 2500);
+  assert.equal(fields.bible.episode_duration_min, 24);
+  assert.equal(fields.bible.script_word_count, 5808);
+  assert.equal(fields.bible.target_duration_sec, 1440);
+  assert.equal(fields.bible.runtime_contract.dialogue_word_budget, 3168);
   assert.equal(fields.bible.budget_ceiling, 500);
+  assert.throws(
+    () => setup.normalizeProjectSetup({ name: 'Too long', episode_duration_min: 31 }),
+    (error) => error.code === 'OUTPUT_INVALID'
+  );
+});
+
+test('Runtime contract scales from 1 minute to 30 minutes', () => {
+  const one = setup.normalizeProjectSetup({ name: 'One', episode_duration_min: 1 }).bible;
+  assert.equal(one.target_duration_sec, 60);
+  assert.equal(one.runtime_contract.dialogue_word_budget, 132);
+  assert.equal(one.script_word_count, 242);
+  assert.deepEqual(one.runtime_contract.act_count, 1);
+
+  const thirty = setup.normalizeProjectSetup({ name: 'Thirty', episode_duration_min: 30 }).bible;
+  assert.equal(thirty.target_duration_sec, 1800);
+  assert.equal(thirty.runtime_contract.dialogue_word_budget, 3960);
+  assert.equal(thirty.script_word_count, 7260);
+  assert.equal(thirty.runtime_contract.act_count, 6);
+  assert.equal(thirty.runtime_contract.render_tier, 'HYBRID');
 });
