@@ -75,3 +75,20 @@ test('Android Director timeline consumes failure reason and retry state', () => 
   assert.match(api, /retryable/);
   assert.match(api, /director\/timeline\/\{command_id\}\/retry/);
 });
+
+test('episode QC approval honours WF-11 human-pending state and blocks direct qc_status PATCH', () => {
+  const route = fs.readFileSync(path.join(root, 'src/modules/anime/reads/lore.routes.ts'), 'utf8');
+  assert.match(route, /PENDING_HUMAN_APPROVAL/);
+  assert.match(route, /patch\.qc_status = 'APPROVED'/);
+  assert.doesNotMatch(route, /patchData\.qc_status = body\.qc_status/);
+});
+
+test('Android episode planning forwards the selected season to the command gateway', () => {
+  const planner = fs.readFileSync(path.join(androidUi, 'episode/EpisodePlannerScreen.kt'), 'utf8');
+  assert.match(planner, /submitStudioCommand\([\s\S]*seasonNo\s*=\s*selectedSeason/);
+});
+
+test('Director clip context is filtered by season', () => {
+  const context = fs.readFileSync(path.join(root, 'src/modules/ai/director/director.context.ts'), 'utf8');
+  assert.match(context, /from\('clips'\)[\s\S]{0,300}\.eq\('season_no',\s*targetSeason\)/, 'clips query must filter season');
+});

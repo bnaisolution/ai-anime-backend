@@ -753,9 +753,13 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       };
       if (typeof body.title === 'string') patchData.title = body.title.trim();
       if (typeof body.synopsis === 'string') patchData.synopsis = body.synopsis;
-      if (typeof body.status === 'string') patchData.current_state = body.status;
-      if (typeof body.current_state === 'string') patchData.current_state = body.current_state;
-      if (typeof body.qc_status === 'string') patchData.qc_status = body.qc_status;
+      // Episode state is workflow-owned. Clients must use approval/publish commands; never PATCH state.
+      if (Object.prototype.hasOwnProperty.call(body, 'status') || Object.prototype.hasOwnProperty.call(body, 'current_state')) {
+        throw new AnimeError({
+          code: AnimeErrorCode.OUTPUT_INVALID,
+          message: 'Episode state is workflow-owned; use the approval or publish command endpoints.',
+        });
+      }
 
       if (body.script_json !== undefined || typeof body.script_text === 'string' || body.prompt_id !== undefined) {
         patchData.script_json = {
@@ -802,7 +806,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
 
       const { data: episode, error: fetchError } = await animeSupabase
         .from('episodes')
-        .select('episode_no, season_no, qc_status')
+        .select('episode_no, season_no, qc_status, output_media')
         .eq('project_id', projectId)
         .eq('season_no', seasonNo)
         .eq('episode_no', episodeNo)
@@ -812,18 +816,21 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       }
       if (decision === 'APPROVED') {
         const qc = String((episode as Record<string, unknown>).qc_status || '').toUpperCase();
-        if (!['PASS', 'PASSED', 'APPROVED', 'QC_PASSED'].includes(qc)) {
+        // PASS-family = automated QC passed; PENDING_HUMAN_APPROVAL = WF-11 pass awaiting this human gate.
+        if (!['PASS', 'PASSED', 'APPROVED', 'QC_PASSED', 'PENDING_HUMAN_APPROVAL'].includes(qc)) {
           throw new AnimeError({ code: AnimeErrorCode.QC_FAILED, httpStatus: 422, message: 'Episode must pass QC before approval.' });
         }
       }
 
       const userId = await requireAuthenticatedUserId(request);
+      const patch: Record<string, unknown> = {
+        approval_status: decision,
+        updated_at: new Date().toISOString(),
+      };
+      if (decision === 'APPROVED') patch.qc_status = 'APPROVED';
       const { data: updated, error: updateError } = await animeSupabase
         .from('episodes')
-        .update({
-          approval_status: decision,
-          updated_at: new Date().toISOString(),
-        })
+        .update(patch)
         .eq('project_id', projectId)
         .eq('season_no', seasonNo)
         .eq('episode_no', episodeNo)
@@ -831,6 +838,35 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         .single();
       if (updateError || !updated) {
         throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to update episode approval.', cause: updateError });
+      }
+      // Close the WF-11 human-review task for this exact master so the queue does not stay stuck.
+      try {
+        const outputMedia = (episode as Record<string, any>).output_media ?? {};
+        const mediaUrl = String(outputMedia.final_video_url || outputMedia.master_video_url || '');
+        const { data: tasks } = await animeSupabase
+          .from('pending_actions')
+          .select('id, action_payload')
+          .eq('project_id', projectId)
+          .eq('action_type', 'QC_HUMAN_APPROVAL')
+          .in('status', ['MANUAL_REVIEW', 'PENDING', 'pending']);
+        const matches = (Array.isArray(tasks) ? tasks : []).filter((task: any) => {
+          const payload = task?.action_payload ?? {};
+          const taskSeason = Number(payload.season_no ?? payload.season_number);
+          const taskEpisode = Number(payload.episode_no ?? payload.episode_number);
+          const taskMediaUrl = String(payload.media_url || payload.final_video_url || '');
+          if (!Number.isFinite(taskSeason) || !Number.isFinite(taskEpisode)) return false;
+          if (taskSeason !== seasonNo || taskEpisode !== episodeNo) return false;
+          return Boolean(mediaUrl) && taskMediaUrl === mediaUrl;
+        });
+        for (const task of matches) {
+          await animeSupabase
+            .from('pending_actions')
+            .update({ status: decision === 'APPROVED' ? 'APPROVED' : 'REJECTED' })
+            .eq('project_id', projectId)
+            .eq('id', task.id);
+        }
+      } catch (_closeError) {
+        // Review-queue cleanup is best-effort; the episode approval above is authoritative.
       }
       return { data: { ...updated, approved_by: decision === 'APPROVED' ? userId : null } };
     }

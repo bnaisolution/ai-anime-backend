@@ -49,5 +49,7 @@ test('command persistence stores redacted payloads and dispatch hydrates at the 
   assert.match(COMMANDS, /outbox_payload: persistedOutboxPayload/);
   assert.match(DISPATCHER, /const dispatchPayload = await hydrateDispatchPayload\(payload\)/);
   assert.match(DISPATCHER, /dispatchToWf00\(dispatchPayload\)/);
-  assert.match(DISPATCHER, /redactSensitivePayload\(\{ \.\.\.\(payload\.payload \|\| \{\}\), n8n_response/);
+  assert.match(DISPATCHER, /export function buildPersistedCommandPayload/);
+  assert.match(DISPATCHER, /redactSensitivePayload\(\{\s*\.\.\.nested,\s*\.\.\.flat,/);
+  assert.match(DISPATCHER, /persistedCommandPayload = buildPersistedCommandPayload\(payload, dispatchResult\)/);
 });

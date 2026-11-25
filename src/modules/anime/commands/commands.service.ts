@@ -71,10 +71,31 @@ async function assertProjectSetupForProduction(_userId: string, body: CreateComm
   }
 }
 
+// Season/episode must never be assumed as 1: clients may send them top-level or inside payload.
+export function resolveRequestedSeasonNo(body: CreateCommandBody): number {
+  const payload = (body.payload ?? {}) as Record<string, unknown>;
+  const candidates = [body.season_no, payload.season_no, payload.seasonNo, payload.season_number];
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+    if (Number.isInteger(value) && value > 0) return value;
+  }
+  return 1;
+}
+
+export function resolveRequestedEpisodeNo(body: CreateCommandBody): number {
+  const payload = (body.payload ?? {}) as Record<string, unknown>;
+  const candidates = [body.episode_no, payload.episode_no, payload.episodeNo, payload.episode_number];
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+    if (Number.isInteger(value) && value > 0) return value;
+  }
+  return 1;
+}
+
 async function assertPublishApproval(userId: string, body: CreateCommandBody): Promise<void> {
   if (body.intent !== CommandIntent.PUBLISH_NOW) return;
-  const seasonNo = Number(body.season_no || 1);
-  const episodeNo = Number(body.episode_no || 1);
+  const seasonNo = resolveRequestedSeasonNo(body);
+  const episodeNo = resolveRequestedEpisodeNo(body);
   const { data: episode, error } = await animeSupabase
     .from('episodes')
     .select('episode_no, season_no, qc_status, approval_status, current_state')
@@ -614,8 +635,8 @@ export async function submitAnimeCommand(
   const effectiveMode =
     params.body.mode ??
     (params.body.intent === CommandIntent.QUICK_GENERATE_REEL ? 'QUICK' : 'SAVE');
-  const episodeNo = params.body.episode_no ?? 1;
-  const seasonNo = params.body.season_no ?? 1;
+  const episodeNo = resolveRequestedEpisodeNo(params.body);
+  const seasonNo = resolveRequestedSeasonNo(params.body);
 
   const dynamicCtx = await resolveDynamicPromptAndInfra(
     params.userId,
