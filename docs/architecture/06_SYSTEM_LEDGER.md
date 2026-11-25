@@ -30,7 +30,6 @@
 5. Wire `storage_choice`, `render_profile`, CPU target in WF-03; prove one real S3 upload.
 6. Phase 8 billing/plan enforcement/export-delete; Phase 9 SLO + canary + rollback.
 
-
 ## 2026-11-22 REAL_HUMAN 60s Master + GPU/CPU Hardening
 - REAL_HUMAN project `b479db60-75c4-4e46-b5e4-89a271740cc8` / episode `16e059e2-1c26-4e15-b044-20acfa9c97c2` now has a verified 60s master: 1280x720 h264 24fps, AAC 96kHz stereo, 13,809,345 bytes, `freezedetect` clean, mean audio -17.0 dB / max -1.3 dB.
 - WF-03 execution `128919` succeeded on resume; all four clips `COMPLETED/MIXED`, episode `MIXED`, QC `PENDING`, Telegram master present.
@@ -41,3 +40,10 @@
 - Tunnel hardening verified live: `tunnel_registered=true`, `tunnel_last_error=null`, 2 GPUs, SDXL + AnimateDiff prewarmed. CPU worker URL refreshed to `rely-midnight-variation-ctrl.trycloudflare.com` in encrypted infrastructure.
 - Backend `npm run build` + `npm run test:safe` (209 unit + 109 route + 155 static) green.
 - Git heads: backend `c755b90`; CPU worker `95094da`; audio assets `02b3a4f`. Verified master also at `/home/ec2-user/realhuman10-master.mp4`.
+
+## 2026-11-23/24 Seven-Wave Remediation (branch remediation/2026-11-23)
+- W1+W2: WF-00 season/title/synopsis + season-aware idempotency lock; WF-11 QC queries filter `season_no`; 1–30 min contract, act batching and duration gates verified with matrix tests.
+- W3 (local GPU worker): image-conditioned AnimateDiff v2v, honest `reference_conditioned`/lipsync/expression/stage status; `py_compile` OK, GPU run UNVERIFIED.
+- W4 (CPU worker): `ducking_db` drives BGM gain; ffmpeg volumedetect `audio_stats`; 32 pytest pass, live render UNVERIFIED.
+- W5: QC `PENDING` root cause fixed — supervisor reads nested `callback.result` media, merges `output_media` (duration/size/telegram preserved), enqueues idempotent RUN_QC; WF-11 stops substituting expected duration; approval accepts `PENDING_HUMAN_APPROVAL`, writes `qc_status=APPROVED`, closes pending task; client `qc_status` PATCH blocked.
+- W6+W7: Android QC is season-aware and approves via canonical endpoint (CI UNVERIFIED); outbox lease + migration 010 RLS grants verified in source/static, live RLS UNVERIFIED. Tests: backend unit 216, routes 110, static 163 green.
