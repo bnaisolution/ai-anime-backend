@@ -130,3 +130,112 @@ test('PUBLISH_NOW accepts an explicit published callback before episode state ca
   assert.equal(result.next_status, 'SUCCEEDED');
   assert.equal(state.calls.find((call) => call.table === 'api_commands' && call.action === 'update').payload.status, 'SUCCEEDED');
 });
+
+test('reconcileCommand reads master media nested under callback.result (WF-03 shape)', async () => {
+  const existing = { output_media: { thumbnail_url: 'https://cdn/thumb.jpg', telegram_file_id: 'tg-old' } };
+  const rpcCalls = [];
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.table === 'api_commands' && call.action === 'select') {
+      return { data: command({ intent: 'GENERATE_EPISODE', payload: { episode_no: 2, season_no: 3 } }), error: null };
+    }
+    if (call.table === 'episode_states' && call.action === 'select') return { data: { current_state: 'MIXED', episode_no: 2 }, error: null };
+    if (call.table === 'pending_actions' && call.action === 'select') return { data: [], error: null };
+    if (call.table === 'episodes' && call.action === 'select') return { data: existing, error: null };
+    return { data: null, error: null };
+  }, (name, args) => {
+    rpcCalls.push({ name, args });
+    return { data: { id: args.p_command_id }, error: null };
+  });
+  const result = await reconcileCommand({
+    project_id: PROJECT,
+    command_id: COMMAND,
+    callback_payload: {
+      status: 'COMPLETED',
+      result: {
+        status: 'MIXED',
+        qc_status: 'PENDING',
+        final_video_url: 'https://cdn/master.mp4',
+        output_media: {
+          master_video_url: 'https://cdn/master.mp4',
+          actual_duration_sec: 600,
+          target_duration_sec: 600,
+          file_size_bytes: 12345,
+          telegram_file_id: 'tg-new',
+          duration_status: 'PASS',
+        },
+        audio_stats: { mean_volume_db: -14.2, max_volume_db: -0.5, clipping_detected: false, measured: true },
+      },
+    },
+  });
+  assert.equal(result.next_status, 'SUCCEEDED');
+  const episodeUpdate = state.calls.find((call) => call.table === 'episodes' && call.action === 'update');
+  assert.equal(episodeUpdate.payload.output_media.final_video_url, 'https://cdn/master.mp4');
+  assert.equal(episodeUpdate.payload.output_media.duration_sec, 600);
+  assert.equal(episodeUpdate.payload.output_media.file_size_bytes, 12345);
+  assert.equal(episodeUpdate.payload.output_media.telegram_file_id, 'tg-new');
+  assert.equal(episodeUpdate.payload.output_media.thumbnail_url, 'https://cdn/thumb.jpg');
+  assert.deepEqual(episodeUpdate.payload.output_media.audio_stats, {
+    mean_volume_db: -14.2,
+    max_volume_db: -0.5,
+    clipping_detected: false,
+    measured: true,
+  });
+  const filters = episodeUpdate.filters.filter((filter) => filter.op === 'eq').map((filter) => [filter.col, filter.value]);
+  assert.deepEqual(filters, [['project_id', PROJECT], ['season_no', 3], ['episode_no', 2]]);
+  const autoQc = rpcCalls.find((call) => call.name === 'insert_anime_command_atomic');
+  assert.ok(autoQc, 'auto QC command must be enqueued');
+  assert.equal(autoQc.args.p_intent, 'RUN_QC');
+  assert.equal(autoQc.args.p_payload.season_no, 3);
+  assert.equal(autoQc.args.p_payload.episode_no, 2);
+  assert.equal(autoQc.args.p_payload.media_url, 'https://cdn/master.mp4');
+});
+
+test('reconcileCommand does not enqueue auto QC without a real master URL', async () => {
+  const rpcCalls = [];
+  installFakeSupabase(async (call) => {
+    if (call.table === 'api_commands' && call.action === 'select') {
+      return { data: command({ intent: 'GENERATE_EPISODE', payload: { episode_no: 1, season_no: 1 } }), error: null };
+    }
+    if (call.table === 'episode_states' && call.action === 'select') return { data: { current_state: 'MIXED', episode_no: 1 }, error: null };
+    if (call.table === 'pending_actions' && call.action === 'select') return { data: [], error: null };
+    return { data: null, error: null };
+  }, (name, args) => {
+    rpcCalls.push({ name, args });
+    return { data: null, error: null };
+  });
+  await reconcileCommand({ project_id: PROJECT, command_id: COMMAND, callback_payload: { status: 'COMPLETED' } });
+  assert.equal(rpcCalls.length, 0);
+});
+
+
+test('reconcileCommand schedules a durable outbox retry when auto QC enqueue fails', async () => {
+  const { state } = installFakeSupabase(async (call) => {
+    if (call.table === 'api_commands' && call.action === 'select') {
+      return { data: command({ intent: 'GENERATE_EPISODE', payload: { episode_no: 2, season_no: 3 } }), error: null };
+    }
+    if (call.table === 'episode_states' && call.action === 'select') return { data: { current_state: 'MIXED', episode_no: 2 }, error: null };
+    if (call.table === 'pending_actions' && call.action === 'select') return { data: [], error: null };
+    if (call.table === 'episodes' && call.action === 'select') return { data: null, error: null };
+    return { data: null, error: null };
+  }, () => ({ data: null, error: { code: 'XX000', message: 'atomic insert unavailable' } }));
+
+  await reconcileCommand({
+    project_id: PROJECT,
+    command_id: COMMAND,
+    callback_payload: {
+      status: 'COMPLETED',
+      result: {
+        final_video_url: 'https://cdn/master.mp4',
+        output_media: { file_size_bytes: 12345, actual_duration_sec: 600 },
+      },
+    },
+  });
+
+  const retry = state.calls.find((call) => call.table === 'outbox_events' && call.action === 'insert');
+  assert.ok(retry, 'auto QC retry event must be inserted');
+  assert.equal(retry.payload.type, 'auto_qc_enqueue');
+  assert.equal(retry.payload.payload.intent, 'RUN_QC');
+  assert.equal(retry.payload.payload.season_no, 3);
+  assert.equal(retry.payload.payload.episode_no, 2);
+  assert.equal(retry.payload.payload.command_payload.media_url, 'https://cdn/master.mp4');
+});

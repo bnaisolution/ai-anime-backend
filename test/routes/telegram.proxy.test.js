@@ -22,6 +22,10 @@ function mediaHandler(options = {}) {
   const clipProjectId = Object.prototype.hasOwnProperty.call(options, 'clipProjectId') ? options.clipProjectId : null;
   const episodeProjectId = Object.prototype.hasOwnProperty.call(options, 'episodeProjectId') ? options.episodeProjectId : null;
   const published = options.published === true;
+  const currentState = options.currentState ?? (published ? 'PUBLISHED' : 'MIXED');
+  const publishedAt = Object.prototype.hasOwnProperty.call(options, 'publishedAt')
+    ? options.publishedAt
+    : (published ? '2026-11-07T00:00:00.000Z' : null);
   const projectOwner = Object.prototype.hasOwnProperty.call(options, 'projectOwner') ? options.projectOwner : OWNER;
 
   return async (call) => {
@@ -34,8 +38,8 @@ function mediaHandler(options = {}) {
       return {
         data: matches && episodeProjectId ? [{
           project_id: episodeProjectId,
-          current_state: published ? 'PUBLISHED' : 'MIXED',
-          published_at: published ? '2026-11-07T00:00:00.000Z' : null,
+          current_state: currentState,
+          published_at: publishedAt,
         }] : [],
         error: null,
       };
@@ -209,6 +213,16 @@ test('Telegram media proxy returns 404 for an unknown asset and 503 when storage
     });
     assert.equal(response.statusCode, 503);
     assert.equal(response.body.includes(BOT_TOKEN), false);
+    assert.deepEqual(calls, []);
+  });
+});
+
+
+test('Telegram media proxy does not treat current_state PUBLISHED without published_at as public', async () => {
+  const calls = mockFetch([]);
+  await withApp({ episodeProjectId: PROJECT, currentState: 'PUBLISHED', publishedAt: null }, async (app) => {
+    const response = await app.inject({ method: 'GET', url: mediaUrl() });
+    assert.equal(response.statusCode, 401);
     assert.deepEqual(calls, []);
   });
 });

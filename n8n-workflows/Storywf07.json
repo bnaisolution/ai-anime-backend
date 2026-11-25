@@ -70,7 +70,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?select=id,project_id,episode_no,title,script,script_json,output_media,current_state,qc_status,youtube_url,instagram_urls,telegram_file_id&project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.episode_no) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?select=id,project_id,season_no,episode_no,title,script,script_json,output_media,current_state,qc_status,approval_status,youtube_url,instagram_urls,telegram_file_id&project_id=eq.\" + ($json.project_id) + \"&season_no=eq.\" + ($json.season_no) + \"&episode_no=eq.\" + ($json.episode_no) + \"&limit=1\", method: \"GET\", body: null, prefer: null, command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}"
       },
       "onError": "continueErrorOutput",
       "retryOnFail": true,
@@ -684,7 +684,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?project_id=eq.\" + ($json.project_id) + \"&episode_no=eq.\" + ($json.episode_no), method: \"PATCH\", body: { youtube_url: $json.final_yt_url, instagram_urls: $json.final_ig_urls, telegram_file_id: $json.final_tg_msg_id, current_state: 'PUBLISHED', published_at: $json.published_at }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ path: \"/rest/v1/episodes?project_id=eq.\" + ($json.project_id) + \"&season_no=eq.\" + ($json.season_no) + \"&episode_no=eq.\" + ($json.episode_no), method: \"PATCH\", body: { youtube_url: $json.final_yt_url, instagram_urls: $json.final_ig_urls, telegram_file_id: $json.final_tg_msg_id, current_state: 'PUBLISHED', published_at: $json.published_at }, prefer: \"return=minimal\", command_id: $('When Executed by Another Workflow').first().json.command_id || $('When Executed by Another Workflow').first().json.sessionId, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {}
       },
       "onError": "continueErrorOutput"

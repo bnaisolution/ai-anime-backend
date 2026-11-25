@@ -200,3 +200,98 @@ test('WF-01 never writes story_bible directly and only returns an approval patch
   assert.match(saveNodes[0].parameters.jsCode, /base_hash/);
   assert.match(saveNodes[0].parameters.jsCode, /changed_fields/);
 });
+
+test('WF-11 QC reads and writes are season-aware', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'Storywf11.json'), 'utf8'));
+  const targets = workflow.nodes.filter((node) => {
+    const body = JSON.stringify(node.parameters || {});
+    return /\/rest\/v1\/(episodes|episode_states)\?/.test(body);
+  });
+  assert.ok(targets.length >= 5, 'expected episode reads plus QC status writes');
+  for (const node of targets) {
+    const body = JSON.stringify(node.parameters || {});
+    assert.match(body, /season_no=eq\./, `${node.name} must filter by season_no`);
+  }
+  const approvals = targets.filter((node) => /qc_status/.test(JSON.stringify(node.parameters || {})));
+  assert.ok(approvals.length >= 3, 'expected PENDING/REJECTED/APPROVED writes');
+});
+
+test('WF-00 carries season, title and synopsis into the WF-02 dispatch', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'StoryWF-00_Main_Router.json'), 'utf8'));
+  const dispatch = workflow.nodes.find((node) => node.name === 'Dispatch: WF-02 Story Generator');
+  assert.ok(dispatch, 'WF-02 dispatch node exists');
+  const values = dispatch.parameters.workflowInputs.value;
+  assert.match(values.season_number, /json\.season_no/);
+  assert.match(values.episode_title, /episode_title/);
+  assert.match(values.episode_synopsis, /episode_synopsis/);
+  const ingest = workflow.nodes.find((node) => node.name === 'Ingest Gate & Aankh Inspector');
+  assert.match(ingest.parameters.jsCode, /incomingSeasonNo/);
+  assert.match(ingest.parameters.jsCode, /incomingEpisodeTitle/);
+  assert.match(ingest.parameters.jsCode, /incomingEpisodeSynopsis/);
+});
+
+test('WF-00 idempotency lock query is season-aware', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'StoryWF-00_Main_Router.json'), 'utf8'));
+  const lock = workflow.nodes.find((node) => node.name === 'Supabase: Query Episode States Lock');
+  assert.ok(lock, 'episode states lock node exists');
+  const body = JSON.stringify(lock.parameters);
+  assert.match(body, /episode_states\?/);
+  assert.match(body, /season_no=eq\./);
+});
+
+test('WF-11 never substitutes expected duration for the actual master runtime', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'Storywf11.json'), 'utf8'));
+  const inspector = workflow.nodes.find((node) => node.name === 'Automated QC Inspector');
+  assert.ok(inspector, 'Automated QC Inspector exists');
+  const code = inspector.parameters.jsCode;
+  assert.ok(!/actualDuration\s*=\s*Number\([^)]*expectedDuration/.test(code), 'actual duration must not fall back to expected');
+  assert.match(code, /outputMedia\.actual_duration_sec/);
+  assert.match(code, /Actual master duration is missing/);
+  assert.match(code, /Expected duration is missing/);
+});
+
+test('WF-11 accepts the file size shape emitted by WF-03', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'Storywf11.json'), 'utf8'));
+  const inspector = workflow.nodes.find((node) => node.name === 'Automated QC Inspector');
+  assert.match(inspector.parameters.jsCode, /base\.file_size_bytes/);
+});
+
+test('WF-11 accepts extensionless media URLs but still rejects malformed ones', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'Storywf11.json'), 'utf8'));
+  const inspector = workflow.nodes.find((node) => node.name === 'Automated QC Inspector');
+  const code = inspector.parameters.jsCode;
+  assert.ok(!/\.\(mp4\|mov\|mkv\|webm\)/.test(code), 'must not require a video file extension');
+  assert.match(code, /new URL\(resolvedUrl\)/);
+  assert.match(code, /\['http:', 'https:'\]\.includes\(parsedMasterUrl\.protocol\)/);
+});
+
+
+test('WF-07 episode reads and publish writes are season-scoped', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'Storywf07.json'), 'utf8'));
+  const targets = workflow.nodes.filter((node) => {
+    const body = JSON.stringify(node.parameters || {});
+    return /\/rest\/v1\/episodes\?/.test(body);
+  });
+  assert.ok(targets.length >= 2, 'expected episode read and publish write');
+  for (const node of targets) {
+    const body = JSON.stringify(node.parameters || {});
+    assert.match(body, /season_no=eq\./, `${node.name} must filter by season_no`);
+    assert.match(body, /episode_no=eq\./, `${node.name} must filter by episode_no`);
+  }
+});
+
+test('WF-11 human approval task carries exact season and episode identity', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'Storywf11.json'), 'utf8'));
+  const inspector = workflow.nodes.find((node) => node.name === 'Automated QC Inspector');
+  assert.ok(inspector, 'Automated QC Inspector exists');
+  const code = inspector.parameters.jsCode;
+  assert.match(code, /action_payload:\s*\{[^}]*season_no:/);
+  assert.match(code, /action_payload:\s*\{[^}]*episode_no:/);
+});
+
+test('WF-03 forwards CPU audio_stats into persisted output_media', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(DIR, 'storywf03.json'), 'utf8'));
+  const verifier = workflow.nodes.find((node) => node.name === 'Verify Final Master Video & Prepare DB Finalization');
+  assert.ok(verifier, 'final verifier exists');
+  assert.match(verifier.parameters.jsCode, /audio_stats:\s*ffmpegResp\.audio_stats/);
+});

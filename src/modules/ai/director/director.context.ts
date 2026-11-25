@@ -204,6 +204,7 @@ export async function buildDirectorContext(
     .from('clips')
     .select('*')
     .eq('project_id', input.projectId)
+    .eq('season_no', targetSeason)
     .eq('episode_no', explicitEpisode)
     .limit(500);
   if (clipsRes.error) clipsRes = { data: [], error: null } as any;

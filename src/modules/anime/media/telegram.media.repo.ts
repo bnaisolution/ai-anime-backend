@@ -11,7 +11,6 @@ const CLIP_FILE_COLUMNS = [
 
 interface EpisodeAccessRow {
   project_id?: string | null;
-  current_state?: string | null;
   published_at?: string | null;
 }
 
@@ -32,11 +31,11 @@ export async function resolveTelegramFileAccess(fileId: string, includePrivateCl
   const episodeResults = await Promise.all([
     animeSupabase
       .from('episodes')
-      .select('project_id,current_state,published_at')
+      .select('project_id,published_at')
       .eq('telegram_file_id', fileId),
     animeSupabase
       .from('episodes')
-      .select('project_id,current_state,published_at')
+      .select('project_id,published_at')
       .eq('output_media->>telegram_file_id', fileId)
   ]);
 
@@ -49,8 +48,7 @@ export async function resolveTelegramFileAccess(fileId: string, includePrivateCl
   for (const episode of episodes) {
     const id = projectId(episode.project_id);
     if (id) projectIds.add(id);
-    const state = String(episode.current_state || '').toUpperCase();
-    if (episode.published_at || state === 'PUBLISHED') published = true;
+    if (episode.published_at) published = true;
   }
 
   if (projectIds.size > 0 || !includePrivateClips) {
