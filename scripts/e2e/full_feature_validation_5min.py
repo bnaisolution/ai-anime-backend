@@ -886,9 +886,6 @@ def infrastructure_payload(project_id):
     gpu_url = (os.environ.get("ANIME_E2E_GPU_URL") or (sessions[0].get("api_endpoint") if sessions else "") or "").rstrip("/")
     gpu_token = os.environ.get("ANIME_E2E_GPU_TOKEN") or (sessions[0].get("worker_token") if sessions else "") or ""
     cpu_url = os.environ.get("ANIME_E2E_CPU_URL", "").rstrip("/")
-    if not cpu_url:
-        raw = urllib.request.urlopen("https://raw.githubusercontent.com/bnaisolution/anime-cpu-worker/ci/worker-url/worker-url.txt", timeout=30).read().decode().strip()
-        cpu_url = raw.rstrip("/")
     telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN") or backend_env("TELEGRAM_BOT_TOKEN")
     telegram_chat = os.environ.get("TELEGRAM_STORAGE_CHAT_ID") or backend_env("TELEGRAM_STORAGE_CHAT_ID")
     worker_token = worker_job_token(project_id)
@@ -908,8 +905,14 @@ def infrastructure_payload(project_id):
 
 
 def run_wf03(project_id, command_id, scene_count, timeout=3600):
+    episode_rows = db(
+        f"episodes?select=target_duration_sec&project_id=eq.{project_id}&season_no=eq.1&episode_no=eq.1&limit=1",
+        project_id=project_id,
+    )
+    target_duration_sec = float((episode_rows[0] if episode_rows else {}).get("target_duration_sec") or 0)
     payload = {
         "project_id": project_id,
+        "target_duration_sec": target_duration_sec,
         "mode": "SAVE",
         "visual_medium": VISUAL_MEDIUM,
         "episode_no": 1,
