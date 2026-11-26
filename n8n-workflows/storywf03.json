@@ -962,7 +962,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/ffmpeg/render-episode', body: ($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload), command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
+        "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/ffmpeg/render-episode', async: true, body: ($('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.ffmpeg_cpu_payload), command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $('Audio Selector (3-Tier Fallback) & Scene Merge Gate').first().json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
           "timeout": 600000
         }
@@ -974,7 +974,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3360,
+        3600,
         432
       ],
       "parameters": {
@@ -1161,7 +1161,7 @@
       ],
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst finalState = __getNodeJson('Verify Final Master Video & Prepare DB Finalization');\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `🎥 **WF-03: Episode ${finalState.episode_no} Production & GitHub FFmpeg Mixing Complete!**`,\n  `📁 **Project ID:** \\`${finalState.project_id}\\` | **Medium:** \\`${finalState.visual_medium}\\` | **State:** \\`MIXED\\``,\n  `📊 **Production & Cache Metrics:**`,\n  `• **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `• **Reused Cache Assets (Rule 9):** ${totalReused}`,\n  `• **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `🎵 **Audio & Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `☁️ **Telegram Storage URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, visual_medium: finalState.visual_medium, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
+        "jsCode": "\nconst __getNodeItem = (n) => { try { if ($(n).item) return $(n).item; } catch (e) {} try { const a = $(n).all(); return (a && a[0]) ? a[0] : { json: {}, binary: {} }; } catch (e2) { return { json: {}, binary: {} }; } };\nconst __getNodeJson = (n) => (__getNodeItem(n).json || {});\nconst finalState = __getNodeJson('Verify Final Master Video & Prepare DB Finalization');\nconst totalReused = Number(finalState.image_cache_hits || 0) + Number(finalState.motion_cache_hits || 0);\nconst totalFallbacks = Number(finalState.bgm_tier_summary?.tier_2_category || 0) + Number(finalState.bgm_tier_summary?.tier_3_default_cc0 || 0) + Number(finalState.bgm_tier_summary?.sfx_fallbacks || 0);\n\nconst summaryText = [\n  `\ud83c\udfa5 **WF-03: Episode ${finalState.episode_no} Production & GitHub FFmpeg Mixing Complete!**`,\n  `\ud83d\udcc1 **Project ID:** \\`${finalState.project_id}\\` | **Medium:** \\`${finalState.visual_medium}\\` | **State:** \\`MIXED\\``,\n  `\ud83d\udcca **Production & Cache Metrics:**`,\n  `\u2022 **Total Scenes Processed:** ${finalState.total_scenes_processed}`,\n  `\u2022 **Reused Cache Assets (Rule 9):** ${totalReused}`,\n  `\u2022 **Surgical Checkpoints Resumed (Rule 29):** ${finalState.surgical_resumed_scenes}`,\n  `\ud83c\udfb5 **Audio & Mastering:** -8dB Dialogue Ducking | 500ms Crossfade | -14 LUFS Normalized`,\n  `\u2601\ufe0f **Telegram Storage URL:** ${finalState.final_video_url}`\n].join('\\n');\n\nreturn { json: { ok: true, status: 'MIXED', qc_status: 'PENDING', workflow_name: 'WF-03', execution_id: $execution.id, project_id: finalState.project_id, episode_no: finalState.episode_no, visual_medium: finalState.visual_medium, total_scenes_processed: finalState.total_scenes_processed, reused_assets_count: totalReused, surgical_resumed_count: finalState.surgical_resumed_scenes, fallback_tracks_used: totalFallbacks, bgm_tier_breakdown: finalState.bgm_tier_summary, final_video_url: finalState.final_video_url, output_media: finalState.output_media, output: summaryText, text: summaryText } };"
       }
     },
     {
@@ -1266,6 +1266,93 @@
       "parameters": {
         "errorMessage": "={{ ($json.error && $json.error.message) || 'Workflow failed; error callback dispatched.' }}"
       }
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "cdb46096-cc8d-404f-ab60-a332e4f66867",
+      "name": "Wait for CPU FFmpeg",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3240,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.ANIME_BACKEND_URL || 'http://backend:3000' }}/v1/anime/internal/workflow/worker/status?job_id={{ encodeURIComponent($json.job_id) }}&command_id={{ encodeURIComponent($json.command_id) }}&project_id={{ encodeURIComponent($json.project_id) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-anime-workflow-token",
+              "value": "={{ $env.ANIME_WORKFLOW_GATEWAY_TOKEN }}"
+            },
+            {
+              "name": "x-anime-timestamp",
+              "value": "={{ $now.toMillis() }}"
+            },
+            {
+              "name": "x-anime-nonce",
+              "value": "={{ $execution.id + ':' + Math.random().toString(36).slice(2) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "c9bf8e11-b788-4086-89d3-8d0872ed8d70",
+      "name": "Check CPU FFmpeg Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3312,
+        432
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.status === 'completed' }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "e5095025-68f0-4fa3-9bf7-a2fbde3b321f",
+      "name": "CPU FFmpeg Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3384,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const payload = ($input.item && $input.item.json) ? $input.item.json : {};\nconst result = payload.result && typeof payload.result === 'object' ? payload.result : payload;\nreturn { json: result };\n"
+      },
+      "id": "a9335475-885c-4b96-9204-0e35908f50c5",
+      "name": "Restore CPU FFmpeg Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3456,
+        300
+      ]
     }
   ],
   "connections": {
@@ -1761,7 +1848,7 @@
       "main": [
         [
           {
-            "node": "Verify Final Master Video & Prepare DB Finalization",
+            "node": "Wait for CPU FFmpeg",
             "type": "main",
             "index": 0
           }
@@ -1874,6 +1961,64 @@
         [
           {
             "node": "Stop: Workflow Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for CPU FFmpeg": {
+      "main": [
+        [
+          {
+            "node": "Check CPU FFmpeg Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check CPU FFmpeg Status": {
+      "main": [
+        [
+          {
+            "node": "CPU FFmpeg Done?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CPU FFmpeg Done?": {
+      "main": [
+        [
+          {
+            "node": "Restore CPU FFmpeg Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for CPU FFmpeg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore CPU FFmpeg Result": {
+      "main": [
+        [
+          {
+            "node": "Verify Final Master Video & Prepare DB Finalization",
             "type": "main",
             "index": 0
           }
