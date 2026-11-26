@@ -8,7 +8,7 @@
 - Worker `main` @ `7430690` (tunnel-URL publish step); static tests green; run-worker active.
 
 ## Current Heads & Infrastructure
-- EC2 t3.small; `ai-backend` + `n8n` healthy. Compose backend image `ec2-user-backend` created 2026-11-26 02:19Z from uncommitted `remediation/2026-11-23` HEAD `8005d9f` (ahead 2; dirty ledger/WF-03/infra/e2e script); old runtime tags `c2de9e8`/`1104d74`. Android `b84efe0`; worker `7430690`.
+- EC2 t3.small; `ai-backend` + `n8n` healthy. Compose backend image `ec2-user-backend` (`sha256:b6ab4832c03033d7f052928329106a550da3fb42799ba53a376240552636c87b`) built 2026-11-26T17:49:20Z from clean `remediation/2026-11-23` HEAD `d7046924ace9508688728da1da1b2365d248f95e`; container `af19c4d46328` started 2026-11-26T17:49:32Z, health 200. Old runtime tags `c2de9e8`/`1104d74`; rollback tag `anime-backend:rollback-pre-d704692`. Android `b84efe0`; worker `7430690`.
 - Central DB `lqdjlcfczjottagobega.supabase.co`; Auth DB `icypjilkcqylgbpmkyes.supabase.co`; migrations 015–021 applied 2026-11-20.
 - n8n: 14 canonical StoryWF active. Backend must join `ec2-user_default` with alias `backend`.
 - BYOD runtime enabled for the dedicated test account; Director setup writes BYOD + central mirror.
@@ -46,4 +46,4 @@
 - W3 (GPU): image-conditioned AnimateDiff v2v + honest `reference_conditioned`/lipsync/stage status; W4 (CPU): `ducking_db` → BGM gain, ffmpeg `audio_stats`; 32 pytest green.
 - W5: QC `PENDING` root cause fixed — supervisor reads nested `callback.result` media, merges `output_media` (duration/size/telegram preserved), enqueues idempotent RUN_QC; WF-11 stops substituting expected duration; approval accepts `PENDING_HUMAN_APPROVAL`, writes `qc_status=APPROVED`, closes pending task; client `qc_status` PATCH blocked.
 - W6+W7: Android QC is season-aware and approves via canonical endpoint (CI UNVERIFIED); outbox lease + migration 010 RLS grants verified in source/static, live RLS UNVERIFIED. Tests: backend unit 216, routes 110, static 163 green.
-- Runtime audit 2026-11-26: live n8n WF-00/02/03/04/05/06/08–13 match repo; WF-01 (4 nodes) + WF-07 (2 nodes: season/approval publish) still drift. 60s v6 run predates deploy → MIXED/PENDING; 300s execution 133507/133508 failed at CPU FFmpeg Branch F with Cloudflare 524 from rotating quick-tunnel URL (GPU scenes completed; WF-02 scene count 0 + hand-seeded fixtures). Next: commit/push dirty tree, deploy by SHA, sync WF-01/07, replace quick tunnel, rerun real E2E.
+- Runtime audit 2026-11-26: live n8n WF-00/02/03/04/05/06/08–13 match repo; WF-01 (4 nodes) + WF-07 (2 nodes: season/approval publish) still drift. 60s v6 run predates deploy → MIXED/PENDING; 300s execution 133507/133508 failed at CPU FFmpeg Branch F with Cloudflare 524 from rotating quick-tunnel URL (GPU scenes completed; WF-02 scene count 0 + hand-seeded fixtures). Phase 1 complete: clean HEAD `d704692` committed/pushed and deployed; next sync WF-01/07, replace quick tunnel, rerun real E2E.
