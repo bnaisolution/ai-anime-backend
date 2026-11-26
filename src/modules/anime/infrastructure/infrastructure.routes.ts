@@ -163,9 +163,6 @@ function evaluatePromptCompatibility(input: {
   if (rule?.models && model && !rule.models.includes(model)) {
     reasons.push(`Genre ${genre} is not compatible with model ${model}.`);
   }
-  if (medium === 'REAL_HUMAN' && model === 'ANIMATEDIFF') {
-    reasons.push('REAL_HUMAN medium cannot be rendered with ANIMATEDIFF.');
-  }
   if ((medium === 'ANIME' || medium === 'MANHWA' || medium === '2D_ANIMATION') && model === 'RUNWAY') {
     reasons.push(`${medium} requires an animation-capable model; RUNWAY is not approved for this medium.`);
   }
@@ -214,16 +211,57 @@ from safetensors.torch import load_file
 from diffusers import StableDiffusionXLPipeline, UNet2DConditionModel, EulerDiscreteScheduler, AnimateDiffPipeline, MotionAdapter
 from diffusers.utils import export_to_video
 
+def scan_input_tree(max_depth: int = 4) -> list:
+    found = []
+    root = "/kaggle/input"
+    if not os.path.isdir(root):
+        return found
+    base_depth = root.rstrip("/").count("/")
+    for dirpath, dirnames, filenames in os.walk(root):
+        depth = dirpath.rstrip("/").count("/") - base_depth
+        if depth >= max_depth:
+            dirnames[:] = []
+        for name in dirnames + filenames:
+            found.append(os.path.join(dirpath, name))
+    return found
+
 def discover_model_paths() -> Dict[str, Optional[str]]:
-    sdxl_matches = glob.glob("/kaggle/input/**/sdxl_lightning_4step_unet.safetensors", recursive=True)
-    anim_matches = glob.glob("/kaggle/input/**/animatediff_lightning_4step_diffusers.safetensors", recursive=True)
-    pulid_matches = glob.glob("/kaggle/input/**/pulid", recursive=True)
-    musetalk_matches = glob.glob("/kaggle/input/**/musetalk", recursive=True)
-    liveportrait_matches = glob.glob("/kaggle/input/**/liveportrait", recursive=True)
-    sdxl_unet = sdxl_matches[0] if sdxl_matches else None
-    base_mount = os.path.dirname(os.path.dirname(sdxl_unet)) if sdxl_unet else "/kaggle/input/anime-engine-models-v1"
-    paths = {"base_mount": base_mount, "sdxl_unet": sdxl_unet, "animatediff_ckpt": anim_matches[0] if anim_matches else None, "pulid_dir": pulid_matches[0] if pulid_matches else None, "musetalk_dir": musetalk_matches[0] if musetalk_matches else None, "liveportrait_dir": liveportrait_matches[0] if liveportrait_matches else None}
-    return paths
+    entries = scan_input_tree()
+    def first_file(*keys):
+        for entry in entries:
+            low = entry.lower()
+            if os.path.isfile(entry) and all(k in low for k in keys):
+                return entry
+        return None
+    def first_dir(*keys):
+        for entry in entries:
+            if os.path.isdir(entry) and all(k in os.path.basename(entry).lower() for k in keys):
+                return entry
+        return None
+    sdxl_unet = first_file("sdxl", "unet") or first_file("sdxl", "lightning") or first_file("4step", "unet")
+    animatediff_ckpt = first_file("animatediff", "lightning", "diffusers") or first_file("animatediff", "lightning") or first_file("animatediff")
+    pulid_dir = first_dir("pulid")
+    musetalk_dir = first_dir("musetalk")
+    liveportrait_dir = first_dir("liveportrait")
+    base_mount = "/kaggle/input/anime-engine-models-v1"
+    if sdxl_unet:
+        parts = sdxl_unet.split("/")
+        if len(parts) > 5 and parts[3] == "datasets":
+            base_mount = "/".join(parts[:6])
+        elif len(parts) >= 4:
+            base_mount = "/".join(parts[:4])
+    return {"base_mount": base_mount, "sdxl_unet": sdxl_unet, "animatediff_ckpt": animatediff_ckpt, "pulid_dir": pulid_dir, "musetalk_dir": musetalk_dir, "liveportrait_dir": liveportrait_dir}
+
+def refresh_model_paths() -> Dict[str, Optional[str]]:
+    global MODEL_PATHS
+    try:
+        fresh = discover_model_paths()
+    except Exception:
+        return MODEL_PATHS
+    for key, value in fresh.items():
+        if value:
+            MODEL_PATHS[key] = value
+    return MODEL_PATHS
 
 MODEL_PATHS = discover_model_paths()
 BACKEND_BASE = "${backendBaseUrl}".rstrip("/")
@@ -352,6 +390,8 @@ class GenerateImageRequest(BaseModel):
     prompt: str
     visual_dna: Optional[Dict[str, Any]] = None
     reference_image_file_id: Optional[str] = None
+    reference_image_url: Optional[str] = None
+    character_code: Optional[str] = None
     fallback_gpu_url: Optional[str] = None
     telegram_upload: Optional[TelegramUploadConfig] = None
     async_mode: bool = False
@@ -425,6 +465,170 @@ def clear_vram(device: str):
     if torch.cuda.is_available():
         with torch.cuda.device(device): torch.cuda.empty_cache()
 
+MEDIUM_PROMPT_TAGS = {
+    "ANIME": "masterpiece anime keyframe, ufotable cel-shaded lighting, crisp lineart, detailed painted background",
+    "MANHWA": "korean manhwa keyframe, refined semi-realistic anatomy, glossy expressive eyes, precise digital lineart, dramatic rim lighting",
+    "3D": "high-end 3D animation still, physically based materials, subsurface scattering, sculpted anatomy, cinematic global illumination",
+    "2D_ANIMATION": "hand-drawn 2D animation keyframe, confident line art, clean color fills, layered parallax background",
+    "REAL_HUMAN": "photorealistic cinema still, real human actor, natural skin texture, ARRI Alexa, 8k raw photo",
+    "LIVE_ACTION": "live-action film still, real actor, practical set, motivated lighting, filmic contrast",
+    "CINEMATIC": "cinematic painterly realism, filmic color grade, atmospheric depth, believable human anatomy",
+    "HYBRID": "hybrid 2D/3D cinematic keyframe, single coherent lighting model, consistent character model",
+}
+
+def medium_tag_for(medium: Optional[str]) -> str:
+    return MEDIUM_PROMPT_TAGS.get((medium or "ANIME").upper().strip(), MEDIUM_PROMPT_TAGS["ANIME"])
+
+def ffmpeg_bin() -> str:
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+def ffprobe_bin() -> str:
+    return shutil.which("ffprobe") or "ffprobe"
+
+def run_cmd(cmd, timeout=900):
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stderr or proc.stdout or "command failed")[-800:])
+    return proc
+
+def probe_fps(path: str) -> float:
+    try:
+        out = subprocess.run([ffprobe_bin(), "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", path], capture_output=True, text=True, timeout=60).stdout.strip()
+        num, den = out.split("/")
+        return float(num) / float(den or 1)
+    except Exception:
+        return 0.0
+
+def fit_video(src: str, dst: str, duration_sec: float, audio_path: Optional[str] = None, fps: int = 24, crf: int = 18) -> str:
+    total = max(1.0, float(duration_sec))
+    is_image = src.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+    vf = f"scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps={fps},format=yuv420p"
+    cmd = [ffmpeg_bin(), "-y"] + (["-loop", "1", "-i", src] if is_image else ["-stream_loop", "-1", "-i", src])
+    has_audio = bool(audio_path and os.path.exists(audio_path))
+    if has_audio:
+        cmd += ["-i", audio_path]
+    cmd += ["-t", f"{total:.3f}", "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", str(crf), "-pix_fmt", "yuv420p"]
+    if has_audio:
+        cmd += ["-c:a", "aac", "-b:a", "192k", "-shortest"]
+    cmd += [dst]
+    run_cmd(cmd, timeout=1800)
+    return dst
+
+def interpolate_to_fps(src: str, dst: str, target_fps: int = 24) -> str:
+    if probe_fps(src) >= target_fps - 0.5:
+        shutil.copyfile(src, dst)
+        return dst
+    vf = f"minterpolate=fps={target_fps}:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p"
+    run_cmd([ffmpeg_bin(), "-y", "-i", src, "-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", dst], timeout=1800)
+    return dst
+
+def find_produced_mp4(directory: str) -> Optional[str]:
+    best = None
+    for root, _, files in os.walk(directory):
+        for name in files:
+            if name.lower().endswith(".mp4"):
+                candidate = os.path.join(root, name)
+                if best is None or os.path.getmtime(candidate) > os.path.getmtime(best):
+                    best = candidate
+    return best
+
+def download_reference_image(url: Optional[str], dest_path: str) -> bool:
+    if not url:
+        return False
+    try:
+        with requests.get(url, headers={"Bypass-Tunnel-Reminder": "true"}, stream=True, timeout=90) as resp:
+            if not resp.ok:
+                return False
+            with open(dest_path, "wb") as fh:
+                for chunk in resp.iter_content(65536):
+                    if chunk: fh.write(chunk)
+        return os.path.exists(dest_path) and os.path.getsize(dest_path) > 0
+    except Exception:
+        return False
+
+CHARACTER_REF_DIR = os.path.join(tempfile.gettempdir(), "anime_character_refs")
+
+def build_character_reference(pipe, req: Any, dna_str: str, medium_tag: str) -> Image.Image:
+    code = (req.character_code or "default").upper().strip()
+    os.makedirs(CHARACTER_REF_DIR, exist_ok=True)
+    cache_path = os.path.join(CHARACTER_REF_DIR, f"{req.project_id}_{code}.png")
+    if os.path.exists(cache_path):
+        try:
+            return Image.open(cache_path).convert("RGB")
+        except Exception:
+            pass
+    prompt = f"{medium_tag}, character reference portrait, upper body, facing camera, neutral expression, clear face, studio lighting"
+    if dna_str:
+        prompt += f", {dna_str}"
+    seed = abs(hash(f"{req.project_id}_{code}_identity")) % (2**31)
+    gen = torch.Generator(device=DEVICE_0).manual_seed(seed)
+    with torch.inference_mode():
+        portrait = pipe(
+            prompt=prompt,
+            negative_prompt="deformed, blurry, bad anatomy, extra limbs, text, watermark, cropped face, multiple people",
+            num_inference_steps=4,
+            guidance_scale=0.0,
+            width=1024,
+            height=1024,
+            generator=gen,
+        ).images[0]
+    portrait.save(cache_path)
+    return portrait
+
+def prepare_lipsync_input(video_path: str, workdir: str, fps: int = 25) -> str:
+    out = os.path.join(workdir, "lipsync_input.mp4")
+    vf = f"scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps={fps},format=yuv420p"
+    run_cmd([ffmpeg_bin(), "-y", "-i", video_path, "-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", out], timeout=900)
+    return out
+
+def run_musetalk_stage(video_path: str, audio_path: str, workdir: str) -> tuple:
+    musetalk_dir = MODEL_PATHS.get("musetalk_dir") or os.path.join(MODEL_PATHS.get("base_mount") or "", "musetalk")
+    script = os.path.join(musetalk_dir, "scripts", "inference.py")
+    if not os.path.exists(script):
+        return None, f"musetalk inference script missing at {script}"
+    outdir = os.path.join(workdir, "musetalk_out")
+    os.makedirs(outdir, exist_ok=True)
+    env = os.environ.copy()
+    env["CUDA_VISIBLE_DEVICES"] = "1" if torch.cuda.device_count() > 1 else "0"
+    timeout_sec = int(os.getenv("MUSETALK_TIMEOUT_SEC", "1800"))
+    attempts = [
+        ["python3", script, "--video_path", video_path, "--audio_path", audio_path, "--result_dir", outdir, "--output_vid_name", "musetalk.mp4"],
+        ["python3", "-m", "scripts.inference", "--video_path", video_path, "--audio_path", audio_path, "--result_dir", outdir, "--output_vid_name", "musetalk.mp4"],
+    ]
+    last_error = None
+    for cmd in attempts:
+        try:
+            proc = subprocess.run(cmd, cwd=musetalk_dir, env=env, capture_output=True, text=True, timeout=timeout_sec)
+            if proc.returncode == 0:
+                produced = find_produced_mp4(outdir)
+                if produced:
+                    return produced, None
+            last_error = (proc.stderr or proc.stdout or "musetalk produced no output")[-600:]
+        except Exception as exc:
+            last_error = str(exc)[:600]
+    return None, last_error
+
+def run_liveportrait_stage(video_path: str, workdir: str) -> tuple:
+    lp_dir = MODEL_PATHS.get("liveportrait_dir") or os.path.join(MODEL_PATHS.get("base_mount") or "", "liveportrait")
+    script = os.path.join(lp_dir, "inference.py")
+    if not os.path.exists(script):
+        return None, f"liveportrait inference script missing at {script}"
+    outdir = os.path.join(workdir, "liveportrait_out")
+    os.makedirs(outdir, exist_ok=True)
+    env = os.environ.copy()
+    env["CUDA_VISIBLE_DEVICES"] = "1" if torch.cuda.device_count() > 1 else "0"
+    timeout_sec = int(os.getenv("LIVEPORTRAIT_TIMEOUT_SEC", "900"))
+    cmd = ["python3", script, "-s", video_path, "-d", video_path, "-o", outdir, "--flag_pasteback", "--flag_relative_motion"]
+    try:
+        proc = subprocess.run(cmd, cwd=lp_dir, env=env, capture_output=True, text=True, timeout=timeout_sec)
+        if proc.returncode == 0:
+            produced = find_produced_mp4(outdir)
+            if produced:
+                return produced, None
+        return None, (proc.stderr or proc.stdout or "liveportrait produced no output")[-600:]
+    except Exception as exc:
+        return None, str(exc)[:600]
+
 def get_sdxl_lightning_pipeline() -> StableDiffusionXLPipeline:
     if "sdxl_lightning" in MODEL_CACHE: return MODEL_CACHE["sdxl_lightning"]
     unet_ckpt = MODEL_PATHS.get("sdxl_unet")
@@ -444,19 +648,32 @@ def get_sdxl_lightning_pipeline() -> StableDiffusionXLPipeline:
 
 def get_animatediff_pipeline() -> AnimateDiffPipeline:
     if "animatediff" in MODEL_CACHE: return MODEL_CACHE["animatediff"]
+    candidates = []
     adapter_ckpt = MODEL_PATHS.get("animatediff_ckpt")
-    if not adapter_ckpt:
-        matches = glob.glob("/kaggle/input/**/animatediff_lightning_4step_diffusers.safetensors", recursive=True)
-        adapter_ckpt = matches[0] if matches else None
-        if not adapter_ckpt:
-            try:
-                from huggingface_hub import hf_hub_download
-                adapter_ckpt = hf_hub_download(repo_id="ByteDance/AnimateDiff-Lightning", filename="animatediff_lightning_4step_diffusers.safetensors")
-            except Exception:
-                adapter_ckpt = None
+    if adapter_ckpt:
+        candidates.append(adapter_ckpt)
+    candidates.extend(glob.glob("/kaggle/input/**/animatediff_lightning_4step_diffusers.safetensors", recursive=True))
+    candidates.extend(glob.glob("/kaggle/input/**/animatediff*lightning*.safetensors", recursive=True))
     adapter = MotionAdapter().to(DEVICE_1, torch.float16)
-    if adapter_ckpt and os.path.exists(adapter_ckpt):
-        adapter.load_state_dict(load_file(adapter_ckpt, device=DEVICE_1))
+    loaded_from = None
+    for candidate in candidates:
+        if not candidate or not os.path.exists(candidate):
+            continue
+        try:
+            adapter.load_state_dict(load_file(candidate, device=DEVICE_1))
+            loaded_from = candidate
+            break
+        except Exception as load_exc:
+            print(f"[animatediff] adapter format rejected for {candidate}: {str(load_exc)[:200]}", flush=True)
+    if not loaded_from:
+        try:
+            from huggingface_hub import hf_hub_download
+            remote = hf_hub_download(repo_id="ByteDance/AnimateDiff-Lightning", filename="animatediff_lightning_4step_diffusers.safetensors")
+            adapter.load_state_dict(load_file(remote, device=DEVICE_1))
+            loaded_from = remote
+        except Exception as remote_exc:
+            print(f"[animatediff] adapter download failed: {str(remote_exc)[:300]}", flush=True)
+    print(f"[animatediff] motion adapter loaded from {loaded_from}", flush=True)
     pipe = AnimateDiffPipeline.from_pretrained("emilianJR/epiCRealism", motion_adapter=adapter, torch_dtype=torch.float16).to(DEVICE_1)
     pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing", beta_schedule="linear")
     MODEL_CACHE["animatediff"] = pipe
@@ -508,6 +725,8 @@ def run_configured_lipsync(kind: str, video_path: str, audio_path: str, output_p
 
 def prewarm_models_background():
     global PREWARM_ERROR, ANIMATION_PREWARM_ERROR
+    refresh_model_paths()
+    print(f"[models] resolved paths: {json.dumps(MODEL_PATHS)}", flush=True)
     try:
         with GPU_0_LOCK: get_sdxl_lightning_pipeline()
         PREWARM_ERROR = None
@@ -522,6 +741,7 @@ def prewarm_models_background():
 def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict[str, Any]:
     JOBS_STORE[job_id] = {"status": "processing"}
     stage_errors = []
+    refresh_model_paths()
     with GPU_0_LOCK:
         try:
             pipe = get_sdxl_lightning_pipeline()
@@ -531,7 +751,7 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
                     v = req.visual_dna.get(k)
                     if v and str(v).lower() != "none": dna_parts.append(str(v))
             dna_str = ", ".join(dna_parts)
-            medium_tag = "photorealistic 8k cinema, raw photo, real human skin texture" if req.visual_medium.upper() == "REAL_HUMAN" else "anime masterpiece, ufotable cel-shaded lighting, crisp lineart"
+            medium_tag = medium_tag_for(req.visual_medium)
             full_prompt = f"{medium_tag}, {req.prompt}" + (f", character details: {dna_str}" if dna_str else "")
             neg_prompt = "deformed, blurry, bad anatomy, disfigured, extra limbs, text, watermark, low quality"
             seed = abs(hash(f"{req.project_id}_{req.season_no}_{req.episode_no}_{req.scene_order}")) % (2**31)
@@ -539,17 +759,33 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
             reference_image = None
             identity_mode = "TEXT_ONLY"
             reference_id = (req.reference_image_file_id or "").strip()
+            reference_path = os.path.join(tempfile.gettempdir(), f"identity_{uuid.uuid4().hex}.png")
             if reference_id and not reference_id.startswith("ref_"):
-                reference_path = os.path.join(tempfile.gettempdir(), f"identity_{uuid.uuid4().hex}.png")
                 if download_telegram_media(reference_id, reference_path, req.telegram_upload):
                     try:
                         reference_image = Image.open(reference_path).convert("RGB")
                     except Exception as ref_exc:
                         stage_errors.append({"stage": "identity_reference", "error": str(ref_exc)[:200]})
-            pipe_kwargs = dict(prompt=full_prompt, negative_prompt=neg_prompt, num_inference_steps=4, guidance_scale=0.0, width=1280, height=720, generator=generator)
+            if reference_image is None and download_reference_image(req.reference_image_url, reference_path):
+                try:
+                    reference_image = Image.open(reference_path).convert("RGB")
+                except Exception as ref_exc:
+                    stage_errors.append({"stage": "identity_reference_url", "error": str(ref_exc)[:200]})
+            if reference_image is None and req.character_code:
+                try:
+                    reference_image = build_character_reference(pipe, req, dna_str, medium_tag)
+                    identity_mode = "AUTO_REFERENCE"
+                except Exception as ref_exc:
+                    stage_errors.append({"stage": "identity_auto_reference", "error": str(ref_exc)[:200]})
+            pipe_kwargs = dict(prompt=full_prompt, negative_prompt=neg_prompt, num_inference_steps=4, guidance_scale=0.0, width=1344, height=768, generator=generator)
             if reference_image is not None and ensure_ip_adapter(pipe):
                 pipe_kwargs["ip_adapter_image"] = reference_image
                 identity_mode = "IP_ADAPTER"
+                identity_scale = 0.8 if req.visual_medium.upper() in ("REAL_HUMAN", "LIVE_ACTION", "3D") else 0.65
+                try:
+                    pipe.set_ip_adapter_scale(identity_scale)
+                except Exception:
+                    pass
             with torch.inference_mode():
                 image: Image.Image = pipe(**pipe_kwargs).images[0]
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -575,6 +811,7 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
     JOBS_STORE[job_id] = {"status": "processing"}
     stage_errors = []
     animation_status = "SKIPPED"
+    refresh_model_paths()
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             current_media = os.path.join(tmpdir, "input_source.png")
@@ -609,26 +846,40 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
             lipsync_requested = bool(branch_d.get("enabled") or branch_e.get("enabled"))
             lipsync_status = "NOT_REQUESTED"
             lipsync_error = None
+            lipsync_engine = None
+            keyframe_conditioned = False
             if branch_c.get("enabled") and not ANIMATION_DISABLED:
                 try:
                     with GPU_1_LOCK:
                         pipe = get_animatediff_pipeline()
-                        num_frames = min(max(req.duration_sec * 8, 16), 32)
                         prompt = branch_c.get("prompt") or "cinematic motion"
-                        anim_kwargs = dict(prompt=prompt, negative_prompt="bad quality, static, deformed", num_frames=num_frames, guidance_scale=1.0, num_inference_steps=4)
-                        keyframe_conditioned = False
+                        anim_seconds = max(2.0, min(float(req.duration_sec), float(os.getenv("ANIMATION_MAX_SECONDS", "12"))))
+                        needed_frames = int(round(anim_seconds * 8))
+                        keyframe_image = None
                         try:
                             if os.path.exists(current_media) and current_media.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
                                 keyframe_image = Image.open(current_media).convert("RGB")
                                 if ensure_animatediff_ip_adapter(pipe):
-                                    anim_kwargs["ip_adapter_image"] = keyframe_image
                                     keyframe_conditioned = True
                         except Exception as condition_exc:
                             stage_errors.append({"stage": "branch_c_keyframe_conditioning", "error": str(condition_exc)[:300]})
-                        with torch.inference_mode():
-                            frames = pipe(**anim_kwargs).frames[0]
+                        collected = []
+                        pass_index = 0
+                        while len(collected) < needed_frames:
+                            remaining = needed_frames - len(collected)
+                            frames_this = max(16, min(32, remaining))
+                            anim_kwargs = dict(prompt=prompt, negative_prompt="bad quality, static, deformed, extra limbs", num_frames=frames_this, guidance_scale=1.0, num_inference_steps=4)
+                            if keyframe_image is not None and keyframe_conditioned:
+                                anim_kwargs["ip_adapter_image"] = keyframe_image
+                            anim_kwargs["generator"] = torch.Generator(device=DEVICE_1).manual_seed(abs(hash(f"{req.project_id}_{req.episode_no}_{req.scene_order}_{pass_index}")) % (2**31))
+                            with torch.inference_mode():
+                                chunk_frames = pipe(**anim_kwargs).frames[0]
+                            collected.extend(chunk_frames)
+                            pass_index += 1
+                        raw_mp4 = os.path.join(tmpdir, "stage_c_raw.mp4")
+                        export_to_video(collected[:needed_frames], raw_mp4, fps=8)
                         anim_mp4 = os.path.join(tmpdir, "stage_c.mp4")
-                        export_to_video(frames, anim_mp4, fps=8)
+                        interpolate_to_fps(raw_mp4, anim_mp4, 24)
                         current_media = anim_mp4
                     animation_status = "COMPLETED"
                 except Exception as anim_exc:
@@ -642,39 +893,59 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
                 animation_status = "DEGRADED_DISABLED"
                 stage_errors.append({"stage": "branch_c_animatediff", "error": "animation worker disabled after prior CUDA failure"})
             if lipsync_requested:
-                lipsync_kind = "musetalk" if branch_d.get("enabled") else "liveportrait"
-                lipsync_out = os.path.join(tmpdir, f"stage_lipsync_{lipsync_kind}.mp4")
-                try:
-                    lipsync_ok, lipsync_error = run_configured_lipsync(lipsync_kind, current_media, local_audio, lipsync_out)
-                    if lipsync_ok:
-                        current_media = lipsync_out
+                lipsync_base = current_media
+                if lipsync_base.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                    still_base = os.path.join(tmpdir, "lipsync_still_base.mp4")
+                    fit_video(lipsync_base, still_base, float(req.duration_sec), None, 24)
+                    lipsync_base = still_base
+                expression_out = None
+                if branch_e.get("enabled"):
+                    try:
+                        expression_out, expression_error = run_liveportrait_stage(lipsync_base, tmpdir)
+                        if expression_out:
+                            lipsync_base = expression_out
+                        else:
+                            stage_errors.append({"stage": "branch_e_liveportrait", "error": expression_error})
+                    finally:
+                        clear_vram(DEVICE_1)
+                if branch_d.get("enabled") and local_audio and os.path.exists(local_audio):
+                    lipsync_input = prepare_lipsync_input(lipsync_base, tmpdir, 25)
+                    musetalk_out, musetalk_error = run_musetalk_stage(lipsync_input, local_audio, tmpdir)
+                    if musetalk_out:
+                        current_media = musetalk_out
                         lipsync_status = "COMPLETED"
+                        lipsync_engine = "musetalk"
                     else:
                         lipsync_status = "UNAVAILABLE"
-                        stage_errors.append({"stage": f"branch_{'d' if lipsync_kind == 'musetalk' else 'e'}_{lipsync_kind}", "error": lipsync_error})
-                except Exception as lipsync_exc:
-                    lipsync_status = "DEGRADED"
-                    lipsync_error = str(lipsync_exc)[:500]
-                    stage_errors.append({"stage": f"branch_{'d' if lipsync_kind == 'musetalk' else 'e'}_{lipsync_kind}", "error": lipsync_error})
-                finally:
-                    clear_vram(DEVICE_1)
+                        lipsync_error = musetalk_error
+                        current_media = lipsync_base
+                        stage_errors.append({"stage": "branch_d_musetalk", "error": musetalk_error})
+                elif expression_out:
+                    current_media = expression_out
+                    lipsync_status = "EXPRESSION_ONLY"
+                    lipsync_engine = "liveportrait"
+                else:
+                    current_media = lipsync_base
+                    lipsync_status = "UNAVAILABLE"
+                    lipsync_error = "no lipsync audio or engine available"
+                clear_vram(DEVICE_1)
             final_mp4 = os.path.join(tmpdir, f"proj_{req.project_id[:8]}_s{req.season_no}_ep{req.episode_no}_sc{req.scene_order}_gpu.mp4")
             is_image = current_media.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
             total_frames = max(24, int(round(float(req.duration_sec) * 24)))
             if is_image:
                 video_filter = f"scale=2560:1440:force_original_aspect_ratio=increase,crop=2560:1440,zoompan=z='min(zoom+0.0012,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s=1280x720:fps=24,format=yuv420p"
             else:
-                video_filter = "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,format=yuv420p"
+                video_filter = "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=24,format=yuv420p"
             cmd = ["ffmpeg", "-y"] + (["-loop", "1", "-i", current_media] if is_image else ["-stream_loop", "-1", "-i", current_media])
             if local_audio and os.path.exists(local_audio):
-                cmd += ["-i", local_audio, "-vf", video_filter, "-af", "apad", "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", "-b:a", "192k", "-t", str(req.duration_sec), final_mp4]
+                cmd += ["-i", local_audio, "-vf", video_filter, "-af", "apad", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "192k", "-t", str(req.duration_sec), final_mp4]
             else:
-                cmd += ["-t", str(req.duration_sec), "-vf", video_filter, "-c:v", "libx264", "-preset", "fast", final_mp4]
+                cmd += ["-t", str(req.duration_sec), "-vf", video_filter, "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", final_mp4]
             subprocess.run(cmd, check=True)
             file_size = os.path.getsize(final_mp4)
             caption = f"GPU CLIP Project: {req.project_id} | S{req.season_no} Ep: {req.episode_no} | Scene: {req.scene_order}"
             tg_res = upload_media_to_telegram(final_mp4, caption, req.telegram_upload)
-            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "animation_status": animation_status, "keyframe_conditioned": bool(locals().get("keyframe_conditioned", False)), "ip_adapter_error": ANIM_IP_ADAPTER_ERROR, "lipsync_requested": lipsync_requested, "lipsync_status": lipsync_status, "lipsync_error": lipsync_error, "stages_skipped": stage_errors, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
+            result_payload = {"ok": True, "status": "completed", "job_id": job_id, "project_id": req.project_id, "season_no": req.season_no, "episode_no": req.episode_no, "scene_order": req.scene_order, "slot": SESSION_SLOT, "file_size_bytes": file_size, "animation_status": animation_status, "keyframe_conditioned": keyframe_conditioned, "ip_adapter_error": ANIM_IP_ADAPTER_ERROR, "lipsync_requested": lipsync_requested, "lipsync_status": lipsync_status, "lipsync_engine": lipsync_engine, "lipsync_error": lipsync_error, "stages_skipped": stage_errors, "telegram_file_id": tg_res["file_id"], "tg_file_id": tg_res["file_id"], "telegram_url": tg_res["telegram_url"], "video_url": tg_res["telegram_url"]}
             JOBS_STORE[job_id] = result_payload
             notify_n8n_webhook(req.callback_url, result_payload)
             return result_payload
@@ -711,6 +982,12 @@ async def shutdown_endpoint(_: None = Depends(require_session_token)):
 async def get_job_status(job_id: str, _: None = Depends(require_session_token)):
     if job_id not in JOBS_STORE: raise HTTPException(status_code=404, detail="Job not found")
     return JOBS_STORE[job_id]
+
+@app.get("/v1/gpu/diagnostics")
+async def diagnostics(depth: int = 3, limit: int = 300):
+    refresh_model_paths()
+    listing = scan_input_tree(max_depth=max(1, min(depth, 8)))
+    return {"ok": True, "slot": SESSION_SLOT, "model_paths": MODEL_PATHS, "input_exists": os.path.isdir("/kaggle/input"), "input_entries": len(listing), "input_listing": listing[:max(1, min(limit, 2000))]}
 
 @app.get("/health")
 async def health():
@@ -935,7 +1212,7 @@ function gpuPresentation(
   return {
     ...config,
     preferred_mode: config.preferred_mode ?? routing.preferred_mode ?? 'KAGGLE_AUTO',
-    models_dataset_slug: config.models_dataset_slug ?? 'bnaisolution/anime-engine-models-v1',
+    models_dataset_slug: config.models_dataset_slug ?? 'neerajbehra/anime-engine-models-v1',
     primary_llm_provider: config.primary_llm_provider ?? 'groq',
     fallback_llm_provider: config.fallback_llm_provider ?? 'gemini',
     vision_provider: config.vision_provider ?? 'gemini',
@@ -1136,7 +1413,7 @@ export async function ensureKaggleWorkerForUser(userId: string, tenantId?: strin
     }
   }
 
-  const datasetSlug = String(asRecord(hydrated.kaggle ?? hydrated.own_gpu).models_dataset_slug || 'bnaisolution/anime-engine-models-v1');
+  const datasetSlug = String(asRecord(hydrated.kaggle ?? hydrated.own_gpu).models_dataset_slug || 'neerajbehra/anime-engine-models-v1');
   const deploy = await pushKaggleKernel(
     username,
     apiKey,
@@ -1262,7 +1539,7 @@ export async function registerAnimeInfrastructureRoutes(app: FastifyInstance): P
     const userId = authCheck(request);
     const body = request.body;
     const requestId = request.anime?.request_id;
-    const datasetSlug = body.models_dataset_slug || 'bnaisolution/anime-engine-models-v1';
+    const datasetSlug = body.models_dataset_slug || 'neerajbehra/anime-engine-models-v1';
     const tenantId = body.tenant_id ? (await resolveTenant(userId, body.tenant_id)).tenant.id : null;
 
     const existingHydrated = await svc.getHydratedInfrastructureForUser(userId);

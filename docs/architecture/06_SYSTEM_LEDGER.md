@@ -8,7 +8,7 @@
 - Worker `main` @ `7430690` (tunnel-URL publish step); static tests green; run-worker active.
 
 ## Current Heads & Infrastructure
-- EC2 t3.small; `ai-backend` + `n8n` healthy. Backend `e93a230` (runtime `c2de9e8`); Android `b84efe0`; worker `7430690`.
+- EC2 t3.small; `ai-backend` + `n8n` healthy. Compose backend image `ec2-user-backend` created 2026-11-26 02:19Z from uncommitted `remediation/2026-11-23` HEAD `8005d9f` (ahead 2; dirty ledger/WF-03/infra/e2e script); old runtime tags `c2de9e8`/`1104d74`. Android `b84efe0`; worker `7430690`.
 - Central DB `lqdjlcfczjottagobega.supabase.co`; Auth DB `icypjilkcqylgbpmkyes.supabase.co`; migrations 015–021 applied 2026-11-20.
 - n8n: 14 canonical StoryWF active. Backend must join `ec2-user_default` with alias `backend`.
 - BYOD runtime enabled for the dedicated test account; Director setup writes BYOD + central mirror.
@@ -43,7 +43,7 @@
 
 ## 2026-11-23/24 Seven-Wave Remediation (branch remediation/2026-11-23)
 - W1+W2: WF-00 season/title/synopsis + season-aware idempotency lock; WF-11 QC queries filter `season_no`; 1–30 min contract, act batching and duration gates verified with matrix tests.
-- W3 (local GPU worker): image-conditioned AnimateDiff v2v, honest `reference_conditioned`/lipsync/expression/stage status; `py_compile` OK, GPU run UNVERIFIED.
-- W4 (CPU worker): `ducking_db` drives BGM gain; ffmpeg volumedetect `audio_stats`; 32 pytest pass, live render UNVERIFIED.
+- W3 (GPU): image-conditioned AnimateDiff v2v + honest `reference_conditioned`/lipsync/stage status; W4 (CPU): `ducking_db` → BGM gain, ffmpeg `audio_stats`; 32 pytest green.
 - W5: QC `PENDING` root cause fixed — supervisor reads nested `callback.result` media, merges `output_media` (duration/size/telegram preserved), enqueues idempotent RUN_QC; WF-11 stops substituting expected duration; approval accepts `PENDING_HUMAN_APPROVAL`, writes `qc_status=APPROVED`, closes pending task; client `qc_status` PATCH blocked.
 - W6+W7: Android QC is season-aware and approves via canonical endpoint (CI UNVERIFIED); outbox lease + migration 010 RLS grants verified in source/static, live RLS UNVERIFIED. Tests: backend unit 216, routes 110, static 163 green.
+- Runtime audit 2026-11-26: live n8n WF-00/02/03/04/05/06/08–13 match repo; WF-01 (4 nodes) + WF-07 (2 nodes: season/approval publish) still drift. 60s v6 run predates deploy → MIXED/PENDING; 300s execution 133507/133508 failed at CPU FFmpeg Branch F with Cloudflare 524 from rotating quick-tunnel URL (GPU scenes completed; WF-02 scene count 0 + hand-seeded fixtures). Next: commit/push dirty tree, deploy by SHA, sync WF-01/07, replace quick tunnel, rerun real E2E.
