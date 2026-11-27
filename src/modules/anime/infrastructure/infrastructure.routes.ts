@@ -739,7 +739,7 @@ def prewarm_models_background():
         ANIMATION_PREWARM_ERROR = str(exc)[:500]
 
 def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict[str, Any]:
-    JOBS_STORE[job_id] = {"status": "processing"}
+    JOBS_STORE[job_id] = {"job_id": job_id, "status": "processing"}
     stage_errors = []
     refresh_model_paths()
     with GPU_0_LOCK:
@@ -808,7 +808,7 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
 
 def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[str, Any]:
     global ANIMATION_DISABLED
-    JOBS_STORE[job_id] = {"status": "processing"}
+    JOBS_STORE[job_id] = {"job_id": job_id, "status": "processing"}
     stage_errors = []
     animation_status = "SKIPPED"
     refresh_model_paths()
@@ -958,7 +958,7 @@ def execute_video_assembly_job(job_id: str, req: VideoAssemblyRequest) -> Dict[s
 @app.post("/v1/generate-image")
 async def generate_image_endpoint(req: GenerateImageRequest, _: None = Depends(require_session_token)):
     job_id = f"img_{req.project_id[:6]}_{uuid.uuid4().hex[:6]}"
-    JOBS_STORE[job_id] = {"status": "queued"}
+    JOBS_STORE[job_id] = {"job_id": job_id, "status": "queued"}
     if req.async_mode or req.callback_url:
         BG_EXECUTOR.submit(run_image_job, job_id, req)
         return {"ok": True, "status": "queued", "job_id": job_id}
@@ -967,7 +967,7 @@ async def generate_image_endpoint(req: GenerateImageRequest, _: None = Depends(r
 @app.post("/v1/gpu/video-assembly-line")
 async def video_assembly_endpoint(req: VideoAssemblyRequest, _: None = Depends(require_session_token)):
     job_id = f"vid_{req.project_id[:6]}_{uuid.uuid4().hex[:6]}"
-    JOBS_STORE[job_id] = {"status": "queued"}
+    JOBS_STORE[job_id] = {"job_id": job_id, "status": "queued"}
     if req.async_mode or req.callback_url:
         BG_EXECUTOR.submit(run_video_job, job_id, req)
         return {"ok": True, "status": "queued", "job_id": job_id}
