@@ -464,6 +464,10 @@
               "value": "application/json"
             },
             {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.gpu_auth_token }}"
+            },
+            {
               "name": "Bypass-Tunnel-Reminder",
               "value": "true"
             }
@@ -657,6 +661,10 @@
               "value": "application/json"
             },
             {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Restore Scene Context After Image').item.json.gpu_auth_token }}"
+            },
+            {
               "name": "Bypass-Tunnel-Reminder",
               "value": "true"
             }
@@ -780,6 +788,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.gpu_auth_token }}"
             },
             {
               "name": "Bypass-Tunnel-Reminder",
