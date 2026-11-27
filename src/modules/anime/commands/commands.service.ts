@@ -8,6 +8,7 @@ import { buildProjectCreativeContext, creativeConfigurationSnapshot, loadCreativ
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { flags } from '../../../config/flags';
 import { buildRuntimeContract, screenplayWordTarget, type RuntimeContract } from '../runtime/runtimeContract';
+import { normalizeProjectFormat, normalizeProjectLanguage, projectFormatRules, projectLanguageName } from '../reads/project.contract';
 import { evaluateProjectSetup } from '../../ai/director/director.readiness';
 import {
   findCommandById,
@@ -391,6 +392,8 @@ async function resolveDynamicPromptAndInfra(
   let seasonPromptOverride = false;
   let imagePromptSeasonOverride = false;
   let runtimeContract: RuntimeContract = buildRuntimeContract(24);
+  let projectFormat = 'SERIES';
+  let language = 'hi';
   let seriesConfig: Record<string, number> = {
     total_seasons: 1,
     episodes_per_season: 12,
@@ -406,18 +409,26 @@ async function resolveDynamicPromptAndInfra(
   );
 
   try {
-    const { data: projectRow } = await animeSupabase
+    const { data: projectRow, error: projectError } = await animeSupabase
       .from('projects')
-      .select('id, genre, visual_medium, active_system_prompt_id, story_bible')
+      .select('id, genre, visual_medium, visual_style, language, active_system_prompt_id, story_bible')
       .eq('id', projectId)
       .eq('user_id', userId)
       .maybeSingle<{
         id?: string;
         genre?: string | null;
         visual_medium?: string | null;
+        visual_style?: string | null;
+        language?: string | null;
         active_system_prompt_id?: string | null;
         story_bible?: Record<string, unknown> | null;
       }>();
+    if (projectError) {
+      throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to load project configuration.', cause: projectError });
+    }
+    if (!projectRow) {
+      throw new AnimeError({ code: AnimeErrorCode.PROJECT_FORBIDDEN, message: 'Project not found or access denied.' });
+    }
 
     if (projectRow) {
       const bible = (projectRow.story_bible && typeof projectRow.story_bible === 'object')
@@ -431,15 +442,19 @@ async function resolveDynamicPromptAndInfra(
       const totalSeasons = bounded(bible.total_seasons, 1, 1, 100);
       const episodesPerSeason = bounded(bible.episodes_per_season, 12, 1, 500);
       const episodeDurationMin = bounded(bible.episode_duration_min, 24, 1, 30);
+      const targetEpisodeCount = bounded(bible.target_episode_count, totalSeasons * episodesPerSeason, 1, 50000);
       runtimeContract = buildRuntimeContract(episodeDurationMin);
+      projectFormat = normalizeProjectFormat(bible.project_format);
+      language = normalizeProjectLanguage(projectRow.language ?? bible.language);
       seriesConfig = {
         total_seasons: totalSeasons,
         episodes_per_season: episodesPerSeason,
         episode_duration_min: episodeDurationMin,
-        script_word_count: screenplayWordTarget(runtimeContract),
+        script_word_count: bounded(bible.script_word_count, screenplayWordTarget(runtimeContract), 50, 200000),
         target_duration_sec: runtimeContract.target_duration_sec,
         total_episode_capacity: totalSeasons * episodesPerSeason,
-        target_episode_count: bounded(bible.target_episode_count, totalSeasons * episodesPerSeason, 1, 50000),
+        target_episode_count: targetEpisodeCount,
+        total_episodes: targetEpisodeCount,
       };
 
       seasonContext = seasonPlanFromBible(projectRow.story_bible, seasonNo);
@@ -562,12 +577,21 @@ async function resolveDynamicPromptAndInfra(
         imageSystemPromptVersion = Number(seasonImagePrompt.version || 1);
       }
     }
-  } catch (_) {}
+  } catch (error) {
+    if (error instanceof AnimeError) throw error;
+    throw new AnimeError({
+      code: AnimeErrorCode.INTERNAL,
+      message: 'Failed to resolve project configuration.',
+      cause: error,
+    });
+  }
 
   let hydratedInfra: Record<string, unknown> = {};
   try {
     hydratedInfra = await getHydratedInfrastructureForUser(userId);
-  } catch (_) {}
+  } catch (error) {
+    console.warn('[anime] infrastructure hydration failed; continuing without hydrated infra', error);
+  }
 
   return {
     visualMedium: creativeContext.visualMedium,
@@ -591,6 +615,8 @@ async function resolveDynamicPromptAndInfra(
     imagePromptSeasonOverride,
     seriesConfig,
     runtimeContract,
+    projectFormat,
+    language,
   };
 }
 
@@ -646,6 +672,8 @@ export async function submitAnimeCommand(
     seasonNo
   );
   const runtimeContract = dynamicCtx.runtimeContract;
+  const projectFormat = dynamicCtx.projectFormat;
+  const language = dynamicCtx.language;
 
   const payloadObj = (params.body.payload ?? {}) as Record<string, unknown>;
   const baseHash = typeof payloadObj.base_hash === 'string'
@@ -691,6 +719,10 @@ export async function submitAnimeCommand(
     visual_medium_title: dynamicCtx.visualMediumTitle,
     visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
     visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    project_format: projectFormat,
+    language,
+    language_name: projectLanguageName(language),
+    project_format_rules: projectFormatRules(projectFormat),
     selected_genres: dynamicCtx.creativeContext.selectedGenres,
     season_no: seasonNo,
     season_context: dynamicCtx.seasonContext,
@@ -725,9 +757,13 @@ export async function submitAnimeCommand(
   const projectStyle = {
     ...(params.body.project_style ?? {}),
     ...((payloadObj.project_style as Record<string, unknown> | undefined) ?? {}),
-    visual_style: renderFamily,
+    visual_style: resolvedVisualMedium,
     render_family: renderFamily,
     visual_medium: resolvedVisualMedium,
+    project_format: projectFormat,
+    language,
+    language_name: projectLanguageName(language),
+    project_format_rules: projectFormatRules(projectFormat),
     visual_medium_title: dynamicCtx.visualMediumTitle,
     visual_medium_prompt: dynamicCtx.mediumPromptContext,
     visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
@@ -802,6 +838,10 @@ export async function submitAnimeCommand(
     visual_medium_prompt: dynamicCtx.mediumPromptContext,
     visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
     visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    project_format: projectFormat,
+    language,
+    language_name: projectLanguageName(language),
+    project_format_rules: projectFormatRules(projectFormat),
     requested_visual_medium: requestedVisualMedium,
     medium_conflict: mediumConflict,
     selected_genres: dynamicCtx.creativeContext.selectedGenres,
@@ -855,6 +895,10 @@ export async function submitAnimeCommand(
     visual_medium_prompt: dynamicCtx.mediumPromptContext,
     visual_medium_prompt_id: dynamicCtx.creativeContext.mediumPrompt.promptId,
     visual_medium_prompt_version: dynamicCtx.creativeContext.mediumPrompt.version,
+    project_format: projectFormat,
+    language,
+    language_name: projectLanguageName(language),
+    project_format_rules: projectFormatRules(projectFormat),
     requested_visual_medium: requestedVisualMedium,
     medium_conflict: mediumConflict,
     selected_genres: dynamicCtx.creativeContext.selectedGenres,

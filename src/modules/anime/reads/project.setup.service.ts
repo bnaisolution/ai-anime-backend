@@ -3,6 +3,7 @@ import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { canonicalMediumKey, parseGenreList } from '../prompts/creative.registry';
 import { createProjectRecord } from './projects.service';
 import { buildRuntimeContract, MAX_EPISODE_DURATION_MIN, screenplayWordTarget } from '../runtime/runtimeContract';
+import { normalizeProjectFormat, normalizeProjectLanguage } from './project.contract';
 
 function integerInRange(value: unknown, fallback: number, min: number, max: number, label: string): number {
   const parsed = Number(value);
@@ -30,6 +31,8 @@ export interface ProjectSetupInput {
   description?: string | null;
   premise?: string | null;
   project_format?: string;
+  language?: string;
+  visual_style?: string;
   budget_ceiling?: number;
   target_episode_count?: number;
   episode_duration_min?: number;
@@ -43,13 +46,10 @@ export interface ProjectSetupFields {
   name: string;
   genre: string;
   visualMedium: string;
+  visualStyle: string;
+  language: string;
   description: string | null;
   bible: Record<string, unknown>;
-}
-
-function projectFormat(value: unknown): string {
-  const clean = String(value || 'SERIES').trim().toUpperCase();
-  return ['SERIES', 'MOVIE', 'SHORT', 'REEL'].includes(clean) ? clean : 'SERIES';
 }
 
 export function normalizeProjectSetup(input: ProjectSetupInput, existingBible: Record<string, unknown> = {}): ProjectSetupFields {
@@ -59,6 +59,11 @@ export function normalizeProjectSetup(input: ProjectSetupInput, existingBible: R
   }
   const genre = parseGenreList(input.genre, existingBible.genre).join(', ') || 'Action / Fantasy';
   const visualMedium = canonicalMediumKey(input.visual_medium ?? existingBible.visual_medium ?? 'ANIME');
+  const visualStyle = canonicalMediumKey(input.visual_style ?? existingBible.visual_style ?? visualMedium);
+  const language = normalizeProjectLanguage(input.language ?? existingBible.language ?? 'hi');
+  const explicitScriptWordCount = input.script_word_count !== undefined && input.script_word_count !== null
+    ? integerInRange(input.script_word_count, 0, 50, 200_000, 'Script word count')
+    : null;
   const description = input.description !== undefined
     ? text(input.description, 4_000)
     : input.premise !== undefined
@@ -69,7 +74,9 @@ export function normalizeProjectSetup(input: ProjectSetupInput, existingBible: R
     title: name,
     genre,
     visual_medium: visualMedium,
-    project_format: projectFormat(input.project_format ?? existingBible.project_format),
+    visual_style: visualStyle,
+    language,
+    project_format: normalizeProjectFormat(input.project_format ?? existingBible.project_format),
     premise: description || text(existingBible.premise) || '',
     auto_approve: input.auto_approve !== undefined
       ? Boolean(input.auto_approve)
@@ -97,8 +104,8 @@ export function normalizeProjectSetup(input: ProjectSetupInput, existingBible: R
   const runtimeContract = buildRuntimeContract(bible.episode_duration_min);
   bible.runtime_contract = runtimeContract;
   bible.target_duration_sec = runtimeContract.target_duration_sec;
-  bible.script_word_count = screenplayWordTarget(runtimeContract);
-  return { name, genre, visualMedium, description, bible };
+  bible.script_word_count = explicitScriptWordCount ?? screenplayWordTarget(runtimeContract);
+  return { name, genre, visualMedium, visualStyle, language, description, bible };
 }
 
 export async function createProjectFromSetup(params: {
@@ -117,6 +124,8 @@ export async function createProjectFromSetup(params: {
       current_episode: 1,
       genre: fields.genre,
       visual_medium: fields.visualMedium,
+      visual_style: fields.visualStyle,
+      language: fields.language,
       description: fields.description,
       story_bible: fields.bible,
     },
@@ -154,6 +163,8 @@ export async function updateProjectFromSetup(params: {
       name: fields.name,
       genre: fields.genre,
       visual_medium: fields.visualMedium,
+      visual_style: fields.visualStyle,
+      language: fields.language,
       description: fields.description,
       story_bible: fields.bible,
     })

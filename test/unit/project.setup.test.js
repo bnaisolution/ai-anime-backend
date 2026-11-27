@@ -24,6 +24,32 @@ test('Director project setup requires a title and fills safe defaults', () => {
   assert.equal(fields.bible.total_seasons, 1);
   assert.equal(fields.bible.episodes_per_season, 12);
   assert.equal(fields.bible.episode_duration_min, 24);
+  assert.equal(fields.bible.language, 'hi');
+  assert.equal(fields.bible.visual_style, 'ANIME');
+});
+
+test('Director project setup normalizes language, visual style, and REEL format', () => {
+  const fields = setup.normalizeProjectSetup({
+    name: 'Vertical Cut',
+    project_format: 'reel',
+    language: 'EN',
+    visual_style: 'real_human',
+    script_word_count: 900,
+  });
+  assert.equal(fields.bible.project_format, 'REEL');
+  assert.equal(fields.bible.language, 'en');
+  assert.equal(fields.language, 'en');
+  assert.equal(fields.bible.visual_style, 'REAL_HUMAN');
+  assert.equal(fields.visualStyle, 'REAL_HUMAN');
+  assert.equal(fields.bible.script_word_count, 900);
+  assert.throws(
+    () => setup.normalizeProjectSetup({ name: 'Bad Language', language: 'fr' }),
+    (error) => error.code === 'OUTPUT_INVALID'
+  );
+  assert.throws(
+    () => setup.normalizeProjectSetup({ name: 'Bad Format', project_format: 'PODCAST' }),
+    (error) => error.code === 'OUTPUT_INVALID'
+  );
 });
 
 test('Director project setup validates season and runtime bounds', () => {
@@ -53,7 +79,7 @@ test('Director project setup validates season and runtime bounds', () => {
   assert.equal(fields.bible.total_seasons, 2);
   assert.equal(fields.bible.episodes_per_season, 8);
   assert.equal(fields.bible.episode_duration_min, 24);
-  assert.equal(fields.bible.script_word_count, 5808);
+  assert.equal(fields.bible.script_word_count, 2500);
   assert.equal(fields.bible.target_duration_sec, 1440);
   assert.equal(fields.bible.runtime_contract.dialogue_word_budget, 3168);
   assert.equal(fields.bible.budget_ceiling, 500);

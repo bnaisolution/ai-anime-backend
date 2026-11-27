@@ -11,6 +11,7 @@ import { buildScopedDbRequest } from '../internal/workflowGateway.db';
 import { executeTenantDbRequest } from '../internal/workflowGateway.tenantDb';
 import { resolveRequestTenant } from '../tenant/tenant.service';
 import { buildRuntimeContract, MAX_EPISODE_DURATION_MIN, screenplayWordTarget } from '../runtime/runtimeContract';
+import { normalizeProjectFormat, normalizeProjectLanguage } from './project.contract';
 
 const READ_ROLES = ['owner', 'admin', 'editor', 'reviewer', 'viewer'];
 const WRITE_ROLES = ['owner', 'admin', 'editor'];
@@ -298,24 +299,32 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Project name is required' });
       }
 
-      const visualMedium = String(body.visual_medium || 'ANIME').toUpperCase();
+      const visualMedium = canonicalMediumKey(body.visual_medium || 'ANIME');
+      const visualStyle = canonicalMediumKey(body.visual_style ?? body.story_bible?.visual_style ?? visualMedium);
+      const language = normalizeProjectLanguage(body.language ?? body.story_bible?.language);
+      const projectFormat = normalizeProjectFormat(body.project_format ?? body.story_bible?.project_format);
       const genre = String(body.genre || 'Action / Fantasy');
       const episodeDurationMin = normalizeGenerationSetting(body.episode_duration_min, 24, 1, MAX_EPISODE_DURATION_MIN);
       const runtimeContract = buildRuntimeContract(episodeDurationMin);
+      const scriptWordCount = body.script_word_count !== undefined && body.script_word_count !== null
+        ? requireIntegerSetting(body.script_word_count, 'Script word count', 50, 200_000)
+        : screenplayWordTarget(runtimeContract);
       const initialBible = {
         ...(body.story_bible && typeof body.story_bible === 'object' ? body.story_bible : {}),
         visual_medium: visualMedium,
+        visual_style: visualStyle,
+        language,
         genre,
         premise: body.premise || body.description || '',
         auto_approve: Boolean(body.auto_approve ?? false),
-        project_format: String(body.project_format || 'SERIES').trim().toUpperCase(),
+        project_format: projectFormat,
         budget_ceiling: Number(body.budget_ceiling ?? 1000),
         ...(body.cover_image_url ? { cover_image_url: body.cover_image_url } : {}),
         target_episode_count: normalizeGenerationSetting(body.target_episode_count, 12, 1, 500),
         episode_duration_min: episodeDurationMin,
         target_duration_sec: runtimeContract.target_duration_sec,
         runtime_contract: runtimeContract,
-        script_word_count: screenplayWordTarget(runtimeContract),
+        script_word_count: scriptWordCount,
         total_seasons: body.total_seasons !== undefined
           ? requireIntegerSetting(body.total_seasons, 'Total seasons', 1, 100)
           : normalizeGenerationSetting(body.story_bible?.total_seasons, 1, 1, 100),
@@ -341,6 +350,8 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
           is_active: true,
           genre,
           visual_medium: visualMedium,
+          visual_style: visualStyle,
+          language,
           description: body.description || body.premise || null,
           story_bible: initialBible,
         },
@@ -412,10 +423,25 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       const normalizedMedium = body.visual_medium !== undefined || incomingBible.visual_medium !== undefined
         ? canonicalMediumKey(body.visual_medium ?? incomingBible.visual_medium)
         : undefined;
+      const normalizedVisualStyle = body.visual_style !== undefined || incomingBible.visual_style !== undefined
+        ? canonicalMediumKey(body.visual_style ?? incomingBible.visual_style)
+        : undefined;
+      const normalizedLanguage = body.language !== undefined || incomingBible.language !== undefined
+        ? normalizeProjectLanguage(body.language ?? incomingBible.language)
+        : undefined;
+      const normalizedFormat = body.project_format !== undefined || incomingBible.project_format !== undefined
+        ? normalizeProjectFormat(body.project_format ?? incomingBible.project_format)
+        : undefined;
+      const explicitScriptWordCount = body.script_word_count !== undefined && body.script_word_count !== null
+        ? requireIntegerSetting(body.script_word_count, 'Script word count', 50, 200_000)
+        : null;
       const updatedBible = {
         ...currentBible,
         ...incomingBible,
         ...(normalizedMedium !== undefined ? { visual_medium: normalizedMedium } : {}),
+        ...(normalizedVisualStyle !== undefined ? { visual_style: normalizedVisualStyle } : {}),
+        ...(normalizedLanguage !== undefined ? { language: normalizedLanguage } : {}),
+        ...(normalizedFormat !== undefined ? { project_format: normalizedFormat } : {}),
         ...(normalizedGenres !== undefined ? { genre: normalizedGenres } : {}),
         ...(body.auto_approve !== undefined ? { auto_approve: Boolean(body.auto_approve) } : {}),
         ...(body.cover_image_url !== undefined ? { cover_image_url: body.cover_image_url } : {}),
@@ -432,12 +458,6 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         ...(body.episodes_per_season !== undefined
           ? { episodes_per_season: requireIntegerSetting(body.episodes_per_season, 'Episodes per season', 1, 500) }
           : {}),
-        ...(() => {
-          const format = body.project_format ?? incomingBible.project_format;
-          return typeof format === 'string' && format.trim()
-            ? { project_format: format.trim().toUpperCase() }
-            : {};
-        })(),
       };
 
       const resolvedDurationMin = normalizeGenerationSetting(
@@ -450,7 +470,11 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       updatedBible.episode_duration_min = resolvedDurationMin;
       updatedBible.target_duration_sec = resolvedRuntimeContract.target_duration_sec;
       updatedBible.runtime_contract = resolvedRuntimeContract;
-      updatedBible.script_word_count = screenplayWordTarget(resolvedRuntimeContract);
+      if (explicitScriptWordCount !== null) {
+        updatedBible.script_word_count = explicitScriptWordCount;
+      } else if (body.episode_duration_min !== undefined || !Number.isFinite(Number(updatedBible.script_word_count)) || Number(updatedBible.script_word_count) <= 0) {
+        updatedBible.script_word_count = screenplayWordTarget(resolvedRuntimeContract);
+      }
 
       const patchPayload: Record<string, any> = {
         story_bible: updatedBible,
@@ -460,6 +484,12 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
       }
       if (normalizedMedium !== undefined) {
         patchPayload.visual_medium = normalizedMedium;
+      }
+      if (normalizedVisualStyle !== undefined) {
+        patchPayload.visual_style = normalizedVisualStyle;
+      }
+      if (normalizedLanguage !== undefined) {
+        patchPayload.language = normalizedLanguage;
       }
       if (normalizedGenres !== undefined) {
         patchPayload.genre = normalizedGenres;
@@ -489,6 +519,9 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
         data: {
           ...updated,
           visual_medium: updatedBible.visual_medium ?? 'ANIME',
+          visual_style: updatedBible.visual_style ?? updatedBible.visual_medium ?? 'ANIME',
+          language: updatedBible.language ?? 'hi',
+          project_format: updatedBible.project_format ?? 'SERIES',
           genre: updatedBible.genre ?? 'Action Fantasy',
           auto_approve: Boolean(updatedBible.auto_approve ?? false),
           cover_image_url: updatedBible.cover_image_url ?? null,
@@ -498,7 +531,7 @@ export async function registerAnimeLoreRoutes(app: FastifyInstance): Promise<voi
           episode_duration_min: resolvedDurationMin,
           target_duration_sec: resolvedRuntimeContract.target_duration_sec,
           runtime_contract: resolvedRuntimeContract,
-          script_word_count: screenplayWordTarget(resolvedRuntimeContract),
+          script_word_count: Number(updatedBible.script_word_count ?? screenplayWordTarget(resolvedRuntimeContract)),
           total_episode_capacity: Number(updatedBible.total_seasons ?? 1) * Number(updatedBible.episodes_per_season ?? 12),
         },
       };
