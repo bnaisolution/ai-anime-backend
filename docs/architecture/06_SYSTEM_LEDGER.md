@@ -8,7 +8,7 @@
 - Worker `main` @ `7430690` (tunnel-URL publish step); static tests green; run-worker active.
 
 ## Current Heads & Infrastructure
-- EC2 t3.small; `ai-backend` + `n8n` healthy. Live backend image `ec2-user-backend:latest` / `anime-backend:phase3-test` (`sha256:71285e0d040aac9e24280d55edacd2b09c5cffa18347ac0d0cc72d8acba72fb0`) built 2026-11-26T19:04:25Z from Phase 3 code `c14c6a5`; container `34d91b37da3a` started 2026-11-26T19:05:03Z, health `healthy`/200; rollback `anime-backend:rollback-pre-phase3` (`sha256:b6ab4832c03033d7f052928329106a550da3fb42799ba53a376240552636c87b`). Backend branch `remediation/2026-11-23` remote HEAD `2fd17ff` (follow-up `n8n`/E2E only; no backend rebuild). CPU worker `main` `af92327`; GitHub run `45882396425`. Android `b84efe0`. n8n WF-03 `s4RGuFSDlevgD5nC` active, 45 nodes.
+- EC2 t3.small; `ai-backend` + `n8n` healthy. Live backend image `anime-backend:phase4-test` (`sha256:a9245015463aaf4b76fa0a1bade50b58c61b35bac0c0d66eb8d05b990f7b80c6`), container `7e36f8aa94f0` started 2026-11-27T05:57:37Z, health 200; rollback `ai-backend-old-phase4b` / `anime-backend:phase3-test` (`sha256:71285e0d040a...`). Backend branch `remediation/2026-11-23` HEAD `8ea03b7` (Phase 4 serialized GPU + one-scene batch + async image/video). CPU worker `main` `af92327`; active GitHub run `45950608171`. Android `b84efe0`. n8n WF-03 `s4RGuFSDlevgD5nC` active, 53 nodes.
 - Central DB `lqdjlcfczjottagobega.supabase.co`; Auth DB `icypjilkcqylgbpmkyes.supabase.co`; migrations 015–021 applied 2026-11-20.
 - n8n: 14 canonical StoryWF active. Backend must join `ec2-user_default` with alias `backend`.
 - BYOD runtime enabled for the dedicated test account; Director setup writes BYOD + central mirror.
@@ -57,3 +57,12 @@
 - Real pull execution: worker run `45882396425` claimed TTS job `cd400862-95d6-4a6c-9ab8-197fb7bbc5fa`; completed in `4.47s`, Telegram file id present, `audio_url` present.
 - Async WF-03: Branch F sends `async: true`; Wait 10s -> status poll -> IF completed -> restore result -> DB finalization. Live WF-03 imported/published/restarted; `active=1`, 45 nodes. Cached 60s run execution `135941` succeeded in `87.4s`; master `6,198,422` bytes; `actual_duration_sec=60`, `target_duration_sec=60`, `duration_delta_sec=0`, `duration_status=PASS`; `final_video_url` and `master_video_url` both present; episode `MIXED`, QC `PENDING`.
 - Remaining: GPU session code still accepts `.trycloudflare.com`/`.loca.lt` for GPU workers; zero-trycloudflare is not complete. No active GPU session, so a fresh Phase 4 60s GPU E2E is not yet possible. `central.pgpass` rotation and the 30-minute episode approval remain pending.
+
+
+## 2026-11-27 Phase 4 60s GPU/CPU E2E + Phase 5 Readiness
+- Phase 4 render gate PASS: project `f4186a9a-a8a8-40f2-ba54-a0d10ecc5aaf`, episode `08234c3f-3f3b-4826-846b-912f03ebcfc0`, command `e32dc6f2-6d5f-4378-a699-63fdf29cc4a8`; WF-03 execution `136050` (wrapper `136049`) success; 3 clips `COMPLETED/MIXED`; all images/audio/video/Telegram present.
+- CPU TTS jobs completed: `a2b84223-0df4-4208-a653-a95577d4d05a`, `20dcb424-23d1-457e-bf7f-3bb6b2661f7b`, `d414e2d2-7677-4405-9c0c-be35c8baedd7`. CPU FFmpeg job `ba74bfc8-0722-41dd-aff2-6c795799e6be` completed; `duration_sec=60`, `target_duration_sec=60`, `duration_delta_sec=0`, `duration_status=PASS`, `file_size_bytes=13308462`.
+- Episode `output_media`: `actual_duration_sec=60`, `duration_delta_sec=0`, `duration_status=PASS`, `loudness_lufs=-14`, `subtitles_burned=true`, `final_video_url` and `master_video_url` present; episode `MIXED`, QC `PENDING`.
+- Live fixes: `GPU_JOB_LOCK` + `BG_EXECUTOR(max_workers=1)` serialized GPU jobs; Branch A image async polling; GPU video async polling; WF-03 batch size 1; Branch B1 timeout 180s; E2E skip-WF02 seeds a command and uses three 20s scenes.
+- Known gap: full WF-02 -> WF-03 fresh path is not the passing evidence. Earlier full-path runs had WF-02 overwrite seeded scenes to 2 (30s) and duplicate WF-03 executions. Phase 4 proof used `ANIME_E2E_SKIP_WF02=1` with seeded 3x20s scenes; WF-02 scene planning for a 60s target still needs a clean single-dispatch run.
+- GPU session stopped after the run; no active GPU endpoint at ledger time. CPU worker run `45950608171` in progress. Phase 5 report: `docs/architecture/07_PHASE5_READINESS.md`.
