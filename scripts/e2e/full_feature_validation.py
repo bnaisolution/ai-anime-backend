@@ -757,16 +757,14 @@ def seed_scenes(project_id, episode_id):
         else " Masterpiece 2D anime cel-shaded keyframe, ufotable lighting, volumetric rain, cinematic composition."
     )
     scenes = [
-        (1, "narration_wide", "Rain-soaked hilltop shrine at dusk, a bronze bell rings by itself.", "बारिश की रात, पुराने मंदिर की घंटियाँ खुद बज उठीं।", "CHAR_AARAV", "neutral", 15),
-        (2, "dialogue_closeup", "Aarav reaches for the sealed bronze door, rain streaming down his face.", "ये आवाज़... कोई मुझे बुला रहा है।", "CHAR_AARAV", "fear", 15),
-        (3, "dialogue_closeup", "Mira steps out of the shadows, silver eyes reflecting the bell.", "रुको! उस दरवाज़े के पीछे जो है, वो इंसान नहीं है।", "CHAR_MIRA", "anger", 15),
-        (4, "action", "Rook raises a burnt crimson sword as the shrine doors crack open.", "देर हो गई, आरव। अब तुम्हारी रक्षा कोई नहीं कर सकता।", "CHAR_ROOK", "anger", 15),
+        (1, "narration_wide", "Rain-soaked hilltop shrine at dusk, a bronze bell rings by itself.", "बारिश की रात, पुराने मंदिर की घंटियाँ खुद बज उठीं।", "CHAR_AARAV", "neutral", 20),
+        (2, "dialogue_closeup", "Aarav reaches for the sealed bronze door, rain streaming down his face.", "ये आवाज़... कोई मुझे बुला रहा है।", "CHAR_AARAV", "fear", 20),
+        (3, "action", "Mira steps out of the shadows, silver eyes reflecting the bell as the shrine doors crack open.", "रुको! उस दरवाज़े के पीछे जो है, वो इंसान नहीं है।", "CHAR_MIRA", "anger", 20),
     ]
     sfx_by_scene = {
         1: ["bell_toll"],
         2: ["rain_ambience"],
-        3: ["door_creak"],
-        4: ["sword_draw", "thunder_rumble"],
+        3: ["door_creak", "sword_draw"],
     }
     for order, category, desc, voice_text, speaker, emotion, duration in scenes:
         needs_motion = True
