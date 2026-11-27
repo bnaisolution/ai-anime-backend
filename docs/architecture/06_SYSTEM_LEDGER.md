@@ -8,7 +8,7 @@
 - Worker `main` @ `7430690` (tunnel-URL publish step); static tests green; run-worker active.
 
 ## Current Heads & Infrastructure
-- EC2 t3.small; `ai-backend` + `n8n` healthy. Live backend image `anime-backend:phase4-test` (`sha256:a9245015463aaf4b76fa0a1bade50b58c61b35bac0c0d66eb8d05b990f7b80c6`), container `7e36f8aa94f0` started 2026-11-27T05:57:37Z, health 200; rollback `ai-backend-old-phase4b` / `anime-backend:phase3-test` (`sha256:71285e0d040a...`). Backend branch `remediation/2026-11-23` HEAD `8ea03b7` (Phase 4 serialized GPU + one-scene batch + async image/video). CPU worker `main` `af92327`; active GitHub run `45950608171`. Android `b84efe0`. n8n WF-03 `s4RGuFSDlevgD5nC` active, 53 nodes.
+- EC2 t3.small; `ai-backend` + `n8n` healthy. Live backend image `anime-backend:phase4-test` (`sha256:a9245015463aaf4b76fa0a1bade50b58c61b35bac0c0d66eb8d05b990f7b80c6`), container `7e36f8aa94f0` started 2026-11-27T05:57:37Z, health 200; rollback `ai-backend-old-phase4b` / `anime-backend:phase3-test` (`sha256:71285e0d040a...`). Backend branch `remediation/2026-11-23` Phase 4 code `8ea03b7` (serialized GPU + one-scene batch + async image/video); docs/report follow-up commit is this entry. CPU worker `main` `af92327`; active GitHub run `45950608171`. Android `b84efe0`. n8n WF-03 `s4RGuFSDlevgD5nC` active, 53 nodes.
 - Central DB `lqdjlcfczjottagobega.supabase.co`; Auth DB `icypjilkcqylgbpmkyes.supabase.co`; migrations 015–021 applied 2026-11-20.
 - n8n: 14 canonical StoryWF active. Backend must join `ec2-user_default` with alias `backend`.
 - BYOD runtime enabled for the dedicated test account; Director setup writes BYOD + central mirror.
