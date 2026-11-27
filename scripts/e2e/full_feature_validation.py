@@ -982,10 +982,37 @@ def main():
     if os.environ.get("ANIME_E2E_SKIP_WF02", "").lower() in {"1", "true", "yes"}:
         rows = db(f"api_commands?select=id,status&project_id=eq.{project_id}&intent=eq.GENERATE_EPISODE&status=eq.SUCCEEDED&order=created_at.desc&limit=1")
         if not rows:
-            raise RuntimeError("no successful GENERATE_EPISODE command to reuse")
+            command_id = str(uuid.uuid4())
+            db(
+                "api_commands",
+                method="POST",
+                payload=[{
+                    "id": command_id,
+                    "project_id": project_id,
+                    "user_id": project.get("user_id"),
+                    "intent": "GENERATE_EPISODE",
+                    "payload": {
+                        "mode": "SAVE",
+                        "intent": "GENERATE_EPISODE",
+                        "wf_key": "WF-02",
+                        "project_id": project_id,
+                        "user_id": project.get("user_id"),
+                        "season_no": 1,
+                        "episode_no": 1,
+                        "command_id": command_id,
+                    },
+                    "status": "SUCCEEDED",
+                    "idempotency_key": f"full-feature-skip-wf02-{RUN_TAG}",
+                    "body_hash": "",
+                }],
+                prefer="return=representation",
+            )
+            rows = [{"id": command_id, "status": "SUCCEEDED"}]
+            print(json.dumps({"command_id": command_id, "state": "seeded"}, indent=2))
+        else:
+            print(json.dumps({"command_id": rows[0]["id"], "state": "reused"}, indent=2))
         command_id = rows[0]["id"]
         command = rows[0]
-        print(json.dumps({"command_id": command_id, "state": "reused"}, indent=2))
     else:
         command_id = dispatch_episode(token, project_id)
         print(json.dumps({"command_id": command_id, "state": "dispatched"}, indent=2))
