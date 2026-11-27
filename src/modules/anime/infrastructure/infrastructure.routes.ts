@@ -276,6 +276,7 @@ DEVICE_0 = "cuda:0" if torch.cuda.is_available() else "cpu"
 DEVICE_1 = ("cuda:1" if torch.cuda.device_count() > 1 else ("cuda:0" if torch.cuda.is_available() else "cpu"))
 GPU_0_LOCK = threading.Lock()
 GPU_1_LOCK = threading.Lock()
+GPU_JOB_LOCK = threading.Lock()
 MODEL_CACHE: Dict[str, Any] = {}
 ANIMATION_DISABLED = False
 IP_ADAPTER_READY = False
@@ -293,7 +294,7 @@ LAST_ACTIVITY_TS = time.time()
 ACTIVE_JOBS = 0
 SHUTTING_DOWN = False
 STATE_LOCK = threading.Lock()
-BG_EXECUTOR = ThreadPoolExecutor(max_workers=2)
+BG_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 app = FastAPI(title="AI Cinematic Anime Engine - Kaggle Worker")
 
 def require_session_token(authorization: str = Header(default="")) -> None:
@@ -362,14 +363,16 @@ def start_lifecycle_watchdogs() -> None:
 def run_image_job(job_id: str, req: Any) -> Dict[str, Any]:
     begin_job()
     try:
-        return execute_image_generation_job(job_id, req)
+        with GPU_JOB_LOCK:
+            return execute_image_generation_job(job_id, req)
     finally:
         end_job()
 
 def run_video_job(job_id: str, req: Any) -> Dict[str, Any]:
     begin_job()
     try:
-        return execute_video_assembly_job(job_id, req)
+        with GPU_JOB_LOCK:
+            return execute_video_assembly_job(job_id, req)
     finally:
         end_job()
 

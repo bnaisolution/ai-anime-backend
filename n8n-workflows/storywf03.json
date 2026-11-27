@@ -475,7 +475,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, season_no: $json.season_no, episode_no: $json.episode_no, scene_order: $json.scene_order, visual_medium: $json.visual_medium, engine: 'SDXL_LIGHTNING_PULID', model_mount_path: $json.kaggle_dataset_mount, prompt: $json.visual_prompt, visual_dna: $json.character_visual_dna, character_code: $json.dialogue_speaker_id, reference_image_file_id: $json.reference_image_file_id, reference_image_url: $json.reference_image_url, fallback_gpu_url: $json.fallback_gpu_url, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge } }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, season_no: $json.season_no, episode_no: $json.episode_no, scene_order: $json.scene_order, visual_medium: $json.visual_medium, async_mode: true, engine: 'SDXL_LIGHTNING_PULID', model_mount_path: $json.kaggle_dataset_mount, prompt: $json.visual_prompt, visual_dna: $json.character_visual_dna, character_code: $json.dialogue_speaker_id, reference_image_file_id: $json.reference_image_file_id, reference_image_url: $json.reference_image_url, fallback_gpu_url: $json.fallback_gpu_url, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge } }) }}",
         "options": {
           "timeout": 300000
         }
@@ -1448,6 +1448,89 @@
         5904,
         208
       ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "973ee867-b600-434f-b4d5-33ad6c089ef5",
+      "name": "Wait for GPU Image",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2976,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('If Image Generation Needed').item.json.primary_gpu_url }}/v1/jobs/{{ encodeURIComponent($json.job_id) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('If Image Generation Needed').item.json.gpu_auth_token }}"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "9ee3ec1c-cea1-4ff2-a68f-c5ed37079305",
+      "name": "Check GPU Image Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3040,
+        208
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.status === 'completed' }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "6a45ac08-80eb-4d24-b880-7c82b8884956",
+      "name": "GPU Image Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        3104,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const payload = ($input.item && $input.item.json) ? $input.item.json : {};\nconst result = payload.result && typeof payload.result === 'object' ? payload.result : payload;\nreturn { json: result };"
+      },
+      "id": "303d54a9-bad1-4fae-93a5-e5d1de4221c5",
+      "name": "Restore GPU Image Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3168,
+        208
+      ]
     }
   ],
   "connections": {
@@ -1668,7 +1751,7 @@
       "main": [
         [
           {
-            "node": "Validate Image Integrity & Checkpoint",
+            "node": "Wait for GPU Image",
             "type": "main",
             "index": 0
           }
@@ -2172,6 +2255,64 @@
         [
           {
             "node": "Validate Video Integrity & Checkpoint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for GPU Image": {
+      "main": [
+        [
+          {
+            "node": "Check GPU Image Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check GPU Image Status": {
+      "main": [
+        [
+          {
+            "node": "GPU Image Done?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPU Image Done?": {
+      "main": [
+        [
+          {
+            "node": "Restore GPU Image Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for GPU Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore GPU Image Result": {
+      "main": [
+        [
+          {
+            "node": "Validate Image Integrity & Checkpoint",
             "type": "main",
             "index": 0
           }
