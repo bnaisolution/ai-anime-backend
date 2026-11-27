@@ -613,7 +613,7 @@
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ worker_kind: 'cpu', path: '/v1/tts/svara', body: ({ project_id: $json.project_id, episode_no: $json.episode_no, scene_order: $json.scene_order, provider: 'Svara TTS', voice_text: $json.voice_text, voice_id: $json.voice_id, emotion: $json.emotion, pitch_multiplier: $json.pitch_multiplier, rate_multiplier: $json.rate_multiplier, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge } }), command_id: $('Normalize Input & Enforce SAVE Mode').first().json.command_id, project_id: $json.project_id || $('When Executed by Another Workflow').first().json.project_id }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 180000
         }
       }
     },
