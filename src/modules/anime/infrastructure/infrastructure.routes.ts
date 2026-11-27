@@ -778,7 +778,7 @@ def execute_image_generation_job(job_id: str, req: GenerateImageRequest) -> Dict
                 except Exception as ref_exc:
                     stage_errors.append({"stage": "identity_auto_reference", "error": str(ref_exc)[:200]})
             pipe_kwargs = dict(prompt=full_prompt, negative_prompt=neg_prompt, num_inference_steps=4, guidance_scale=0.0, width=1344, height=768, generator=generator)
-            if reference_image is not None and ensure_ip_adapter(pipe):
+            if reference_image is not None and os.getenv("ENABLE_SDXL_IP_ADAPTER", "false").lower() in ("1", "true", "yes") and ensure_ip_adapter(pipe):
                 pipe_kwargs["ip_adapter_image"] = reference_image
                 identity_mode = "IP_ADAPTER"
                 identity_scale = 0.8 if req.visual_medium.upper() in ("REAL_HUMAN", "LIVE_ACTION", "3D") else 0.65
@@ -981,7 +981,10 @@ async def shutdown_endpoint(_: None = Depends(require_session_token)):
 @app.get("/v1/jobs/{job_id}")
 async def get_job_status(job_id: str, _: None = Depends(require_session_token)):
     if job_id not in JOBS_STORE: raise HTTPException(status_code=404, detail="Job not found")
-    return JOBS_STORE[job_id]
+    job = JOBS_STORE[job_id]
+    if str(job.get("status", "")).lower() == "failed":
+        raise HTTPException(status_code=500, detail=str(job.get("error") or "job failed")[:1000])
+    return job
 
 @app.get("/v1/gpu/diagnostics")
 async def diagnostics(depth: int = 3, limit: int = 300):

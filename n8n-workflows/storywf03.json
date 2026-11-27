@@ -801,7 +801,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, season_no: $json.season_no, episode_no: $json.episode_no, scene_order: $json.scene_order, visual_medium: $json.visual_medium, model_mount_path: $json.kaggle_dataset_mount, fallback_gpu_url: $json.fallback_gpu_url, image_url: $json.image_url, audio_url: $json.audio_url, image_telegram_file_id: $json.tg_image_file_id || null, audio_telegram_file_id: $json.tg_audio_file_id || null, duration_sec: $json.duration_sec, emotion: $json.emotion, gpu_priority: $json.gpu_priority, routing_type: $json.routing_type, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge }, stages: { branch_c_animatediff: { enabled: $json.run_animatediff, gpu_slot: 'GPU_0', model: 'AnimateDiff-Lightning', prompt: $json.visual_prompt }, branch_d_musetalk: { enabled: $json.run_musetalk && $json.mouth_visible, gpu_slot: 'GPU_1', model: 'MuseTalk-v1.5', mouth_visible: $json.mouth_visible }, branch_e_liveportrait: { enabled: $json.run_liveportrait, gpu_slot: 'GPU_1', model: 'LivePortrait', emotion: $json.emotion } } }) }}",
+        "jsonBody": "={{ JSON.stringify({ project_id: $json.project_id, season_no: $json.season_no, episode_no: $json.episode_no, scene_order: $json.scene_order, visual_medium: $json.visual_medium, model_mount_path: $json.kaggle_dataset_mount, fallback_gpu_url: $json.fallback_gpu_url, image_url: $json.image_url, audio_url: $json.audio_url, image_telegram_file_id: $json.tg_image_file_id || null, audio_telegram_file_id: $json.tg_audio_file_id || null, duration_sec: $json.duration_sec, emotion: $json.emotion, gpu_priority: $json.gpu_priority, routing_type: $json.routing_type, telegram_upload: { enabled: Boolean($json.telegram_bot_token && $json.telegram_chat_id), bot_token: $json.telegram_bot_token, chat_id: $json.telegram_chat_id, stream_bridge_url: $json.telegram_stream_bridge }, async_mode: true, stages: { branch_c_animatediff: { enabled: $json.run_animatediff, gpu_slot: 'GPU_0', model: 'AnimateDiff-Lightning', prompt: $json.visual_prompt }, branch_d_musetalk: { enabled: $json.run_musetalk && $json.mouth_visible, gpu_slot: 'GPU_1', model: 'MuseTalk-v1.5', mouth_visible: $json.mouth_visible }, branch_e_liveportrait: { enabled: $json.run_liveportrait, gpu_slot: 'GPU_1', model: 'LivePortrait', emotion: $json.emotion } } }) }}",
         "options": {
           "timeout": 600000
         }
@@ -1365,6 +1365,89 @@
         3456,
         300
       ]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 10,
+        "unit": "seconds"
+      },
+      "id": "a716d51b-2c66-4627-ba3e-35ce2bcbe4df",
+      "name": "Wait for GPU Video",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5712,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Restore Scene Context After Audio').item.json.primary_gpu_url }}/v1/jobs/{{ encodeURIComponent($json.job_id) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Restore Scene Context After Audio').item.json.gpu_auth_token }}"
+            },
+            {
+              "name": "Bypass-Tunnel-Reminder",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "29d0b50c-768e-443a-b068-cc0202362847",
+      "name": "Check GPU Video Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5776,
+        208
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.status === 'completed' }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "0214e1eb-36c1-4274-b9f7-0897d958774d",
+      "name": "GPU Video Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        5840,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const payload = ($input.item && $input.item.json) ? $input.item.json : {};\nconst result = payload.result && typeof payload.result === 'object' ? payload.result : payload;\nreturn { json: result };"
+      },
+      "id": "f86ef120-e857-4349-b56d-7ea90f1c15a2",
+      "name": "Restore GPU Video Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5904,
+        208
+      ]
     }
   ],
   "connections": {
@@ -1773,7 +1856,7 @@
       "main": [
         [
           {
-            "node": "Validate Video Integrity & Checkpoint",
+            "node": "Wait for GPU Video",
             "type": "main",
             "index": 0
           }
@@ -2031,6 +2114,64 @@
         [
           {
             "node": "Verify Final Master Video & Prepare DB Finalization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for GPU Video": {
+      "main": [
+        [
+          {
+            "node": "Check GPU Video Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check GPU Video Status": {
+      "main": [
+        [
+          {
+            "node": "GPU Video Done?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Backend: Error Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPU Video Done?": {
+      "main": [
+        [
+          {
+            "node": "Restore GPU Video Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait for GPU Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore GPU Video Result": {
+      "main": [
+        [
+          {
+            "node": "Validate Video Integrity & Checkpoint",
             "type": "main",
             "index": 0
           }
