@@ -7,6 +7,8 @@ import { DEFAULT_DOMAIN_PROMPTS, canonicalMediumKey, type PromptCategory } from 
 import { buildProjectCreativeContext, creativeConfigurationSnapshot, loadCreativePromptRows, type ProjectCreativeContext } from '../prompts/creative.service';
 import { AnimeError, AnimeErrorCode } from '../errors/anime.errors';
 import { flags } from '../../../config/flags';
+import { animeFlags } from '../config/anime.env';
+import { retrieveContext } from '../intelligence/memory.service';
 import { buildRuntimeContract, screenplayWordTarget, type RuntimeContract } from '../runtime/runtimeContract';
 import { normalizeProjectFormat, normalizeProjectLanguage, projectFormatRules, projectLanguageName } from '../reads/project.contract';
 import { evaluateProjectSetup } from '../../ai/director/director.readiness';
@@ -822,6 +824,26 @@ export async function submitAnimeCommand(
           ? payloadObj.prompt
           : '');
 
+  let narrativeMemory: Array<Record<string, unknown>> = [];
+  if (animeFlags.narrativeMemory) {
+    try {
+      const memoryRows = await retrieveContext(
+        params.body.project_id,
+        `${userPrompt} S${seasonNo}E${episodeNo}`,
+        params.userId
+      );
+      narrativeMemory = memoryRows.map((row: any) => ({
+        id: row.id ?? null,
+        memory_type: row.memory_type ?? row.type ?? null,
+        content: row.content ?? null,
+        metadata: row.metadata ?? null,
+        similarity: row.similarity ?? null,
+      }));
+    } catch (error) {
+      console.warn('[anime] narrative memory retrieval failed; continuing without memory', error);
+    }
+  }
+
   const enrichedPayload: Record<string, unknown> = {
     ...payloadObj,
     intent: params.body.intent,
@@ -869,6 +891,7 @@ export async function submitAnimeCommand(
     series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec, runtime_contract: runtimeContract },
     target_duration_sec: canonicalTargetSec,
     runtime_contract: runtimeContract,
+    narrative_memory: narrativeMemory,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},
@@ -926,6 +949,7 @@ export async function submitAnimeCommand(
     series_config: { ...dynamicCtx.seriesConfig, target_duration_sec: canonicalTargetSec, runtime_contract: runtimeContract },
     target_duration_sec: canonicalTargetSec,
     runtime_contract: runtimeContract,
+    narrative_memory: narrativeMemory,
     user_infrastructure: userInfrastructure,
     gpu_routing: userInfrastructure.gpu_routing ?? {},
     telegram_storage: userInfrastructure.telegram_storage ?? {},

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { writeAudit } from '../audit/audit.writer';
+import { incrementCounter } from '../observability/metrics';
 import { CommandStatus } from '../commands/commands.types';
 import { insertCommandAtomic } from '../commands/commands.repo';
 import { animeSupabase } from '../db/anime.supabase';
@@ -248,8 +249,10 @@ export async function reconcileCommand(input: { project_id: string, command_id: 
   if (next === CommandStatus.SUCCEEDED && productionIntent && !media.final_video_url) {
     next = CommandStatus.MANUAL_REVIEW;
     blockedNoMedia = true;
+    incrementCounter('anime_command_blocked_total', { reason: 'OUTPUT_MEDIA_MISSING' });
   }
   if (next !== prev) {
+    incrementCounter('anime_command_status_total', { status: next });
     await animeSupabase.from('api_commands').update({ status: next }).eq('project_id', input.project_id).eq('id', input.command_id);
     await writeAudit({
       project_id: input.project_id,

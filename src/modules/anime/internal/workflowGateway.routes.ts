@@ -8,6 +8,7 @@ import { buildProviderRequest } from './workflowGateway.llm';
 import { verifyWorkflowGatewayRequest } from './workflowGateway.auth';
 import { getDecryptedMapForUser } from '../infrastructure/infrastructure.service';
 import { estimateTokens, reserveTokenBudget } from '../../../core/ai-brain/modelRouter';
+import { incrementCounter } from '../observability/metrics';
 import * as tenantDb from '../tenant/tenantDatabase.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -239,9 +240,11 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
         const text = await response.text();
         if (!response.ok) {
           if (response.status === 413) {
+            incrementCounter('anime_llm_gateway_failures_total', { status: 413, reason: 'INPUT_TOO_LARGE' });
             throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} exceeded provider token limit.`, httpStatus: 413, retryable: false });
           }
           if (response.status === 429) {
+            incrementCounter('anime_llm_gateway_failures_total', { status: 429, reason: 'QUOTA_DEFERRED' });
             throw new AnimeError({ code: AnimeErrorCode.QUOTA_DEFERRED, message: `LLM batch item ${index + 1} was rate limited.`, httpStatus: 429, retryable: true });
           }
           throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: `LLM batch item ${index + 1} failed with status ${response.status}.`, httpStatus: 503, retryable: true });
