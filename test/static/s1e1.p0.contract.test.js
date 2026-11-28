@@ -86,7 +86,7 @@ test('WF-02 Stage-1 uses act-wise batching with explicit output budget', () => {
   const stage1a = node(wf, 'Stage 1A: Groq Outline & Script Writer');
   const stage1b = node(wf, 'Stage 1B: Gemini Fallback Script Writer');
   assert.match(context.parameters.jsCode, /batch_mode: 'acts'/);
-  assert.match(context.parameters.jsCode, /max_tokens: 6144/);
+  assert.match(context.parameters.jsCode, /max_tokens: 4096/);
   assert.match(context.parameters.jsCode, /stage1Batch/);
   assert.match(context.parameters.jsCode, /stage1FallbackBatch/);
   assert.match(context.parameters.jsCode, /__beatsPerActLow/);
