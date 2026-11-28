@@ -1,9 +1,9 @@
 # S1E1 Remediation + ViMax Adoption — Final 4-Phase Implementation Plan
 
-**Version:** v3.2  
+**Version:** v3.3  
 **Date:** 2026-11-28  
-**Status:** APPROVED — executing all 4 phases sequentially; Phase 0 complete  
-**Scope:** Phase 0 safety net applied. Phase 1 P0 implementation in progress.  
+**Status:** APPROVED — executing all 4 phases sequentially; Phase 0 complete; P0 implemented locally  
+**Scope:** Phase 0 safety net applied. Phase 1 P0 code implemented and tested locally; EC2 replay pending.  
 **Canonical copies:**
 - Local Android repo: `docs/audit/S1E1_VIMAX_4_PHASE_IMPLEMENTATION_PLAN.md`
 - EC2 backend repo: `/home/ec2-user/ai-backend/docs/plans/S1E1_VIMAX_4_PHASE_IMPLEMENTATION_PLAN.md`
@@ -196,6 +196,8 @@ Applied:
 ---
 
 ## 4. Phase 1 — P0 correctness (blocking)
+
+**Implementation status (2026-11-28):** P0 code implemented locally. WF-02 runtime-contract gates, Stage-1 act grounding, Stage-2 fail-closed, beat/runtime persistence, and terminal scene-plan callbacks are in place. WF-03 pre-loop fetch and Cache Evaluator now use `executeOnce` + `.first()`, remove the generic scene fallback, and emit one terminal episode callback. Backend supervisor blocks production success without media, gateway batch dispatch is bounded with 413/429 handling, migration `023` + rollback exist, and P0 tests pass. EC2 deployment and S1E1 replay remain.
 
 ### 4.1 Runtime config and Stage-1
 
@@ -663,11 +665,11 @@ Pattern from ViMax Novel2Video; do not copy its buggy pipeline.
 
 **Approved scope:** all 4 phases, executed sequentially with the four corrections in Section 2.
 
-Phase 0 is complete. Current work: Phase 1 P0 implementation.
-- `storywf02.json`: runtime contract, strict gates, Stage-2 grounding, persistence
-- `storywf03.json`: single pre-loop fetch, single terminal callback
-- backend: command status, migration, tests
-- GPU: verify existing serialization remains intact
+Phase 0 is complete. P0 code is implemented locally and unit/static P0 tests pass. Current work: commit/push P0, apply migration and flags on EC2, then run the S1E1 replay.
+- `storywf02.json`: runtime contract, strict gates, Stage-2 grounding, persistence — done
+- `storywf03.json`: single pre-loop fetch, single terminal callback — done
+- backend: command status, migration, tests — done
+- GPU: existing serialization retained — verified by inspection
 
 ---
 
@@ -680,3 +682,4 @@ Phase 0 is complete. Current work: Phase 1 P0 implementation.
 | v3 | 2026-11-28 | Added 4 corrections; accidentally omitted explicit P2 |
 | v3.1 | 2026-11-28 | Restored Phase 3 P2; final 4-phase plan |
 | v3.2 | 2026-11-28 | Owner approved all 4 phases; Phase 0 completed and recorded |
+| v3.3 | 2026-11-28 | P0 implemented locally: WF-02 strict gates/act grounding, WF-03 single fetch/terminal callback, supervisor media gate, bounded gateway, migration 023, tests |
