@@ -1,9 +1,9 @@
 # S1E1 Remediation + ViMax Adoption — Final 4-Phase Implementation Plan
 
-**Version:** v3.1  
+**Version:** v3.2  
 **Date:** 2026-11-28  
-**Status:** FINAL PLAN — approval pending for Phase 0 + Phase 1 (P0) only  
-**Scope:** Read-only investigation complete. No code, workflow, DB, or config changes made by this plan.  
+**Status:** APPROVED — executing all 4 phases sequentially; Phase 0 complete  
+**Scope:** Phase 0 safety net applied. Phase 1 P0 implementation in progress.  
 **Canonical copies:**
 - Local Android repo: `docs/audit/S1E1_VIMAX_4_PHASE_IMPLEMENTATION_PLAN.md`
 - EC2 backend repo: `/home/ec2-user/ai-backend/docs/plans/S1E1_VIMAX_4_PHASE_IMPLEMENTATION_PLAN.md`
@@ -32,7 +32,7 @@ The final program is **four phases**:
 | **Phase 2** | P1 ViMax capabilities | Narrative memory, shot/camera, continuity, keyframes, manifest, UI |
 | **Phase 3** | P2 scale/observability | Metrics, alerts, provider registry, optional transitions, cost controls |
 
-**Approval rule:** Phase 0 + P0 only first. P1 starts only after S1E1 replay passes P0 cleanly. P2 starts after P1 metrics are stable.
+**Approval rule:** Owner approved all 4 phases on 2026-11-28. Execute sequentially. P1 still starts only after S1E1 replay passes P0 cleanly. P2 starts after P1 metrics are stable.
 
 ---
 
@@ -157,6 +157,17 @@ Correct acceptance:
 ---
 
 ## 3. Phase 0 — Safety net
+
+**Status: COMPLETE (2026-11-28).**
+
+Applied:
+- Backed up `storywf02.json`, `storywf03.json`, and EC2 `.env` under `backups/phase0-2026-11-28/` (gitignored).
+- Added default-off flags in `anime.env.ts` and EC2 `.env`.
+- Marked both S1E1 commands, the episode, and the episode state `MANUAL_REVIEW`.
+- Wrote 4 `S1E1_VIMAX_PHASE0` audit rows.
+- Preserved 82 scenes / 82 clips as fixture; no deletes.
+- Added `docs/plans/PHASE0_ROLLBACK.md`.
+- Confirmed fixture rows are keyed by `project_id + season_no + episode_no`; `episode_id` is `NULL` on fixture rows.
 
 ### Actions
 
@@ -650,16 +661,13 @@ Pattern from ViMax Novel2Video; do not copy its buggy pipeline.
 
 ## 13. Next step
 
-**Approved scope (pending confirmation):** Phase 0 + Phase 1 (P0) only, with the four corrections in Section 2.
+**Approved scope:** all 4 phases, executed sequentially with the four corrections in Section 2.
 
-Next output should be a **Phase 0 + P0 diff plan only**:
-- exact node changes in `storywf02.json`
-- exact node changes in `storywf03.json`
-- exact backend function changes
-- exact migration SQL
-- exact test fixtures
-
-No edits until that diff plan is approved. P1 and P2 remain gated.
+Phase 0 is complete. Current work: Phase 1 P0 implementation.
+- `storywf02.json`: runtime contract, strict gates, Stage-2 grounding, persistence
+- `storywf03.json`: single pre-loop fetch, single terminal callback
+- backend: command status, migration, tests
+- GPU: verify existing serialization remains intact
 
 ---
 
@@ -671,3 +679,4 @@ No edits until that diff plan is approved. P1 and P2 remain gated.
 | v2 | 2026-11-28 | Added Phase 0 safety, flags, rollback, backward compatibility, GPU OOM |
 | v3 | 2026-11-28 | Added 4 corrections; accidentally omitted explicit P2 |
 | v3.1 | 2026-11-28 | Restored Phase 3 P2; final 4-phase plan |
+| v3.2 | 2026-11-28 | Owner approved all 4 phases; Phase 0 completed and recorded |
