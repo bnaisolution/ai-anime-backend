@@ -13,6 +13,15 @@ export async function handleCallbackRequest(input: { source: 'n8n' | 'worker'; r
   let payload: any; try { payload = JSON.parse(input.rawBody); } catch (e) { throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'Invalid JSON' }); }
   const projectId = typeof payload.project_id === 'string' ? payload.project_id.trim() : null;
   if (!projectId) throw new AnimeError({ code: AnimeErrorCode.WORKFLOW_CONTRACT_MISMATCH, message: 'Missing project_id' });
+  const completionScope = typeof payload.completion_scope === 'string' ? payload.completion_scope.trim().toUpperCase() : null;
+  const callbackStage = typeof payload.stage === 'string' ? payload.stage.trim().toUpperCase() : null;
+  const terminal = payload.terminal === true;
+  if (terminal && !completionScope) {
+    throw new AnimeError({ code: AnimeErrorCode.WORKFLOW_CONTRACT_MISMATCH, message: 'Terminal callback requires completion_scope.' });
+  }
+  if (terminal && String(payload.wf_key || '').toUpperCase() === 'WF-03' && completionScope !== 'EPISODE') {
+    throw new AnimeError({ code: AnimeErrorCode.WORKFLOW_CONTRACT_MISMATCH, message: 'WF-03 terminal callback must be EPISODE scope.' });
+  }
   const commandId = typeof payload.command_id === 'string' && payload.command_id.trim() ? payload.command_id.trim() : null;
   if (commandId) {
     const { data: command, error: commandError } = await animeSupabase
@@ -41,6 +50,6 @@ export async function handleCallbackRequest(input: { source: 'n8n' | 'worker'; r
     await animeSupabase.from('callback_inbox').delete().eq('project_id', projectId).eq('callback_id', callbackId);
     throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: 'Failed to enqueue callback reconciliation.', cause: outboxError });
   }
-  await writeAudit({ project_id: projectId, workflow_name: payload.wf_key || `CALLBACK_${input.source.toUpperCase()}`, action: 'CALLBACK_RECEIVED', entity_type: 'CALLBACK_INBOX', entity_id: callbackId, new_value: { source: input.source, callback_id: callbackId, command_id: commandId }, request_id: input.requestId });
+  await writeAudit({ project_id: projectId, workflow_name: payload.wf_key || `CALLBACK_${input.source.toUpperCase()}`, action: 'CALLBACK_RECEIVED', entity_type: 'CALLBACK_INBOX', entity_id: callbackId, new_value: { source: input.source, callback_id: callbackId, command_id: commandId, stage: callbackStage, completion_scope: completionScope, terminal }, request_id: input.requestId });
   return { accepted: true, duplicate: false, callback_id: callbackId, project_id: projectId };
 }

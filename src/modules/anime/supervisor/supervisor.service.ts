@@ -214,18 +214,29 @@ async function enqueueAutoQc(input: {
 export async function reconcileCommand(input: { project_id: string, command_id: string, callback_payload?: any, request_id?: string }): Promise<any> {
   const snap = await readCommandState(input.project_id, input.command_id);
   if (snap.command === null) return { command_id: input.command_id, next_status: CommandStatus.FAILED };
-  const prev = String(snap.command.status || '').toUpperCase(); const cb = input.callback_payload?.status?.toUpperCase(); const ep = snap.episode_state?.current_state?.toUpperCase();
+  const prev = String(snap.command.status || '').toUpperCase();
+  const callback = asRecord(input.callback_payload);
+  const cb = String(callback.status || '').toUpperCase();
+  const ep = snap.episode_state?.current_state?.toUpperCase();
   const intent = String(snap.command.intent || '').toUpperCase();
+  const productionIntent = PRODUCTION_INTENTS.has(intent);
+  const completionScope = firstString(callback.completion_scope, callback.completionScope);
+  const callbackStage = firstString(callback.stage, callback.callback_stage);
+  const terminal = callback.terminal === true;
+  const media = extractCallbackMedia(input.callback_payload);
   const publishConfirmed = ep === 'PUBLISHED'
-    || String(input.callback_payload?.publish_status || '').toUpperCase() === 'PUBLISHED'
-    || input.callback_payload?.published === true
-    || Boolean(input.callback_payload?.published_at);
+    || String(callback.publish_status || '').toUpperCase() === 'PUBLISHED'
+    || callback.published === true
+    || Boolean(callback.published_at);
   if (['SUCCEEDED', 'FAILED'].includes(prev)) return { command_id: input.command_id, next_status: prev };
   let next = CommandStatus.RECONCILING;
+  let blockedNoMedia = false;
   if (intent === 'PUBLISH_NOW') {
     if (publishConfirmed) next = CommandStatus.SUCCEEDED;
     else if (['FAILED', 'ERROR', 'CANCELLED'].includes(cb) || ep?.endsWith('_FAILED')) next = CommandStatus.FAILED;
     else if (cb === 'MANUAL_REVIEW' || snap.pending_actions.length > 0) next = CommandStatus.MANUAL_REVIEW;
+  } else if (productionIntent && completionScope === 'SCENE_PLAN_ONLY') {
+    next = CommandStatus.RECONCILING;
   } else if (['SUCCEEDED', 'COMPLETED'].includes(cb) || ['COMPLETED', 'PUBLISHED'].includes(ep)) next = CommandStatus.SUCCEEDED;
   else if (['FAILED', 'ERROR', 'CANCELLED'].includes(cb) || ep?.endsWith('_FAILED')) next = CommandStatus.FAILED;
   else if (cb === 'MANUAL_REVIEW' || snap.pending_actions.length > 0) next = CommandStatus.MANUAL_REVIEW;
@@ -234,11 +245,24 @@ export async function reconcileCommand(input: { project_id: string, command_id: 
     if (ageMs > 30 * 60 * 1000) next = CommandStatus.MANUAL_REVIEW;
     else return { command_id: input.command_id, next_status: prev };
   }
+  if (next === CommandStatus.SUCCEEDED && productionIntent && !media.final_video_url) {
+    next = CommandStatus.MANUAL_REVIEW;
+    blockedNoMedia = true;
+  }
   if (next !== prev) {
     await animeSupabase.from('api_commands').update({ status: next }).eq('project_id', input.project_id).eq('id', input.command_id);
-    await writeAudit({ project_id: input.project_id, user_id: snap.command.user_id, workflow_name: 'SUPERVISOR_RECONCILER', action: 'COMMAND_STATE_RECONCILED', entity_type: 'API_COMMAND', entity_id: input.command_id, previous_value: { status: prev }, new_value: { status: next }, request_id: input.request_id });
+    await writeAudit({
+      project_id: input.project_id,
+      user_id: snap.command.user_id,
+      workflow_name: 'SUPERVISOR_RECONCILER',
+      action: 'COMMAND_STATE_RECONCILED',
+      entity_type: 'API_COMMAND',
+      entity_id: input.command_id,
+      previous_value: { status: prev },
+      new_value: { status: next, stage: callbackStage, completion_scope: completionScope, terminal },
+      request_id: input.request_id,
+    });
     if (next === CommandStatus.SUCCEEDED && input.callback_payload) {
-      const media = extractCallbackMedia(input.callback_payload);
       const payload = asRecord(snap.command.payload);
       const seasonNo = Number(payload.season_no || payload.season_number || media.season_no || 1);
       const epNo = snap.episode_state?.episode_no || payload.episode_no || payload.episode_number;
@@ -268,6 +292,20 @@ export async function reconcileCommand(input: { project_id: string, command_id: 
           media,
         });
       }
+    }
+    if (blockedNoMedia) {
+      await writeAudit({
+        project_id: input.project_id,
+        user_id: snap.command.user_id,
+        workflow_name: 'SUPERVISOR_RECONCILER',
+        action: 'COMMAND_SUCCESS_BLOCKED_NO_MEDIA',
+        entity_type: 'API_COMMAND',
+        entity_id: input.command_id,
+        previous_value: { status: prev },
+        new_value: { status: next, stage: callbackStage, completion_scope: completionScope, terminal },
+        reason: 'OUTPUT_MEDIA_MISSING',
+        request_id: input.request_id,
+      });
     }
   }
   return { command_id: input.command_id, next_status: next };

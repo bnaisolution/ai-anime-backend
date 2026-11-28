@@ -7,6 +7,7 @@ import { executeTenantDbRequest, hasOffset, mergeTenantRows, type TenantDbResult
 import { buildProviderRequest } from './workflowGateway.llm';
 import { verifyWorkflowGatewayRequest } from './workflowGateway.auth';
 import { getDecryptedMapForUser } from '../infrastructure/infrastructure.service';
+import { estimateTokens, reserveTokenBudget } from '../../../core/ai-brain/modelRouter';
 import * as tenantDb from '../tenant/tenantDatabase.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -149,6 +150,21 @@ async function executeSystemRequest(scoped: ReturnType<typeof buildScopedDbReque
   return { status: 201, contentType: null, text: '', body: null };
 }
 
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      results[index] = await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/anime/internal/workflow/db', { config: { rateLimit: false } }, async (request: any, reply: any) => {
     const body = request.body as any;
@@ -197,7 +213,9 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
       if (batch.length > 12) {
         throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'LLM batch exceeds the supported limit.' });
       }
-      const parsedResponses: any[] = await Promise.all(batch.map(async (item: any, index: number) => {
+      const batchMode = String(body.batch_mode || 'scenes').toLowerCase();
+      const concurrency = batchMode === 'acts' ? 1 : 2;
+      const parsedResponses: any[] = await mapWithConcurrency(batch, concurrency, async (item: any, index: number) => {
         const providerName = String(item.provider || body.provider || '').toLowerCase();
         const providerRequest = buildProviderRequest({
           provider: providerName,
@@ -205,6 +223,14 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
           body: item.body,
           apiKey: apiKeyFor(providerName),
         });
+        const messages = Array.isArray(item.body?.messages) ? item.body.messages : [];
+        const inputText = messages.length > 0
+          ? messages.map((message: any) => String(message?.content || '')).join('\n')
+          : JSON.stringify(item.body || {});
+        const maxTokens = Number(item.body?.max_tokens || item.body?.generationConfig?.maxOutputTokens || 512);
+        if (!reserveTokenBudget(estimateTokens(inputText) + Math.min(maxTokens, 2048))) {
+          throw new AnimeError({ code: AnimeErrorCode.QUOTA_DEFERRED, message: 'LLM token budget exceeded.', httpStatus: 429, retryable: true });
+        }
         const response = await fetch(providerRequest.url, {
           method: 'POST',
           headers: providerRequest.headers,
@@ -212,13 +238,22 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
         });
         const text = await response.text();
         if (!response.ok) {
-          throw new AnimeError({ code: AnimeErrorCode.INTERNAL, message: `LLM batch item ${index + 1} failed with status ${response.status}.` });
+          if (response.status === 413) {
+            throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} exceeded provider token limit.`, httpStatus: 413, retryable: false });
+          }
+          if (response.status === 429) {
+            throw new AnimeError({ code: AnimeErrorCode.QUOTA_DEFERRED, message: `LLM batch item ${index + 1} was rate limited.`, httpStatus: 429, retryable: true });
+          }
+          throw new AnimeError({ code: AnimeErrorCode.PROVIDER_UNAVAILABLE, message: `LLM batch item ${index + 1} failed with status ${response.status}.`, httpStatus: 503, retryable: true });
         }
         let providerJson: any;
         try {
           providerJson = JSON.parse(text);
         } catch {
           throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} returned invalid JSON.` });
+        }
+        if (String(providerJson?.choices?.[0]?.finish_reason || '').toLowerCase() === 'length') {
+          throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} was truncated.` });
         }
         const content = providerJson?.choices?.[0]?.message?.content;
         if (typeof content !== 'string' || !content.trim()) {
@@ -230,7 +265,20 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
         } catch {
           throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM batch item ${index + 1} content is not valid JSON.` });
         }
-      }));
+      });
+      if (batchMode === 'acts') {
+        const acts = parsedResponses.map((item: any, index: number) => ({
+          act_index: index + 1,
+          act_text: String(item?.act_text || item?.text || item?.full_script_text || '').trim(),
+        }));
+        if (acts.some((act) => !act.act_text)) {
+          throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'LLM act batch returned an empty act.' });
+        }
+        const combined = { full_script_text: acts.map((act) => act.act_text).join('\n\n'), acts };
+        reply.status(200).header('content-type', 'application/json; charset=utf-8');
+        reply.send(JSON.stringify({ choices: [{ message: { content: JSON.stringify(combined) } }], batch: { count: acts.length } }));
+        return;
+      }
       const base = parsedResponses[0] && typeof parsedResponses[0] === 'object' ? { ...parsedResponses[0] } : {};
       const mergedScenes = parsedResponses.flatMap((item) => Array.isArray(item?.scenes) ? item.scenes : []);
       if (mergedScenes.length === 0) {

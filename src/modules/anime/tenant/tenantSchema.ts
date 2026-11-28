@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS anime_data.episodes (
     parallel_status jsonb DEFAULT '{}'::jsonb,
     recap_note text,
     beat_count integer DEFAULT 0,
+    target_duration_sec integer,
     script_json jsonb,
     telegram_url text
 );
@@ -684,6 +685,7 @@ CREATE TABLE IF NOT EXISTS anime_data.audit_log (
 
 ALTER TABLE anime_data.episodes ADD COLUMN IF NOT EXISTS synopsis text;
 ALTER TABLE anime_data.episodes ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+ALTER TABLE anime_data.episodes ADD COLUMN IF NOT EXISTS target_duration_sec integer;
 ALTER TABLE anime_data.episode_states ADD COLUMN IF NOT EXISTS season_no integer NOT NULL DEFAULT 1;
 ALTER TABLE anime_data.scenes ADD COLUMN IF NOT EXISTS season_no integer NOT NULL DEFAULT 1;
 ALTER TABLE anime_data.clips ADD COLUMN IF NOT EXISTS season_no integer NOT NULL DEFAULT 1;

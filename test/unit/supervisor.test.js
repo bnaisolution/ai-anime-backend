@@ -239,3 +239,38 @@ test('reconcileCommand schedules a durable outbox retry when auto QC enqueue fai
   assert.equal(retry.payload.payload.episode_no, 2);
   assert.equal(retry.payload.payload.command_payload.media_url, 'https://cdn/master.mp4');
 });
+
+test('production success without final media is blocked to MANUAL_REVIEW', async () => {
+  const { state } = install(
+    command({ intent: 'GENERATE_EPISODE', payload: { episode_no: 1, season_no: 1 } }),
+    [],
+    { current_state: 'MIXED', episode_no: 1 }
+  );
+  const result = await reconcileCommand({
+    project_id: PROJECT,
+    command_id: COMMAND,
+    callback_payload: { status: 'COMPLETED', completion_scope: 'EPISODE', stage: 'FINAL_RENDER', terminal: true },
+  });
+  assert.equal(result.next_status, 'MANUAL_REVIEW');
+  const update = state.calls.find((call) => call.table === 'api_commands' && call.action === 'update');
+  assert.equal(update.payload.status, 'MANUAL_REVIEW');
+  const audits = state.calls.filter((call) => call.table === 'audit_log' && call.action === 'insert');
+  const blocked = audits.find((call) => call.payload.action === 'COMMAND_SUCCESS_BLOCKED_NO_MEDIA');
+  assert.ok(blocked, 'blocked success must be audited');
+  assert.equal(blocked.payload.reason, 'OUTPUT_MEDIA_MISSING');
+});
+
+test('scene-plan-only completion does not complete a production command', async () => {
+  const { state } = install(
+    command({ intent: 'GENERATE_EPISODE', payload: { episode_no: 1, season_no: 1 } }),
+    [],
+    { current_state: 'SCENE_PLAN_READY', episode_no: 1 }
+  );
+  const result = await reconcileCommand({
+    project_id: PROJECT,
+    command_id: COMMAND,
+    callback_payload: { status: 'COMPLETED', completion_scope: 'SCENE_PLAN_ONLY', stage: 'SCENE_PLAN', terminal: true },
+  });
+  assert.equal(result.next_status, 'RECONCILING');
+  assert.equal(state.calls.find((call) => call.table === 'api_commands' && call.action === 'update').payload.status, 'RECONCILING');
+});
