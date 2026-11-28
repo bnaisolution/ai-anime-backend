@@ -6,7 +6,7 @@ const H = require('../helpers/env');
 const { installFakeSupabase } = require('../helpers/fake-supabase');
 
 const { recoverStaleProcessing, markDispatched, markFailed, markDeadLetter } = H.dist('modules/anime/outbox/outbox.repo.js');
-const { buildPersistedCommandPayload, processAutoQcEnqueueEvent } = H.dist('modules/anime/outbox/outbox.dispatcher.js');
+const { buildPersistedCommandPayload, processAutoQcEnqueueEvent, resolveSynchronousCommandStatus } = H.dist('modules/anime/outbox/outbox.dispatcher.js');
 
 test('recoverStaleProcessing requeues stale processing leases', async () => {
   const { state } = installFakeSupabase(async (call) => {
@@ -55,6 +55,13 @@ test('outbox state transitions fail closed when the update is rejected', async (
   await assert.rejects(() => markDeadLetter('event-1', 5, 'boom'), /dead-letter update failed/);
 });
 
+
+test('synchronous production dispatch never marks the command succeeded without media', () => {
+  assert.equal(resolveSynchronousCommandStatus('GENERATE_EPISODE', 'COMPLETED'), 'RECONCILING');
+  assert.equal(resolveSynchronousCommandStatus('REGENERATE_EPISODE', 'SUCCEEDED'), 'RECONCILING');
+  assert.equal(resolveSynchronousCommandStatus('GENERATE_EPISODE', 'RUNNING'), 'DISPATCHED');
+  assert.equal(resolveSynchronousCommandStatus('CREATE_PROJECT', 'COMPLETED'), 'SUCCEEDED');
+});
 
 test('buildPersistedCommandPayload preserves flat auto-QC metadata and nested payload', () => {
   const persisted = buildPersistedCommandPayload({

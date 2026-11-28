@@ -10,6 +10,7 @@ import { claimBatch, markDeadLetter, markDispatched, markFailed, redactExpiredPa
 
 const MAX_RETRIES = 5;
 const GPU_INTENTS = new Set(['GENERATE_EPISODE', 'REGENERATE_EPISODE', 'CONTINUE_EPISODE']);
+const PRODUCTION_INTENTS = new Set(['GENERATE_EPISODE', 'REGENERATE_EPISODE', 'CONTINUE_EPISODE']);
 
 async function maybeStartGpu(payload: any, userId: string): Promise<void> {
   const intent = String(payload?.intent || '').toUpperCase();
@@ -47,6 +48,12 @@ export async function hydrateDispatchPayload(payload: any): Promise<any> {
   };
 }
 
+export function resolveSynchronousCommandStatus(intent: unknown, dispatchStatus: unknown): CommandStatus {
+  const completed = ['COMPLETED', 'SUCCEEDED'].includes(String(dispatchStatus || '').toUpperCase());
+  if (!completed) return CommandStatus.DISPATCHED;
+  return PRODUCTION_INTENTS.has(String(intent || '').toUpperCase()) ? CommandStatus.RECONCILING : CommandStatus.SUCCEEDED;
+}
+
 export function buildPersistedCommandPayload(payload: any, dispatchResult: any): Record<string, any> {
   const source = payload && typeof payload === 'object' ? payload : {};
   const nested = source.payload && typeof source.payload === 'object' && !Array.isArray(source.payload) ? source.payload : {};
@@ -66,8 +73,9 @@ async function processDispatchEvent(event: any): Promise<void> {
     const dispatchPayload = await hydrateDispatchPayload(payload);
     if (typeof payload.user_id === 'string' && payload.user_id) await maybeStartGpu(dispatchPayload, payload.user_id);
     const dispatchResult = await dispatchToWf00(dispatchPayload);
-    const isCompletedSynchronously = dispatchResult.ok && ['COMPLETED', 'SUCCEEDED'].includes(String(dispatchResult.status).toUpperCase());
-    const nextCmdStatus = isCompletedSynchronously ? CommandStatus.SUCCEEDED : CommandStatus.DISPATCHED;
+    const nextCmdStatus = dispatchResult.ok
+      ? resolveSynchronousCommandStatus(payload.intent, dispatchResult.status)
+      : CommandStatus.DISPATCHED;
     const persistedCommandPayload = buildPersistedCommandPayload(payload, dispatchResult);
     await animeSupabase.from('api_commands').update({ status: nextCmdStatus, payload: persistedCommandPayload }).eq('project_id', projectId).eq('id', commandId);
     await markDispatched(event.id);
