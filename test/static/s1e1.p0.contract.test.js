@@ -80,6 +80,21 @@ test('backend blocks production success without media and bounds LLM batch dispa
   assert.match(gateway, /finish_reason/);
 });
 
+test('WF-02 Stage-1 uses act-wise batching with explicit output budget', () => {
+  const wf = workflow('storywf02.json');
+  const context = node(wf, 'Context Assembly & Prompt Constructor');
+  const stage1a = node(wf, 'Stage 1A: Groq Outline & Script Writer');
+  const stage1b = node(wf, 'Stage 1B: Gemini Fallback Script Writer');
+  assert.match(context.parameters.jsCode, /batch_mode: 'acts'/);
+  assert.match(context.parameters.jsCode, /max_tokens: 6144/);
+  assert.match(context.parameters.jsCode, /stage1Batch/);
+  assert.match(context.parameters.jsCode, /stage1FallbackBatch/);
+  assert.match(context.parameters.jsCode, /__beatsPerActLow/);
+  assert.match(context.parameters.jsCode, /__wordsPerActLow/);
+  assert.equal(stage1a.parameters.options.timeout, 600000);
+  assert.equal(stage1b.parameters.options.timeout, 600000);
+});
+
 test('P0 migration and rollback exist', () => {
   for (const migration of [
     'supabase/migrations/023_s1e1_integrity.sql',

@@ -7,6 +7,7 @@ const H = require('../helpers/env');
 const { buildScopedDbRequest } = H.dist('modules/anime/internal/workflowGateway.db.js');
 const { buildProviderRequest } = H.dist('modules/anime/internal/workflowGateway.llm.js');
 const { verifyGatewayHeaders, clearGatewayNonceCacheForTests } = H.dist('modules/anime/internal/workflowGateway.auth.js');
+const { mergeActBatch } = H.dist('modules/anime/internal/workflowGateway.routes.js');
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_PROJECT_ID = '22222222-2222-4222-8222-222222222222';
@@ -89,4 +90,23 @@ test('gateway auth rejects wrong, expired, and replayed requests', () => {
   assert.throws(() => verifyGatewayHeaders({ token: 'good', expectedToken: 'good', timestamp: String(now - 400_000), nonce: 'n2', nowMs: now }), /outside/);
   verifyGatewayHeaders({ token: 'good', expectedToken: 'good', timestamp: String(now), nonce: 'n3', nowMs: now });
   assert.throws(() => verifyGatewayHeaders({ token: 'good', expectedToken: 'good', timestamp: String(now), nonce: 'n3', nowMs: now }), /replay/);
+});
+
+
+test('act batch merges act scripts and globally renumbers grounded beats', () => {
+  const merged = mergeActBatch([
+    { title: 'T', act_text: 'ACT ONE', beats: [{ beat_order: 1, dialogue_text: 'a' }, { beat_order: 2, dialogue_text: 'b' }] },
+    { act_text: 'ACT TWO', beats: [{ beat_order: 1, dialogue_text: 'c' }] },
+  ]);
+  assert.equal(merged.full_script_text, 'ACT ONE\n\nACT TWO');
+  assert.deepEqual(merged.acts.map((act) => act.act_index), [1, 2]);
+  assert.deepEqual(merged.acts[0].beat_orders, [1, 2]);
+  assert.deepEqual(merged.acts[1].beat_orders, [3]);
+  assert.deepEqual(merged.beats.map((beat) => beat.beat_order), [1, 2, 3]);
+  assert.equal(merged.beats[2].dialogue_text, 'c');
+});
+
+test('act batch fails closed on an empty act or missing beats', () => {
+  assert.throws(() => mergeActBatch([{ act_text: '', beats: [{ beat_order: 1 }] }]), /empty act/);
+  assert.throws(() => mergeActBatch([{ act_text: 'ACT', beats: [] }]), /no beats/);
 });

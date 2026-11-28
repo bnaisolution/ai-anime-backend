@@ -166,6 +166,44 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T,
   return results;
 }
 
+export function mergeActBatch(parsedResponses: any[]): Record<string, any> {
+  const acts: any[] = [];
+  const beats: any[] = [];
+  let nextBeatOrder = 1;
+  parsedResponses.forEach((item: any, index: number) => {
+    const actText = String(item?.act_text || item?.text || item?.full_script_text || '').trim();
+    if (!actText) {
+      throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM act batch returned an empty act at position ${index + 1}.` });
+    }
+    const actBeats = Array.isArray(item?.beats) ? item.beats : [];
+    if (actBeats.length === 0) {
+      throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: `LLM act batch returned no beats for act ${index + 1}.` });
+    }
+    const beatOrders: number[] = [];
+    for (const beat of actBeats) {
+      if (!beat || typeof beat !== 'object') continue;
+      const groundedBeat = { ...beat, beat_order: nextBeatOrder };
+      beatOrders.push(nextBeatOrder);
+      nextBeatOrder += 1;
+      beats.push(groundedBeat);
+    }
+    acts.push({ act_index: index + 1, act_text: actText, beat_orders: beatOrders });
+  });
+  const first = parsedResponses[0] && typeof parsedResponses[0] === 'object' ? parsedResponses[0] : {};
+  return {
+    title: first.title || '',
+    logline: first.logline || '',
+    objective: first.objective || '',
+    opening_hook: first.opening_hook || '',
+    climax: first.climax || '',
+    cliffhanger: first.cliffhanger || '',
+    estimated_runtime_min: first.estimated_runtime_min,
+    full_script_text: acts.map((act) => act.act_text).join('\n\n'),
+    acts,
+    beats,
+  };
+}
+
 export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/anime/internal/workflow/db', { config: { rateLimit: false } }, async (request: any, reply: any) => {
     const body = request.body as any;
@@ -270,16 +308,9 @@ export async function registerAnimeWorkflowGatewayRoutes(app: FastifyInstance): 
         }
       });
       if (batchMode === 'acts') {
-        const acts = parsedResponses.map((item: any, index: number) => ({
-          act_index: index + 1,
-          act_text: String(item?.act_text || item?.text || item?.full_script_text || '').trim(),
-        }));
-        if (acts.some((act) => !act.act_text)) {
-          throw new AnimeError({ code: AnimeErrorCode.OUTPUT_INVALID, message: 'LLM act batch returned an empty act.' });
-        }
-        const combined = { full_script_text: acts.map((act) => act.act_text).join('\n\n'), acts };
+        const combined = mergeActBatch(parsedResponses);
         reply.status(200).header('content-type', 'application/json; charset=utf-8');
-        reply.send(JSON.stringify({ choices: [{ message: { content: JSON.stringify(combined) } }], batch: { count: acts.length } }));
+        reply.send(JSON.stringify({ choices: [{ message: { content: JSON.stringify(combined) } }], batch: { count: combined.acts.length } }));
         return;
       }
       const base = parsedResponses[0] && typeof parsedResponses[0] === 'object' ? { ...parsedResponses[0] } : {};
