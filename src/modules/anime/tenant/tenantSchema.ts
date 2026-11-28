@@ -699,10 +699,12 @@ ALTER TABLE anime_data.scenes ADD COLUMN IF NOT EXISTS shot_manifest jsonb DEFAU
 ALTER TABLE anime_data.scenes ADD COLUMN IF NOT EXISTS camera_json jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE anime_data.scenes ADD COLUMN IF NOT EXISTS continuity_json jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE anime_data.scenes ADD COLUMN IF NOT EXISTS keyframe_url text;
+ALTER TABLE anime_data.scenes ADD COLUMN IF NOT EXISTS scene_state_json jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE anime_data.clips ADD COLUMN IF NOT EXISTS shot_manifest jsonb DEFAULT '[]'::jsonb;
 ALTER TABLE anime_data.clips ADD COLUMN IF NOT EXISTS camera_json jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE anime_data.clips ADD COLUMN IF NOT EXISTS continuity_json jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE anime_data.clips ADD COLUMN IF NOT EXISTS keyframe_url text;
+ALTER TABLE anime_data.clips ADD COLUMN IF NOT EXISTS scene_state_json jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE anime_data.episodes ADD COLUMN IF NOT EXISTS artifact_manifest jsonb DEFAULT '{}'::jsonb;
 ALTER TABLE anime_data.quota_usage ADD COLUMN IF NOT EXISTS tenant_id uuid;
 ALTER TABLE anime_data.episodes ALTER COLUMN season_no SET DEFAULT 1;

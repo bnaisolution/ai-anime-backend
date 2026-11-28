@@ -1,9 +1,9 @@
 # S1E1 Remediation + ViMax Adoption — Final 4-Phase Implementation Plan
 
-**Version:** v3.3  
+**Version:** v3.4  
 **Date:** 2026-11-28  
-**Status:** APPROVED — executing all 4 phases sequentially; Phase 0 complete; P0 implemented locally  
-**Scope:** Phase 0 safety net applied. Phase 1 P0 code implemented and tested locally; EC2 replay pending.  
+**Status:** APPROVED — executing all 4 phases sequentially; Phase 0 complete; P0 deployed; P1 implemented and deployed  
+**Scope:** Phase 0 safety net applied. P0 deployed to EC2. P0 replay failed closed at Stage-1 act grounding; owner directed proceeding to P1 with the failure documented. P1 visual continuity, narrative memory, worker shot metadata, and readiness UI implemented.  
 **Canonical copies:**
 - Local Android repo: `docs/audit/S1E1_VIMAX_4_PHASE_IMPLEMENTATION_PLAN.md`
 - EC2 backend repo: `/home/ec2-user/ai-backend/docs/plans/S1E1_VIMAX_4_PHASE_IMPLEMENTATION_PLAN.md`
@@ -361,11 +361,19 @@ Applied:
 | Status | No `SUCCEEDED` without media |
 | Data | S1E1 preserved; no duplicate rows |
 
+### 4.10 P0 replay result (2026-11-28)
+
+- Replay command `12265356-8add-4b2c-8b6f-1d5b141f35cb` dispatched through WF-00 to WF-02 execution `136176`.
+- WF-02 failed closed at `STAGE1_ACT_GROUNDING_FAILED: expected 6 acts, received 1` after the fallback model returned 1 act / 5 beats / 1471-character script. This is the strict gate working as intended, not a regression.
+- The first replay also exposed a real P0 gap: synchronous WF-02 completion marked the production command `SUCCEEDED` without media, bypassing the supervisor media gate. Fixed in `outbox.dispatcher.ts` (`resolveSynchronousCommandStatus`): production intents now stay `RECONCILING` on synchronous completion. Commit `1a0a22a`; 233 unit tests pass.
+- Stage-1 quality tuning (explicit output budget / act batching) remains open and is tracked as a P0 follow-up.
+- Per owner direction, P1 proceeded with this replay failure documented.
+
 ---
 
 ## 5. Phase 2 — P1 ViMax-inspired capabilities
 
-**Gate:** Start only after S1E1 replay passes P0 cleanly.
+**Gate:** P0 replay did not pass cleanly. Owner directed proceeding to P1 with the Stage-1 act-grounding failure documented in section 4.10.
 
 ### 5.1 Narrative memory + context compaction
 
@@ -470,6 +478,16 @@ Pattern from ViMax Novel2Video; do not copy its buggy pipeline.
   - subtitle sync if applicable
 
 **Acceptance:** User can see why S1E1 failed and what to do; final master QC is meaningful.
+
+### 5.8 P1 implementation status (2026-11-28)
+
+- Narrative memory retrieval is wired into command dispatch behind `NARRATIVE_MEMORY` and included in the enriched payload/outbox.
+- Migration `024_visual_continuity.sql` adds `shot_manifest`, `camera_json`, `continuity_json`, `keyframe_url`, `scene_state_json` to scenes/clips and `artifact_manifest` to episodes (public + `anime_data`).
+- CPU worker accepts shot/camera/transition/frame/state fields, sorts by `(scene_order, shot_order)`, and returns `shots_rendered` plus `artifact_manifest`; scene-level payloads still render.
+- Android `SceneDto`/`EpisodeDto` accept optional shot, camera, continuity, keyframe, media, artifact, and approval fields; Scene Inspector and QC screens render them with fallbacks.
+- `SHOT_LEVEL_ASSEMBLY` and `KEYFRAME_CANDIDATES` flags are enabled; keyframe candidate count defaults to 1 and becomes 2 only when the flag is on.
+- Multi-view character references and advanced final QC remain follow-ups; basic duration/audio checks already exist in the worker.
+- P1 deployed to EC2: migration 024 applied, backend image rebuilt, flags set, workflows left active.
 
 ---
 
@@ -683,3 +701,4 @@ Phase 0 is complete. P0 code is implemented locally and unit/static P0 tests pas
 | v3.1 | 2026-11-28 | Restored Phase 3 P2; final 4-phase plan |
 | v3.2 | 2026-11-28 | Owner approved all 4 phases; Phase 0 completed and recorded |
 | v3.3 | 2026-11-28 | P0 implemented locally: WF-02 strict gates/act grounding, WF-03 single fetch/terminal callback, supervisor media gate, bounded gateway, migration 023, tests |
+| v3.4 | 2026-11-28 | P0 deployed; replay failed closed at Stage-1 act grounding; fixed synchronous outbox `SUCCEEDED` bypass; P1 implemented/deployed with narrative memory, visual continuity, shot metadata, artifact manifest, readiness UI; P2 metrics started |
